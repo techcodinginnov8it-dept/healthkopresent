@@ -92,6 +92,9 @@ export default function DoctorSignInPage() {
       if (res.success) {
         setSuccess(true);
         setShowOtpModal(false);
+        setTimeout(() => {
+          window.location.href = "/doctor/dashboard";
+        }, 1200);
       } else {
         setOtpError(res.error || "Verification failed. Invalid credentials or security key.");
       }

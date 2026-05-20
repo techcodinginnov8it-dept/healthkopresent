@@ -1,0 +1,118 @@
+{
+  "patients": [
+    {
+      "firstName": "Jane",
+      "middleName": null,
+      "lastName": "Lesh",
+      "suffix": null,
+      "email": "larajeani.innov8it@gmail.com",
+      "countryCode": "+63",
+      "phone": "9345678653",
+      "dob": "2000-09-08",
+      "gender": "Female",
+      "password": "$2a$10$ffZu7ZFosFrNoxlcgp238O6RYt/VvnHguy7sBMVEAmNEkAlnK1wwS",
+      "hipaaConsent": true,
+      "emailVerified": true,
+      "id": "pat-jnpd6vok9",
+      "isActive": true,
+      "createdAt": "2026-05-20T21:04:05.727Z",
+      "updatedAt": "2026-05-20T21:04:27.765Z"
+    }
+  ],
+  "doctors": [
+    {
+      "id": "doc-sarah-jenkins-123",
+      "npi": "1982736450",
+      "email": "s.jenkins@healthko.com",
+      "password": "$2a$10$mvLEIHhxPwFsPXGcVwt8lO1pAJWn9q5VI3XpSdDFcIWB/gsyoQVDG",
+      "name": "Dr. Sarah Jenkins",
+      "specialty": "Board-Certified Cardiologist",
+      "rating": 4.9,
+      "reviewCount": 142,
+      "availability": "Mon - Fri, 9AM - 5PM",
+      "consultFee": 150,
+      "bio": "Dr. Sarah Jenkins is an Ivy League-educated cardiologist with over 15 years of clinical experience specializing in non-invasive cardiology and preventive health.",
+      "image": null,
+      "languages": [
+        "English",
+        "Spanish"
+      ],
+      "isActive": true,
+      "isFeatured": true,
+      "isVerified": true,
+      "createdAt": "2026-05-20T20:58:55.527Z",
+      "updatedAt": "2026-05-20T20:58:55.527Z"
+    },
+    {
+      "id": "doc-marcus-vance-456",
+      "npi": "1098273645",
+      "email": "m.vance@healthko.com",
+      "password": "$2a$10$kAlutzfXgMWk0ziU0Colo./awoHqY4sMDPS1D4XBLq0uKcgWL.LMi",
+      "name": "Dr. Marcus Vance",
+      "specialty": "Pediatric Medicine Specialist",
+      "rating": 4.8,
+      "reviewCount": 98,
+      "availability": "Mon - Thu, 8AM - 4PM",
+      "consultFee": 120,
+      "bio": "Dr. Marcus Vance is a board-certified pediatrician dedicated to providing comprehensive healthcare for children from infancy through adolescence.",
+      "image": null,
+      "languages": [
+        "English"
+      ],
+      "isActive": true,
+      "isFeatured": true,
+      "isVerified": true,
+      "createdAt": "2026-05-20T20:58:55.679Z",
+      "updatedAt": "2026-05-20T20:58:55.679Z"
+    },
+    {
+      "id": "doc-aaliyah-patel-789",
+      "npi": "1234567890",
+      "email": "a.patel@healthko.com",
+      "password": "$2a$10$jeoGz.y5mdaRrOihly.wDOGInwEsczmVjL3TMUBBPPrGcuMPUg0dO",
+      "name": "Dr. Aaliyah Patel",
+      "specialty": "Family Practitioner & Telehealth Lead",
+      "rating": 4.9,
+      "reviewCount": 210,
+      "availability": "Tue - Sat, 10AM - 6PM",
+      "consultFee": 100,
+      "bio": "Dr. Aaliyah Patel is a passionate family physician specializing in chronic disease management and virtual healthcare delivery paradigms.",
+      "image": null,
+      "languages": [
+        "English",
+        "Hindi"
+      ],
+      "isActive": true,
+      "isFeatured": true,
+      "isVerified": true,
+      "createdAt": "2026-05-20T20:58:55.825Z",
+      "updatedAt": "2026-05-20T20:58:55.826Z"
+    }
+  ],
+  "consultations": [
+    {
+      "id": "con-p8kc3o7hn",
+      "patientId": "pat-jnpd6vok9",
+      "doctorId": "doc-sarah-jenkins-123",
+      "scheduledAt": "2026-05-22T02:00:00.000Z",
+      "status": "COMPLETED",
+      "reason": "The sensation of a racing, fluttering, or skipping heartbeat.",
+      "notes": "History of Present Illness\n\n36-year-old male reports intermittent palpitations described as “fluttering” and “skipping beats,” occurring several times daily over the past 72 hours. Episodes last 1–5 minutes and are associated with mild anxiety and lightheadedness. Denies chest pain, syncope, severe shortness of breath, fever, or recent illness.\n\nReports increased caffeine intake (4–5 energy drinks/day) and poor sleep over the past week. No known cardiac history.\n\nReview of Systems\nCardiovascular: Positive for palpitations\nRespiratory: Negative for dyspnea at rest\nNeurologic: Negative for syncope\nConstitutional: Negative for fever/chills\nMedical History\nMild generalized anxiety disorder\nNo hypertension\nNo diabetes\nMedications\nNone currently\nAllergies\nNKDA (No Known Drug Allergies)\nFamily History\nFather with hypertension\nNo family history of sudden cardiac death\nSocial History\nNon-smoker\nSocial alcohol use\nHigh caffeine consumption\nObjective (O)\nVital Signs\nBP: 128/82 mmHg\nHR: 104 bpm\nRR: 18/min\nTemp: 98.4°F\nSpO₂: 99%\nPhysical Examination\nGeneral: Alert, mildly anxious, no acute distress\nCardiovascular: Mild tachycardia, regular rhythm during exam\nRespiratory: Clear to auscultation bilaterally\nNeuro: Grossly intact\nDiagnostic Data\nIn-office ECG: Sinus tachycardia, no acute ischemic changes\nRecommended labs:\nCBC\nCMP\nTSH\nMagnesium\nAssessment (A)\nDiagnoses\nPalpitations\nSinus tachycardia likely exacerbated by caffeine intake and anxiety\nAnxiety disorder\nPlan (P)\nAdvise reduction of caffeine and stimulant intake\nEncourage hydration and sleep hygiene\nOrder outpatient Holter monitor if symptoms persist\nER precautions reviewed:\nChest pain\nFainting\nSevere shortness of breath\nSustained rapid heartbeat\nFollow-Up\nRe-evaluation in 1–2 weeks\nEarlier follow-up if symptoms worsen",
+      "prescription": "Medication 1  Medication: Propranolol 10 mg tablet  Sig: Take 1 tablet by mouth twice daily as needed for palpitations and anxiety symptoms.  Dispense: 30 tablets Refills: 0  Indication: Symptomatic palpitations  Special Instructions: Avoid excessive caffeine intake. Monitor for dizziness, fatigue, or low heart rate.  Medication 2 (Optional Supportive Therapy)  Medication: Magnesium Oxide 400 mg tablet  Sig: Take 1 tablet by mouth once daily with food.  Dispense: 30 tablets Refills: 1  Limit caffeine, nicotine, and energy drinks Maintain adequate hydration Seek emergency care if: Chest pain develops You faint Heart rate remains very fast for prolonged periods Severe breathing difficulty occurs",
+      "duration": 30,
+      "createdAt": "2026-05-20T21:07:09.834Z",
+      "updatedAt": "2026-05-20T21:13:02.527Z"
+    }
+  ],
+  "emailOtps": [
+    {
+      "id": "otp-3bmpiimsx",
+      "email": "larajeani.innov8it@gmail.com",
+      "otp": "690162",
+      "purpose": "signup_verify",
+      "expiresAt": "2026-05-20T21:14:05.728Z",
+      "used": false,
+      "createdAt": "2026-05-20T21:04:05.729Z"
+    }
+  ]
+}
