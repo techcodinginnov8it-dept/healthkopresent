@@ -8,47 +8,239 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-model Patient {
-  id           String         @id @default(uuid())
-  firstName    String
-  middleName   String?
-  lastName     String
-  suffix       String?
-  email        String         @unique
-  countryCode  String
-  phone        String
-  dob          String
-  password     String
-  hipaaConsent Boolean        @default(false)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  bookings     Consultation[]
+// ─────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────
+
+enum ConsultationStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
 }
+
+enum DoctorSpecialty {
+  GENERAL_PRACTITIONER
+  CARDIOLOGIST
+  DERMATOLOGIST
+  NEUROLOGIST
+  PEDIATRICIAN
+  PSYCHIATRIST
+  ORTHOPEDIST
+  GYNECOLOGIST
+  ONCOLOGIST
+  ENDOCRINOLOGIST
+  OTHER
+}
+
+// ─────────────────────────────────────────────
+// Patient — registered portal users
+// ─────────────────────────────────────────────
+
+model Patient {
+  id            String         @id @default(uuid())
+
+  // Name segments (split for HIPAA-compliant storage)
+  firstName     String
+  middleName    String?
+  lastName      String
+  suffix        String?
+
+  // Contact
+  email         String         @unique
+  countryCode   String         @default("+1")
+  phone         String
+
+  // Profile
+  dob           String
+  gender        String?
+  address       String?
+  city          String?
+  state         String?
+  zipCode       String?
+  country       String?
+
+  // Auth
+  password      String
+
+  // Compliance
+  hipaaConsent  Boolean        @default(false)
+
+  // Flags
+  isActive      Boolean        @default(true)
+  emailVerified Boolean        @default(false)
+
+  // Timestamps
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  // Relations
+  bookings      Consultation[]
+
+  @@index([email])
+  @@index([lastName, firstName])
+  @@map("patients")
+}
+
+// ─────────────────────────────────────────────
+// Doctor — licensed medical practitioners
+// ─────────────────────────────────────────────
 
 model Doctor {
-  id           String         @id @default(uuid())
-  npi          String         @unique
-  email        String         @unique
-  password     String
-  name         String
-  specialty    String
-  rating       Float
-  availability String
-  image        String?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  bookings     Consultation[]
+  id             String          @id @default(uuid())
+
+  // Identity
+  name           String
+  npi            String          @unique
+  email          String          @unique
+  password       String
+
+  // Profile
+  specialty      String
+  bio            String?
+  image          String?
+  languages      String[]        @default(["English"])
+
+  // Availability & Rating
+  rating         Float           @default(0.0)
+  reviewCount    Int             @default(0)
+  availability   String          @default("Available")
+  consultFee     Float?
+
+  // Credentials
+  licenseNumber  String?
+  licenseState   String?
+  yearsExp       Int?
+
+  // Security
+  securityKey    String?
+
+  // Flags
+  isActive       Boolean         @default(true)
+  isFeatured     Boolean         @default(false)
+  isVerified     Boolean         @default(false)
+
+  // Timestamps
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  // Relations
+  bookings       Consultation[]
+  audits         DoctorAudit[]
+
+  @@index([email])
+  @@index([npi])
+  @@index([specialty])
+  @@map("doctors")
 }
 
+// ─────────────────────────────────────────────
+// Consultation — links Patients to Doctors
+// ─────────────────────────────────────────────
+
 model Consultation {
-  id          String   @id @default(uuid())
-  patientId   String
-  doctorId    String
-  scheduledAt DateTime @default(now())
-  status      String   @default("PENDING")
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  doctor      Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  id           String              @id @default(uuid())
+
+  patientId    String
+  doctorId     String
+
+  scheduledAt  DateTime            @default(now())
+  status       ConsultationStatus  @default(PENDING)
+
+  // Session details
+  reason       String?
+  notes        String?
+  prescription String?
+  duration     Int?                // minutes
+
+  // Timestamps
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  // Relations
+  patient      Patient             @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor       Doctor              @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([status])
+  @@map("consultations")
+}
+
+// ─────────────────────────────────────────────
+// Credentials Audit System
+// ─────────────────────────────────────────────
+
+enum AuditStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+model DoctorAudit {
+  id             String      @id @default(uuid())
+  doctorId       String?     @map("doctor_id")
+  npi            String
+  licenseNumber  String      @map("license_number")
+  licenseState   String      @map("license_state")
+  specialty      String
+  medicalSchool  String      @map("medical_school")
+  gradYear       Int         @map("grad_year")
+  yearsExp       Int         @map("years_exp")
+  documentName   String?     @map("document_name")
+  status         AuditStatus @default(PENDING)
+  signature      String
+  consent        Boolean     @default(false)
+  submittedAt    DateTime    @default(now()) @map("submitted_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  doctor         Doctor?     @relation(fields: [doctorId], references: [id], onDelete: SetNull)
+
+  @@index([npi])
+  @@index([status])
+  @@map("doctor_audits")
+}
+
+// ─────────────────────────────────────────────
+// Password Reset — time-limited OTP tokens
+// ─────────────────────────────────────────────
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+
+  // Who is resetting
+  email     String
+  userType  String   // "patient" | "doctor"
+
+  // Verification secrets
+  token     String   @unique  // URL-safe token used in the reset link
+  otp       String            // 6-digit numeric OTP sent separately in the email body
+
+  // Lifecycle
+  expiresAt DateTime
+  used      Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([email])
+  @@map("password_reset_tokens")
+}
+
+// ─────────────────────────────────────────────
+// Email Verification & Login OTP Codes
+// ─────────────────────────────────────────────
+
+model EmailOtp {
+  id        String   @id @default(uuid())
+  email     String
+  otp       String
+  purpose   String   // "signup_verify" | "login_verify"
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@map("email_otps")
 }

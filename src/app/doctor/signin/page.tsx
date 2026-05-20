@@ -7,38 +7,107 @@ import { loginDoctor } from "../../actions/auth";
 export default function DoctorSignInPage() {
   const [emailOrNpi, setEmailOrNpi] = useState("");
   const [password, setPassword] = useState("");
-  const [securityKey, setSecurityKey] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // OTP Popup states
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
+  const [otpError, setOtpError] = useState("");
+
+  // Step 1: Handle main form submission and prompt OTP modal
+  const handleOpenOtpModal = (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    if (!emailOrNpi || !password) {
+      setError("Please enter your NPI/Email and password to proceed.");
+      return;
+    }
     setError("");
+    setOtpError("");
+    setOtpDigits(["", "", "", "", "", ""]);
+    setShowOtpModal(true);
+
+    // Delay briefly to allow DOM render then focus first input
+    setTimeout(() => {
+      document.getElementById("otp-input-0")?.focus();
+    }, 100);
+  };
+
+  // Step 2: Handle OTP digital codes input management
+  const handleOtpChange = (value: string, idx: number) => {
+    // Handle paste or typing of a single digit
+    const cleaned = value.slice(-1);
+    if (cleaned && isNaN(Number(cleaned))) return; // Numbers only
+
+    const newDigits = [...otpDigits];
+    newDigits[idx] = cleaned;
+    setOtpDigits(newDigits);
+
+    // Auto-focus next input field if digit entered
+    if (cleaned && idx < 5) {
+      const nextInput = document.getElementById(`otp-input-${idx + 1}`);
+      nextInput?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, idx: number) => {
+    // Backspace: clear current and focus previous if empty
+    if (e.key === "Backspace") {
+      if (!otpDigits[idx] && idx > 0) {
+        const newDigits = [...otpDigits];
+        newDigits[idx - 1] = "";
+        setOtpDigits(newDigits);
+        const prevInput = document.getElementById(`otp-input-${idx - 1}`);
+        prevInput?.focus();
+      } else {
+        const newDigits = [...otpDigits];
+        newDigits[idx] = "";
+        setOtpDigits(newDigits);
+      }
+    }
+  };
+
+  // Step 3: Call Server Action to log in clinician with compiled OTP key
+  const handleVerifyOtp = async () => {
+    const combinedOtp = otpDigits.join("");
+    if (combinedOtp.length !== 6) {
+      setOtpError("Security passcode must be exactly 6 digits.");
+      return;
+    }
+
+    setLoading(true);
+    setOtpError("");
+    setError("");
+
     try {
-      const res = await loginDoctor({ emailOrNpi, password, securityKey });
+      const res = await loginDoctor({
+        emailOrNpi,
+        password,
+        securityKey: combinedOtp,
+      });
+
       setLoading(false);
       if (res.success) {
         setSuccess(true);
+        setShowOtpModal(false);
       } else {
-        setError(res.error || "Invalid physician credentials or passcode");
+        setOtpError(res.error || "Verification failed. Invalid credentials or security key.");
       }
     } catch (err: any) {
       setLoading(false);
-      setError("A network error occurred. Please verify your connection.");
+      setOtpError("A connection error occurred. Please verify your connection.");
     }
   };
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-12 bg-white font-sans text-slate-800">
+    <div className="min-h-screen grid lg:grid-cols-12 bg-white font-sans text-slate-800 relative">
       
       {/* Left Column: Doctor Branding & Key metrics (5 cols) */}
       <div className="hidden lg:flex lg:col-span-5 bg-slate-900 text-white p-12 flex-col justify-between relative overflow-hidden">
-        {/* Glow Effects */}
-        <div className="absolute top-0 left-0 w-80 h-80 rounded-full bg-brand-teal/20 blur-3xl" />
-        <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full bg-brand-red/10 blur-3xl" />
+        <div className="absolute top-0 left-0 w-80 h-80 rounded-full bg-brand-teal/20 blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full bg-brand-red/10 blur-3xl pointer-events-none" />
 
         {/* Logo */}
         <Link href="/" className="flex items-center space-x-1 select-none relative z-10">
@@ -86,7 +155,6 @@ export default function DoctorSignInPage() {
 
       {/* Right Column: Practitioner Login Form (7 cols) */}
       <div className="col-span-12 lg:col-span-7 flex flex-col justify-center px-6 sm:px-12 lg:px-20 py-12 relative">
-        {/* Mobile Header Logo */}
         <div className="absolute top-8 left-8 lg:hidden">
           <Link href="/" className="flex items-center space-x-1">
             <span className="font-display text-xl tracking-tight">
@@ -99,7 +167,6 @@ export default function DoctorSignInPage() {
         </div>
 
         <div className="max-w-md w-full mx-auto space-y-8">
-          
           {/* Form Header */}
           <div className="space-y-2">
             <span className="text-[10px] font-black text-brand-red uppercase bg-brand-red-tint/10 border border-brand-red/10 px-2 py-0.5 rounded tracking-wider">
@@ -114,7 +181,7 @@ export default function DoctorSignInPage() {
           </div>
 
           {!success ? (
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleOpenOtpModal} className="space-y-5">
               {error && (
                 <div className="p-3 bg-brand-red/10 border border-brand-red/20 text-brand-red font-bold text-xs rounded-xl animate-fade-in">
                   {error}
@@ -138,9 +205,17 @@ export default function DoctorSignInPage() {
 
               {/* Password */}
               <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5 tracking-wider">
-                  Password
-                </label>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                    Password
+                  </label>
+                  <Link
+                    href="/forgot-password"
+                    className="text-[10px] font-bold text-brand-teal hover:text-brand-teal-hover hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
                 <div className="relative">
                   <input
                     type={showPassword ? "text" : "password"}
@@ -169,39 +244,12 @@ export default function DoctorSignInPage() {
                 </div>
               </div>
 
-              {/* Security Key / Passcode (Clinical 2FA) */}
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5 tracking-wider">
-                  2FA Secure Passcode (SMS or Authenticator)
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={securityKey}
-                  onChange={(e) => setSecurityKey(e.target.value)}
-                  placeholder="e.g. 102938"
-                  maxLength={6}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-850 focus:outline-none focus:border-brand-teal focus:ring-1 focus:ring-brand-teal/20"
-                />
-              </div>
-
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={loading}
                 className="w-full bg-slate-900 hover:bg-brand-teal text-white font-bold text-sm py-3.5 rounded-xl transition-all duration-300 shadow-md hover:-translate-y-0.5 active:translate-y-0 disabled:bg-slate-350 disabled:translate-y-0 flex items-center justify-center space-x-2"
               >
-                {loading ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    <span>Verifying Licensure...</span>
-                  </>
-                ) : (
-                  <span>Access Clinical Console</span>
-                )}
+                <span>Access Clinical Console</span>
               </button>
             </form>
           ) : (
@@ -221,13 +269,10 @@ export default function DoctorSignInPage() {
                 </p>
               </div>
               <div className="w-full max-w-xs mx-auto bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                <div className="bg-brand-teal h-1.5 rounded-full animate-progress-bar" style={{ width: '100%', transition: 'width 2s ease-in-out' }} />
+                <div className="bg-brand-teal h-1.5 rounded-full" style={{ width: '100%', transition: 'width 2s ease-in-out' }} />
               </div>
               <div className="pt-4">
-                <Link
-                  href="/"
-                  className="text-xs font-black text-brand-teal hover:underline"
-                >
+                <Link href="/" className="text-xs font-black text-brand-teal hover:underline">
                   Return to Homepage
                 </Link>
               </div>
@@ -245,16 +290,105 @@ export default function DoctorSignInPage() {
               </div>
               <div className="pt-1">
                 <span>Want to join the network? </span>
-                <Link href="#" className="text-slate-700 hover:text-brand-teal font-extrabold underline">
+                <Link href="/doctor/audit" className="text-slate-700 hover:text-brand-teal font-extrabold underline">
                   Submit credentials audit
                 </Link>
               </div>
             </div>
           )}
-
         </div>
       </div>
-      
+
+      {/* ── OTP Verification Popup Modal ── */}
+      {showOtpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-md transition-all duration-300">
+          <div className="bg-slate-900 border border-slate-800 text-white rounded-2xl p-6 sm:p-8 max-w-md w-full mx-4 shadow-2xl space-y-6 transform scale-100 transition-all duration-300 animate-fade-in">
+            
+            {/* Modal Header */}
+            <div className="text-center space-y-2">
+              <div className="h-12 w-12 rounded-full bg-brand-teal/10 border border-brand-teal/20 flex items-center justify-center text-brand-teal mx-auto">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <h3 className="font-display font-black text-xl tracking-tight text-white">Two-Factor Authentication</h3>
+              <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
+                We sent a 6-digit secure verification passcode to your registered practitioner device.
+              </p>
+            </div>
+
+            {/* Error Alert in Modal */}
+            {otpError && (
+              <div className="p-3 bg-brand-red/10 border border-brand-red/15 text-brand-red font-bold text-xs rounded-xl text-center">
+                {otpError}
+              </div>
+            )}
+
+            {/* 6 Digit Inputs Grid */}
+            <div className="flex justify-center gap-2 sm:gap-3 py-2">
+              {otpDigits.map((digit, idx) => (
+                <input
+                  key={idx}
+                  id={`otp-input-${idx}`}
+                  type="text"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handleOtpChange(e.target.value, idx)}
+                  onKeyDown={(e) => handleOtpKeyDown(e, idx)}
+                  className="w-10 h-12 sm:w-12 sm:h-14 text-center text-lg font-bold bg-slate-950 border border-slate-800 focus:border-brand-teal focus:ring-1 focus:ring-brand-teal/20 rounded-xl focus:outline-none transition-all text-brand-teal"
+                  placeholder="-"
+                />
+              ))}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={handleVerifyOtp}
+                disabled={loading}
+                className="w-full bg-brand-teal hover:bg-brand-teal-hover text-white font-bold text-sm py-3.5 rounded-xl transition-all shadow-md shadow-brand-teal/15 disabled:bg-slate-800 disabled:shadow-none flex items-center justify-center space-x-2"
+              >
+                {loading ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Verifying Passcode...</span>
+                  </>
+                ) : (
+                  <span>Confirm & Authorize Login</span>
+                )}
+              </button>
+
+              <div className="flex justify-between items-center text-xs font-semibold px-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowOtpModal(false);
+                    setOtpError("");
+                  }}
+                  className="text-slate-450 hover:text-slate-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOtpDigits(["", "", "", "", "", ""]);
+                    setOtpError("");
+                    document.getElementById("otp-input-0")?.focus();
+                  }}
+                  className="text-brand-teal hover:underline"
+                >
+                  Clear digits
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
