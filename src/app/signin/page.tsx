@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { loginPatient } from "../actions/auth";
 
 export default function SignInPage() {
   const [email, setEmail] = useState("");
@@ -9,14 +10,24 @@ export default function SignInPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
+    setError("");
+    try {
+      const res = await loginPatient({ email, password });
       setLoading(false);
-      setSuccess(true);
-    }, 1800);
+      if (res.success) {
+        setSuccess(true);
+      } else {
+        setError(res.error || "Invalid email or password");
+      }
+    } catch (err: any) {
+      setLoading(false);
+      setError("A network error occurred. Please verify your connection.");
+    }
   };
 
   return (
@@ -88,6 +99,11 @@ export default function SignInPage() {
 
           {!success ? (
             <form onSubmit={handleSubmit} className="space-y-5">
+              {error && (
+                <div className="p-3 bg-brand-red/10 border border-brand-red/20 text-brand-red font-bold text-xs rounded-xl animate-fade-in">
+                  {error}
+                </div>
+              )}
               
               {/* Email Address */}
               <div>

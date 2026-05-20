@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { registerPatient } from "../actions/auth";
 
 // Universal Country Code configurations and validation patterns
 const countries = [
@@ -28,6 +29,7 @@ export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState("");
 
   // Dynamic phone validation
   const activeCountry = countries.find((c) => c.code === countryCode) || countries[0];
@@ -45,14 +47,34 @@ export default function SignUpPage() {
     !dob ||
     !password;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitDisabled) return;
     setLoading(true);
-    setTimeout(() => {
+    setError("");
+    try {
+      const res = await registerPatient({
+        firstName,
+        middleName,
+        lastName,
+        suffix,
+        email,
+        countryCode,
+        phone,
+        dob,
+        password,
+        hipaaConsent
+      });
       setLoading(false);
-      setSuccess(true);
-    }, 2000);
+      if (res.success) {
+        setSuccess(true);
+      } else {
+        setError(res.error || "Failed to register profile");
+      }
+    } catch (err: any) {
+      setLoading(false);
+      setError("A network error occurred. Please verify your connection.");
+    }
   };
 
   return (
@@ -146,6 +168,11 @@ export default function SignUpPage() {
 
           {!success ? (
             <form onSubmit={handleSubmit} className="space-y-4">
+              {error && (
+                <div className="p-3 bg-brand-red/10 border border-brand-red/20 text-brand-red font-bold text-xs rounded-xl animate-fade-in">
+                  {error}
+                </div>
+              )}
               
               {/* Separated Name Grid */}
               <div className="grid grid-cols-12 gap-3">

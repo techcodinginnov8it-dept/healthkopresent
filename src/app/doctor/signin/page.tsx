@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { loginDoctor } from "../../actions/auth";
 
 export default function DoctorSignInPage() {
   const [emailOrNpi, setEmailOrNpi] = useState("");
@@ -10,14 +11,24 @@ export default function DoctorSignInPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
+    setError("");
+    try {
+      const res = await loginDoctor({ emailOrNpi, password, securityKey });
       setLoading(false);
-      setSuccess(true);
-    }, 2000);
+      if (res.success) {
+        setSuccess(true);
+      } else {
+        setError(res.error || "Invalid physician credentials or passcode");
+      }
+    } catch (err: any) {
+      setLoading(false);
+      setError("A network error occurred. Please verify your connection.");
+    }
   };
 
   return (
@@ -104,6 +115,11 @@ export default function DoctorSignInPage() {
 
           {!success ? (
             <form onSubmit={handleSubmit} className="space-y-5">
+              {error && (
+                <div className="p-3 bg-brand-red/10 border border-brand-red/20 text-brand-red font-bold text-xs rounded-xl animate-fade-in">
+                  {error}
+                </div>
+              )}
               
               {/* Email / NPI */}
               <div>
