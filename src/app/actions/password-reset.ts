@@ -55,7 +55,20 @@ export async function requestPasswordReset(data: {
     });
 
     if (error) {
-      console.error("[requestPasswordReset]", error.message);
+      console.error("[requestPasswordReset] Supabase reset error:", error.message, "Status:", error.status);
+
+      // Specific user-friendly error for rate limiting
+      if (
+        error.status === 429 ||
+        error.message?.toLowerCase().includes("rate limit") ||
+        error.message?.toLowerCase().includes("throttled")
+      ) {
+        return {
+          success: false,
+          error: "You have requested password resets too many times recently. Please wait a while before trying again.",
+        };
+      }
+
       return {
         success: false,
         error:

@@ -132,16 +132,7 @@ export function DashboardShell<TModule extends ModuleId>({
       >
         <div className="space-y-6">
           <div className="flex items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                if (overviewModule) {
-                  onNavigate(overviewModule);
-                }
-              }}
-              className="flex items-center gap-1 select-none text-left"
-              aria-label="Open dashboard overview"
-            >
+            <span className="flex items-center gap-1 select-none">
               <span className="font-display text-xl tracking-tight">
                 <span className="text-brand-red font-black">H</span>
                 {!collapsed && (
@@ -152,7 +143,7 @@ export function DashboardShell<TModule extends ModuleId>({
                   </>
                 )}
               </span>
-            </button>
+            </span>
             <button
               type="button"
               onClick={onToggleCollapsed}
