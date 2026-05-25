@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { getErrorMessage } from "@/lib/errors";
 import { loginDoctor } from "../../actions/auth";
 
 export default function DoctorSignInPage() {
@@ -98,9 +99,9 @@ export default function DoctorSignInPage() {
       } else {
         setOtpError(res.error || "Verification failed. Invalid credentials or security key.");
       }
-    } catch (err: any) {
+    } catch (error: unknown) {
       setLoading(false);
-      setOtpError("A connection error occurred. Please verify your connection.");
+      setOtpError(getErrorMessage(error, "A connection error occurred. Please verify your connection."));
     }
   };
 
@@ -214,7 +215,7 @@ export default function DoctorSignInPage() {
                   </label>
                   <Link
                     href="/forgot-password"
-                    className="text-[10px] font-bold text-brand-teal hover:text-brand-teal-hover hover:underline"
+                    className="text-[10px] font-bold text-brand-teal hover:text-brand-teal-hover hover:underline transition-colors"
                   >
                     Forgot password?
                   </Link>

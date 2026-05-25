@@ -256,7 +256,7 @@ export default function SignInPage() {
               </div>
               <Link
                 href="/forgot-password"
-                className="text-xs font-bold text-brand-teal hover:text-brand-teal-hover hover:underline"
+                className="text-xs font-bold text-brand-teal hover:text-brand-teal-hover hover:underline transition-colors"
               >
                 Forgot password?
               </Link>
