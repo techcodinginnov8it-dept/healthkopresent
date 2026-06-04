@@ -262,135 +262,173 @@ export function AppointmentCalendar({
           </div>
         )}
       </div>
-      {viewMode === "month" ? (
-        <div className="max-h-[620px] overflow-auto rounded-lg border border-slate-800 bg-slate-800 transition-all duration-300">
-          <div className="grid min-w-[920px] grid-cols-7 gap-px">
-            {days.map((day) => {
-              const dayAppointments = appointments.filter((appointment) => sameDay(appointment.scheduledAt, day));
-              const dayAvailable = !availabilityWindow || availabilityWindow.days.includes(day.getDay());
+      <div className="space-y-3 md:hidden">
+        {days.map((day) => {
+          const dayAppointments = appointments.filter((appointment) => sameDay(appointment.scheduledAt, day));
+          const dayAvailable = !availabilityWindow || availabilityWindow.days.includes(day.getDay());
 
-              return (
-                <div
-                  key={day.toISOString()}
-                  onDragOver={(event) => {
-                    if (editable && dayAvailable) {
-                      event.preventDefault();
-                    }
-                  }}
-                  onDrop={(event) => {
-                    if (!editable || !onReschedule || !dayAvailable) {
-                      return;
-                    }
-
-                    const appointmentId = event.dataTransfer.getData("text/plain");
-                    const appointment = appointments.find((item) => item.id === appointmentId);
-                    if (appointment) {
-                      onReschedule(appointmentId, moveAppointmentToDay(appointment.scheduledAt, day));
-                    }
-                  }}
-                  className={`min-h-36 p-2 transition-colors ${dayAvailable ? "bg-slate-950" : "bg-slate-900/50"}`}
-                >
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <div>
-                      <p className="text-xs font-black text-white">{formatMonthDay(day)}</p>
-                      <p className="text-[10px] font-bold uppercase text-slate-500">{formatWeekday(day)}</p>
-                    </div>
-                    {dayAppointments.length ? (
-                      <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-black text-slate-200">{dayAppointments.length}</span>
-                    ) : null}
-                  </div>
-                  <div className="max-h-24 space-y-1.5 overflow-y-auto pr-1">
-                    {dayAppointments.map((appointment) => (
-                      <AppointmentBlock key={appointment.id} appointment={appointment} editable={editable} compact />
-                    ))}
-                  </div>
+          return (
+            <section key={day.toISOString()} className={`rounded-xl border p-3 ${dark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-slate-50"}`}>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-black">{formatWeekday(day)} · {formatMonthDay(day)}</p>
+                  <p className={`text-[10px] font-bold uppercase ${dayAvailable ? "text-emerald-400" : "text-slate-400"}`}>
+                    {dayAvailable ? "Available" : "Outside availability"}
+                  </p>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : (
-      <div className="max-h-[620px] overflow-x-auto overflow-y-auto rounded-lg transition-all duration-300">
-        <div
-          className={`grid gap-px overflow-hidden rounded-lg border ${dark ? "border-slate-800 bg-slate-800" : "border-slate-200 bg-slate-200"}`}
-          style={{
-            gridTemplateColumns: `72px repeat(${days.length}, ${columnMinWidth})`,
-            minWidth: `${gridMinWidth}px`,
-          }}
-        >
-          <div className={dark ? "bg-slate-950 p-3" : "bg-slate-50 p-3"} />
-          {days.map((day) => (
-            <div key={day.toISOString()} className={dark ? "bg-slate-950 p-3" : "bg-slate-50 p-3"}>
-              <p className="text-xs font-black">{formatWeekday(day)}</p>
-              <p className={dark ? "text-xs font-semibold text-slate-400" : "text-xs font-semibold text-slate-500"}>
-                {formatMonthDay(day)}
-              </p>
-            </div>
-          ))}
-          {hours.map((hour) => (
-            <Fragment key={hour}>
-              <div key={`time-${hour}`} className={dark ? "bg-slate-950 p-3 text-xs font-black text-slate-400" : "bg-slate-50 p-3 text-xs font-black text-slate-500"}>
-                {`${hour.toString().padStart(2, "0")}:00`}
+                {dayAppointments.length ? (
+                  <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase ${dark ? "bg-white/10 text-slate-100" : "bg-slate-200 text-slate-700"}`}>
+                    {dayAppointments.length} items
+                  </span>
+                ) : null}
               </div>
+              <div className="mt-3 space-y-2">
+                {dayAppointments.length ? (
+                  dayAppointments.map((appointment) => (
+                    <AppointmentBlock key={appointment.id} appointment={appointment} editable={editable} compact />
+                  ))
+                ) : (
+                  <p className={`rounded-lg border border-dashed p-3 text-xs font-semibold ${dark ? "border-slate-800 text-slate-500" : "border-slate-300 text-slate-500"}`}>
+                    No appointments scheduled.
+                  </p>
+                )}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+
+      <div className="hidden md:block">
+        {viewMode === "month" ? (
+          <div className="max-h-[620px] overflow-auto rounded-lg border border-slate-800 bg-slate-800 transition-all duration-300">
+            <div className="grid min-w-[920px] grid-cols-7 gap-px">
               {days.map((day) => {
-                const slot = setTime(day, hour);
-                const slotAppointments = appointments.filter((appointment) => sameSlot(appointment.scheduledAt, slot));
-                const slotMinutes = hour * 60;
-                const slotAvailable = !availabilityWindow || (
-                  availabilityWindow.days.includes(slot.getDay()) &&
-                  slotMinutes >= availabilityWindow.startMinutes &&
-                  slotMinutes < availabilityWindow.endMinutes
-                );
+                const dayAppointments = appointments.filter((appointment) => sameDay(appointment.scheduledAt, day));
+                const dayAvailable = !availabilityWindow || availabilityWindow.days.includes(day.getDay());
 
                 return (
                   <div
-                    key={`${day.toISOString()}-${hour}`}
+                    key={day.toISOString()}
                     onDragOver={(event) => {
-                      if (editable) {
+                      if (editable && dayAvailable) {
                         event.preventDefault();
                       }
                     }}
                     onDrop={(event) => {
-                      if (!editable || !onReschedule || !slotAvailable) {
+                      if (!editable || !onReschedule || !dayAvailable) {
                         return;
                       }
 
                       const appointmentId = event.dataTransfer.getData("text/plain");
-                      if (appointmentId) {
-                        onReschedule(appointmentId, toLocalDateTimeValue(slot));
+                      const appointment = appointments.find((item) => item.id === appointmentId);
+                      if (appointment) {
+                        onReschedule(appointmentId, moveAppointmentToDay(appointment.scheduledAt, day));
                       }
                     }}
-                    className={`${stage ? "min-h-20" : "min-h-24"} p-2 ${slotAvailable ? (dark ? "bg-slate-950" : "bg-white") : dark ? "bg-slate-900/50" : "bg-slate-100"}`}
+                    className={`min-h-36 p-2 transition-colors ${dayAvailable ? "bg-slate-950" : "bg-slate-900/50"}`}
                   >
-                    <div className={stage ? "flex max-h-28 flex-col gap-1.5 overflow-y-auto pr-1" : "space-y-2"}>
-                      {slotAppointments.map((appointment) => {
-                        return stage ? (
-                          <AppointmentBlock key={appointment.id} appointment={appointment} editable={editable} />
-                        ) : (
-                          <article
-                            key={appointment.id}
-                            draggable={editable}
-                            onDragStart={(event) => event.dataTransfer.setData("text/plain", appointment.id)}
-                            className={`rounded-lg border-l-4 border-brand-teal p-2 text-xs shadow-sm ${
-                              dark ? "bg-slate-900 text-slate-100" : "bg-slate-50 text-slate-900"
-                            } ${editable ? "cursor-grab active:cursor-grabbing" : ""}`}
-                            title={editable ? "Drag to another calendar slot" : undefined}
-                          >
-                            <p className="font-black">{appointment.title}</p>
-                            <p className={dark ? "mt-1 font-semibold text-slate-400" : "mt-1 font-semibold text-slate-500"}>{appointment.subtitle}</p>
-                            <p className="mt-2 font-black uppercase text-brand-teal">{appointment.status}</p>
-                          </article>
-                        );
-                      })}
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-black text-white">{formatMonthDay(day)}</p>
+                        <p className="text-[10px] font-bold uppercase text-slate-500">{formatWeekday(day)}</p>
+                      </div>
+                      {dayAppointments.length ? (
+                        <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-black text-slate-200">{dayAppointments.length}</span>
+                      ) : null}
+                    </div>
+                    <div className="max-h-24 space-y-1.5 overflow-y-auto pr-1">
+                      {dayAppointments.map((appointment) => (
+                        <AppointmentBlock key={appointment.id} appointment={appointment} editable={editable} compact />
+                      ))}
                     </div>
                   </div>
                 );
               })}
-            </Fragment>
-          ))}
-        </div>
+            </div>
+          </div>
+        ) : (
+          <div className="max-h-[620px] overflow-x-auto overflow-y-auto rounded-lg transition-all duration-300">
+            <div
+              className={`grid gap-px overflow-hidden rounded-lg border ${dark ? "border-slate-800 bg-slate-800" : "border-slate-200 bg-slate-200"}`}
+              style={{
+                gridTemplateColumns: `72px repeat(${days.length}, ${columnMinWidth})`,
+                minWidth: `${gridMinWidth}px`,
+              }}
+            >
+              <div className={dark ? "bg-slate-950 p-3" : "bg-slate-50 p-3"} />
+              {days.map((day) => (
+                <div key={day.toISOString()} className={dark ? "bg-slate-950 p-3" : "bg-slate-50 p-3"}>
+                  <p className="text-xs font-black">{formatWeekday(day)}</p>
+                  <p className={dark ? "text-xs font-semibold text-slate-400" : "text-xs font-semibold text-slate-500"}>
+                    {formatMonthDay(day)}
+                  </p>
+                </div>
+              ))}
+              {hours.map((hour) => (
+                <Fragment key={hour}>
+                  <div key={`time-${hour}`} className={dark ? "bg-slate-950 p-3 text-xs font-black text-slate-400" : "bg-slate-50 p-3 text-xs font-black text-slate-500"}>
+                    {`${hour.toString().padStart(2, "0")}:00`}
+                  </div>
+                  {days.map((day) => {
+                    const slot = setTime(day, hour);
+                    const slotAppointments = appointments.filter((appointment) => sameSlot(appointment.scheduledAt, slot));
+                    const slotMinutes = hour * 60;
+                    const slotAvailable = !availabilityWindow || (
+                      availabilityWindow.days.includes(slot.getDay()) &&
+                      slotMinutes >= availabilityWindow.startMinutes &&
+                      slotMinutes < availabilityWindow.endMinutes
+                    );
+
+                    return (
+                      <div
+                        key={`${day.toISOString()}-${hour}`}
+                        onDragOver={(event) => {
+                          if (editable) {
+                            event.preventDefault();
+                          }
+                        }}
+                        onDrop={(event) => {
+                          if (!editable || !onReschedule || !slotAvailable) {
+                            return;
+                          }
+
+                          const appointmentId = event.dataTransfer.getData("text/plain");
+                          if (appointmentId) {
+                            onReschedule(appointmentId, toLocalDateTimeValue(slot));
+                          }
+                        }}
+                        className={`${stage ? "min-h-20" : "min-h-24"} p-2 ${slotAvailable ? (dark ? "bg-slate-950" : "bg-white") : dark ? "bg-slate-900/50" : "bg-slate-100"}`}
+                      >
+                        <div className={stage ? "flex max-h-28 flex-col gap-1.5 overflow-y-auto pr-1" : "space-y-2"}>
+                          {slotAppointments.map((appointment) => {
+                            return stage ? (
+                              <AppointmentBlock key={appointment.id} appointment={appointment} editable={editable} />
+                            ) : (
+                              <article
+                                key={appointment.id}
+                                draggable={editable}
+                                onDragStart={(event) => event.dataTransfer.setData("text/plain", appointment.id)}
+                                className={`rounded-lg border-l-4 border-brand-teal p-2 text-xs shadow-sm ${
+                                  dark ? "bg-slate-900 text-slate-100" : "bg-slate-50 text-slate-900"
+                                } ${editable ? "cursor-grab active:cursor-grabbing" : ""}`}
+                                title={editable ? "Drag to another calendar slot" : undefined}
+                              >
+                                <p className="font-black">{appointment.title}</p>
+                                <p className={dark ? "mt-1 font-semibold text-slate-400" : "mt-1 font-semibold text-slate-500"}>{appointment.subtitle}</p>
+                                <p className="mt-2 font-black uppercase text-brand-teal">{appointment.status}</p>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </Fragment>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
-      )}
       {!stage && appointments.length ? (
         <div className="mt-4 grid gap-2 md:grid-cols-2">
           {appointments.slice(0, 4).map((appointment) => (

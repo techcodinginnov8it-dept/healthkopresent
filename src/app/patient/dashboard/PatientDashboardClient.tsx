@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import QRCode from "qrcode";
 import { logoutPatient } from "@/app/actions/auth";
 import { bookAppointment, confirmFollowUpAppointment, requestFollowUpReschedule } from "@/app/actions/patient";
 import { authorizePatientVideoSession, endVideoSession } from "@/app/actions/video-session";
@@ -10,7 +11,6 @@ import { DashboardShell, type DashboardNavItem } from "@/components/dashboard/Da
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
 import { PatientSettingsModule } from "@/components/dashboard/SettingsModule";
 import {
-  AppointmentCard,
   ChatPanel,
   EmptyState,
   FloatingConsultationCall,
@@ -44,10 +44,13 @@ type PatientDashboardClientProps = {
   patient: Patient;
   doctors: DashboardDoctor[];
   initialModule?: PatientModuleId;
+  medicalIdUrl: string;
 };
 
 type AppointmentFeedFilter = "all" | "pending" | "confirmed" | "completed" | "cancelled";
 type MedicalAccessTab = "summary" | "assessment" | "prescriptions";
+type ConsultationTimelineFilter = "all" | "upcoming" | "past";
+type ConsultationHubTab = "prescriptions" | "notes" | "documents" | "requirements";
 
 const PATIENT_MODULES = [
   "overview",
@@ -74,6 +77,19 @@ const MEDICAL_ACCESS_TABS: { id: MedicalAccessTab; label: string }[] = [
   { id: "summary", label: "Summary" },
   { id: "assessment", label: "Assessment" },
   { id: "prescriptions", label: "Prescriptions" },
+];
+
+const CONSULTATION_TIMELINE_FILTERS: { id: ConsultationTimelineFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "upcoming", label: "Upcoming" },
+  { id: "past", label: "Past" },
+];
+
+const CONSULTATION_HUB_TABS: { id: ConsultationHubTab; label: string }[] = [
+  { id: "prescriptions", label: "Prescriptions" },
+  { id: "notes", label: "Doctor's Notes" },
+  { id: "documents", label: "Medical Documents" },
+  { id: "requirements", label: "Requirements" },
 ];
 
 function getAppointmentStatusStyle(status: string) {
@@ -125,12 +141,75 @@ function getMedicalBullets(value?: string | null) {
     .filter(Boolean);
 }
 
+function getAgeFromDob(dob: string) {
+  const birthDate = new Date(dob);
+  if (Number.isNaN(birthDate.getTime())) {
+    return null;
+  }
+
+  const now = new Date();
+  let age = now.getFullYear() - birthDate.getFullYear();
+  const monthDiff = now.getMonth() - birthDate.getMonth();
+
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birthDate.getDate())) {
+    age -= 1;
+  }
+
+  return age >= 0 ? age : null;
+}
+
+type MedicalInfoFieldProps = {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  emphasized?: boolean;
+};
+
+function MedicalInfoField({ icon, label, value, emphasized = false }: MedicalInfoFieldProps) {
+  return (
+    <div
+      className={[
+        "flex items-start gap-3 rounded-2xl border p-4",
+        emphasized ? "border-red-200 bg-red-50/80" : "border-slate-200 bg-slate-50",
+      ].join(" ")}
+    >
+      <div
+        className={[
+          "mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+          emphasized ? "bg-red-100 text-red-700" : "bg-white text-brand-teal shadow-sm",
+        ].join(" ")}
+      >
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <dt className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">{label}</dt>
+        <dd className={["mt-1 text-sm font-bold leading-snug", emphasized ? "text-red-900" : "text-slate-900"].join(" ")}>
+          {value}
+        </dd>
+      </div>
+    </div>
+  );
+}
+
+function getInitials(value: string) {
+  return value
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+}
+
 function isDoctorFollowUp(appointment: PatientAppointment) {
   return appointment.reason?.toLowerCase().startsWith("follow-up") || appointment.notes?.includes("Follow-up requested by doctor");
 }
 
+function escapePdfText(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+}
+
 function downloadMedicalReport(appointment: PatientAppointment) {
-  const report = [
+  const reportLines = [
     "Healthko Medical Report",
     "",
     `Doctor: ${appointment.doctor.name}`,
@@ -146,8 +225,31 @@ function downloadMedicalReport(appointment: PatientAppointment) {
     "",
     "Prescription",
     appointment.prescription || "No prescription issued.",
-  ].join("\n");
-  const blob = new Blob([report], { type: "application/pdf" });
+  ];
+  const textStream = reportLines
+    .slice(0, 34)
+    .map((line, index) => `BT /F1 11 Tf 54 ${760 - index * 18} Td (${escapePdfText(line)}) Tj ET`)
+    .join("\n");
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    `<< /Length ${textStream.length} >>\nstream\n${textStream}\nendstream`,
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  });
+  pdf += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  const blob = new Blob([pdf], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
 
@@ -244,34 +346,32 @@ function getSmartSchedulingSuggestions({
   return suggestions;
 }
 
-function PatientQrCode({ value }: { value: string }) {
-  const cells = Array.from({ length: 121 }, (_, index) => {
-    const code = value.charCodeAt(index % Math.max(value.length, 1)) || 0;
-    const row = Math.floor(index / 11);
-    const col = index % 11;
-    const finder =
-      (row < 3 && col < 3) ||
-      (row < 3 && col > 7) ||
-      (row > 7 && col < 3);
-
-    return finder || ((code + row * 7 + col * 13 + index) % 5 < 2);
-  });
-
+function PatientQrCode({ svgMarkup }: { svgMarkup: string }) {
   return (
-    <svg viewBox="0 0 132 132" role="img" aria-label="Patient quick access code" className="h-36 w-36 rounded-xl bg-white p-2">
-      <title>{value}</title>
-      <rect width="132" height="132" rx="10" fill="white" />
-      {cells.map((filled, index) => {
-        if (!filled) {
-          return null;
-        }
-
-        const x = (index % 11) * 12 + 4;
-        const y = Math.floor(index / 11) * 12 + 4;
-        return <rect key={index} x={x} y={y} width="9" height="9" rx="2" fill="#0f766e" />;
-      })}
-    </svg>
+    <div
+      className="grid h-44 w-44 place-items-center rounded-3xl border border-slate-200 bg-white p-3 shadow-inner ring-1 ring-slate-950/5 sm:h-48 sm:w-48 [&>svg]:h-full [&>svg]:w-full"
+      role="img"
+      aria-label="Secure patient medical information QR code"
+    >
+      {svgMarkup ? (
+        <div className="h-full w-full" dangerouslySetInnerHTML={{ __html: svgMarkup }} />
+      ) : (
+        <div className="grid h-full w-full place-items-center rounded-xl bg-slate-50 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+          Generating QR
+        </div>
+      )}
+    </div>
   );
+}
+
+function downloadSvgAsFile(svgMarkup: string, filename: string) {
+  const blob = new Blob([svgMarkup], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function PatientAppointmentMiniCalendar({
@@ -389,8 +489,8 @@ function DoctorProfileModal({
               <p className="mt-1 text-sm font-bold text-slate-500">{doctor.specialty}</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-black text-slate-600">
-            Close
+          <button type="button" onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 text-sm font-black text-slate-600 hover:bg-slate-50" aria-label="Close doctor profile">
+            X
           </button>
         </div>
 
@@ -421,7 +521,7 @@ function DoctorProfileModal({
   );
 }
 
-export default function PatientDashboardClient({ patient, doctors, initialModule = "overview" }: PatientDashboardClientProps) {
+export default function PatientDashboardClient({ patient, doctors, initialModule = "overview", medicalIdUrl }: PatientDashboardClientProps) {
   const router = useRouter();
   const [activeModule, setActiveModule] = useDashboardModule<PatientModuleId>(initialModule, PATIENT_MODULES);
   const [collapsed, setCollapsed] = useState(false);
@@ -437,6 +537,8 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [appointmentFilter, setAppointmentFilter] = useState<AppointmentFeedFilter>("all");
   const [selectedAppointmentId, setSelectedAppointmentId] = useState("");
+  const [consultationFilter, setConsultationFilter] = useState<ConsultationTimelineFilter>("all");
+  const [consultationHubTab, setConsultationHubTab] = useState<ConsultationHubTab>("prescriptions");
   const [profileDoctor, setProfileDoctor] = useState<DashboardDoctor | null>(null);
   const [selectedMedicalAppointmentId, setSelectedMedicalAppointmentId] = useState("");
   const [medicalAccessTab, setMedicalAccessTab] = useState<MedicalAccessTab>("summary");
@@ -447,6 +549,8 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
   const [appointmentCalendarAnchor, setAppointmentCalendarAnchor] = useState(() => startOfMonth(new Date()));
   const [selectedCalendarDate, setSelectedCalendarDate] = useState("");
   const [appointmentReferenceTime] = useState(() => new Date());
+  const [medicalIdQrSvg, setMedicalIdQrSvg] = useState("");
+  const [medicalIdAction, setMedicalIdAction] = useState<"idle" | "copied" | "downloaded">("idle");
   const [bookingState, setBookingState] = useState<{ loading: boolean; error: string; success: string }>({
     loading: false,
     error: "",
@@ -461,6 +565,32 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       setToasts((current) => current.filter((toast) => toast.id !== id));
     }, 5000);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    QRCode.toString(medicalIdUrl, {
+      errorCorrectionLevel: "M",
+      margin: 1,
+      type: "svg",
+      width: 256,
+    })
+      .then((svg) => {
+        if (active) {
+          setMedicalIdQrSvg(svg);
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to generate medical ID QR code:", error);
+        if (active) {
+          setMedicalIdQrSvg("");
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [medicalIdUrl]);
 
   const onRealtimeEvent = useCallback((event: RealtimeEvent) => {
     if (
@@ -508,13 +638,14 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     publish: realtime.publish,
     persistKey: `healthko:patient:${patient.id}:active-consultation`,
   });
+  const isLiveConsultationActive = Boolean(session.roomId && (session.status === "waiting" || session.status === "connected"));
   const webRTC = useWebRTC({
     roomId: session.roomId,
     role: "patient",
     getSocket: realtime.getSocket,
     isCameraOn: session.isCameraOn,
     isMicOn: session.isMicOn,
-    isActive: Boolean(session.roomId && session.status === "connected"),
+    isActive: isLiveConsultationActive,
     signalingReady: realtime.socketReady,
     onRemoteSessionEnded: () => {
       session.endSession(false);
@@ -525,6 +656,29 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     },
   });
   const receiveRealtimeEvent = session.receiveRealtimeEvent;
+
+  const handleCopyMedicalIdLink = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(medicalIdUrl);
+      setMedicalIdAction("copied");
+      showToast("success", "Medical profile link copied.");
+      window.setTimeout(() => setMedicalIdAction("idle"), 2000);
+    } catch {
+      showToast("error", "Could not copy the medical profile link.");
+    }
+  }, [medicalIdUrl, showToast]);
+
+  const handleDownloadMedicalIdQr = useCallback(() => {
+    if (!medicalIdQrSvg) {
+      showToast("error", "QR code is still generating.");
+      return;
+    }
+
+    downloadSvgAsFile(medicalIdQrSvg, `healthko-medical-id-${patient.id}.svg`);
+    setMedicalIdAction("downloaded");
+    showToast("success", "QR code downloaded.");
+    window.setTimeout(() => setMedicalIdAction("idle"), 2000);
+  }, [medicalIdQrSvg, patient.id, showToast]);
 
   useEffect(() => {
     receiveRealtimeEvent(realtime.lastEvent);
@@ -572,6 +726,26 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       null
     );
   }, [appointmentFeed, appointments, selectedAppointmentId, upcomingAppointments]);
+  const consultationTimeline = useMemo(() => {
+    const filtered = appointments.filter((booking) => {
+      if (consultationFilter === "upcoming") {
+        return new Date(booking.scheduledAt) >= appointmentReferenceTime && booking.status !== "CANCELLED" && booking.status !== "COMPLETED";
+      }
+
+      if (consultationFilter === "past") {
+        return booking.status === "COMPLETED" || booking.status === "CANCELLED" || new Date(booking.scheduledAt) < appointmentReferenceTime;
+      }
+
+      return true;
+    });
+
+    return [...filtered].sort((a, b) => {
+      const first = new Date(a.scheduledAt).getTime();
+      const second = new Date(b.scheduledAt).getTime();
+
+      return consultationFilter === "past" ? second - first : first - second;
+    });
+  }, [appointmentReferenceTime, appointments, consultationFilter]);
   const medicalAccessAppointments = useMemo(
     () => historicalAppointments.length ? historicalAppointments : [...appointments].sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()),
     [appointments, historicalAppointments]
@@ -586,6 +760,10 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
   const selectedDoctor = useMemo(
     () => doctors.find((doctor) => doctor.id === selectedDoctorId),
     [doctors, selectedDoctorId]
+  );
+  const selectedAppointmentDoctor = useMemo(
+    () => selectedAppointment ? doctors.find((doctor) => doctor.id === selectedAppointment.doctor.id) : undefined,
+    [doctors, selectedAppointment]
   );
   const schedulingSuggestions = useMemo(
     () => getSmartSchedulingSuggestions({
@@ -832,14 +1010,154 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
   const completedAppointments = appointments.filter((booking) => booking.status === "COMPLETED");
   const recentDoctorNames = Array.from(new Set(appointments.map((booking) => booking.doctor.name))).slice(0, 4);
   const patientAddress = [patient.address, patient.city, patient.state, patient.zipCode, patient.country].filter(Boolean).join(", ");
-  const qrPayload = JSON.stringify({
-    id: patient.id,
-    name: `${patient.firstName} ${patient.lastName}`,
-    dob: patient.dob,
-    phone: patient.phone,
-    email: patient.email,
-    recentDoctors: recentDoctorNames,
-  });
+  const patientMedicalSummary = {
+    height: patient.height || "Not recorded",
+    weight: patient.weight || "Not recorded",
+    bloodType: patient.bloodType || "Not recorded",
+    allergies: patient.allergies || "Not recorded",
+    conditions: patient.existingConditions || "Not recorded",
+    medications: patient.currentMedications || "Not recorded",
+    emergencyContact: [patient.emergencyContactName, patient.emergencyContactRelation, patient.emergencyContactPhone].filter(Boolean).join(" / ") || "Not recorded",
+  };
+  const patientAge = getAgeFromDob(patient.dob);
+  const identityFields = [
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" />
+          <path d="M5 20a7 7 0 0 1 14 0" />
+        </svg>
+      ),
+      label: "Name",
+      value: `${patient.firstName} ${patient.lastName}`,
+    },
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+          <path d="M9 11h6" />
+          <path d="M9 15h4" />
+        </svg>
+      ),
+      label: "Gender",
+      value: patient.gender || "Not specified",
+    },
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="5" width="18" height="16" rx="2" />
+          <path d="M8 3v4" />
+          <path d="M16 3v4" />
+          <path d="M3 10h18" />
+        </svg>
+      ),
+      label: "DOB / Age",
+      value: patientAge ? `${patient.dob} • ${patientAge} years old` : patient.dob,
+    },
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 4h16v16H4z" />
+          <path d="M8 10h8" />
+          <path d="M8 14h6" />
+        </svg>
+      ),
+      label: "Email",
+      value: patient.email,
+    },
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.7-3.1 19.2 19.2 0 0 1-6-6A19.8 19.8 0 0 1 2 4.1 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.2 1.1.6 2.1 1.1 3a2 2 0 0 1-.4 2.1L8.6 10.6a16 16 0 0 0 4.8 4.8l1.8-1.1a2 2 0 0 1 2.1-.4c.9.5 1.9.9 3 1.1A2 2 0 0 1 22 16.9Z" />
+        </svg>
+      ),
+      label: "Phone",
+      value: `${patient.countryCode || ""} ${patient.phone}`.trim(),
+    },
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 21s6-4.8 6-10a6 6 0 1 0-12 0c0 5.2 6 10 6 10Z" />
+          <circle cx="12" cy="11" r="2.5" />
+        </svg>
+      ),
+      label: "Address",
+      value: patientAddress || "No address on file",
+    },
+  ];
+  const vitalFields = [
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 19h16" />
+          <path d="M7 19V9" />
+          <path d="M17 19V5" />
+        </svg>
+      ),
+      label: "Height",
+      value: patientMedicalSummary.height,
+    },
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 7h14l-1 10H6L5 7Z" />
+          <path d="M9 7V5a3 3 0 0 1 6 0v2" />
+          <path d="M8 12h8" />
+        </svg>
+      ),
+      label: "Weight",
+      value: patientMedicalSummary.weight,
+    },
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 21s6-5 6-11a6 6 0 0 0-12 0c0 6 6 11 6 11Z" />
+          <path d="M9.5 11.5h5" />
+        </svg>
+      ),
+      label: "Blood type",
+      value: patientMedicalSummary.bloodType,
+    },
+  ];
+  const riskFields = [
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+          <path d="M10.3 4.3 2.3 18a2 2 0 0 0 1.7 3h16a2 2 0 0 0 1.7-3l-8-13.7a2 2 0 0 0-3.4 0Z" />
+        </svg>
+      ),
+      label: "Allergies",
+      value: patientMedicalSummary.allergies,
+      emphasized: true,
+    },
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 12a8 8 0 1 0 16 0" />
+          <path d="M12 4v5" />
+          <path d="M9.5 8.5 12 11l2.5-2.5" />
+        </svg>
+      ),
+      label: "Conditions",
+      value: patientMedicalSummary.conditions,
+      emphasized: true,
+    },
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M8 4v16" />
+          <path d="M16 4v16" />
+          <path d="M4 8h16" />
+          <path d="M4 16h16" />
+        </svg>
+      ),
+      label: "Medications",
+      value: patientMedicalSummary.medications,
+      emphasized: true,
+    },
+  ];
 
   return (
     <DashboardShell
@@ -852,6 +1170,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
         name: `${patient.firstName} ${patient.lastName}`,
         detail: patient.email,
         meta: patient.emailVerified ? "Email verified" : "Email pending verification",
+        image: patient.image,
       }}
       connectionState={realtime.connectionState}
       notificationBell={
@@ -1101,28 +1420,128 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
               { label: "Pending Rx", value: prescriptions.length, helper: "prescription records available" },
             ]}
           />
+
           <div className="grid gap-5 xl:grid-cols-12">
-            <section className="rounded-xl border border-slate-200 bg-white p-5 xl:col-span-7">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Patient Information</p>
-              <h2 className="mt-2 text-lg font-black text-slate-950">{patient.firstName} {patient.lastName}</h2>
-              <dl className="mt-4 grid gap-3 text-sm md:grid-cols-2">
-                <div><dt className="text-xs font-black uppercase text-slate-400">Email</dt><dd className="font-semibold text-slate-800">{patient.email}</dd></div>
-                <div><dt className="text-xs font-black uppercase text-slate-400">Phone</dt><dd className="font-semibold text-slate-800">{patient.countryCode || ""} {patient.phone}</dd></div>
-                <div><dt className="text-xs font-black uppercase text-slate-400">Date of birth</dt><dd className="font-semibold text-slate-800">{patient.dob}</dd></div>
-                <div><dt className="text-xs font-black uppercase text-slate-400">Gender</dt><dd className="font-semibold text-slate-800">{patient.gender || "Not specified"}</dd></div>
-                <div className="md:col-span-2"><dt className="text-xs font-black uppercase text-slate-400">Address</dt><dd className="font-semibold text-slate-800">{patientAddress || "No address on file"}</dd></div>
-              </dl>
-            </section>
-            <section className="rounded-xl border border-brand-teal/20 bg-brand-teal/5 p-5 xl:col-span-5">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Patient QR</p>
-              <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row">
-                <PatientQrCode value={qrPayload} />
-                <div>
-                  <p className="text-sm font-black text-slate-950">Quick identity reference</p>
-                  <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-600">
-                    Encodes patient ID, name, DOB, contact, and recent care team references for fast verification.
+            <div className="grid gap-5 xl:col-span-7 xl:grid-cols-3">
+              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.24em] text-brand-teal">Identity Profile</p>
+                    <h2 className="mt-2 text-lg font-black text-slate-950">Basic patient details</h2>
+                  </div>
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-teal/10 text-brand-teal">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" />
+                      <path d="M5 20a7 7 0 0 1 14 0" />
+                    </svg>
+                  </div>
+                </div>
+                <dl className="mt-5 grid gap-3">
+                  {identityFields.map((field) => (
+                    <MedicalInfoField key={field.label} icon={field.icon} label={field.label} value={field.value} />
+                  ))}
+                </dl>
+              </section>
+
+              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.24em] text-brand-teal">Vital Health Metrics</p>
+                    <h2 className="mt-2 text-lg font-black text-slate-950">Clinical measurements</h2>
+                  </div>
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 19h16" />
+                      <path d="M7 19V9" />
+                      <path d="M17 19V5" />
+                    </svg>
+                  </div>
+                </div>
+                <dl className="mt-5 grid gap-3">
+                  {vitalFields.map((field) => (
+                    <MedicalInfoField key={field.label} icon={field.icon} label={field.label} value={field.value} />
+                  ))}
+                </dl>
+              </section>
+
+              <section className="rounded-3xl border border-red-200 bg-gradient-to-b from-red-50 to-white p-5 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.24em] text-red-600">Clinical Risk Alerts</p>
+                    <h2 className="mt-2 text-lg font-black text-slate-950">High-priority medical info</h2>
+                  </div>
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-100 text-red-700">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 9v4" />
+                      <path d="M12 17h.01" />
+                      <path d="M10.3 4.3 2.3 18a2 2 0 0 0 1.7 3h16a2 2 0 0 0 1.7-3l-8-13.7a2 2 0 0 0-3.4 0Z" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="mt-5 grid gap-3">
+                  {riskFields.map((field) => (
+                    <MedicalInfoField key={field.label} icon={field.icon} label={field.label} value={field.value} emphasized />
+                  ))}
+                </div>
+              </section>
+            </div>
+
+            <section className="rounded-3xl border border-brand-teal/15 bg-gradient-to-b from-brand-teal/10 via-white to-white p-6 shadow-sm xl:col-span-5">
+              <div className="flex h-full min-h-[28rem] flex-col items-center justify-center text-center">
+                <div className="inline-flex items-center gap-2 rounded-full border border-brand-teal/15 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-brand-teal shadow-sm">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 7a3 3 0 0 1 3-3h1" />
+                    <path d="M16 4h1a3 3 0 0 1 3 3v1" />
+                    <path d="M20 17v1a3 3 0 0 1-3 3h-1" />
+                    <path d="M7 20H6a3 3 0 0 1-3-3v-1" />
+                    <path d="M9 9h6v6H9z" />
+                  </svg>
+                  Digital Medical ID
+                </div>
+
+                <div className="mt-5 rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-inner">
+                  <PatientQrCode svgMarkup={medicalIdQrSvg} />
+                </div>
+
+                <div className="mt-5 w-full max-w-sm">
+                  <h3 className="text-lg font-black text-slate-950 sm:text-xl">Digital Medical ID</h3>
+                  <p className="mt-2 text-sm font-medium leading-relaxed text-slate-600">
+                    Scan to securely share your medical profile with authorized clinicians.
                   </p>
                 </div>
+
+                <div className="mt-5 flex w-full flex-col gap-3 sm:flex-row sm:justify-center">
+                  <button
+                    type="button"
+                    onClick={handleCopyMedicalIdLink}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 shadow-sm transition hover:border-brand-teal hover:text-brand-teal active:scale-[0.99] sm:min-w-36"
+                    aria-label="Copy medical profile link"
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="9" width="11" height="11" rx="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" />
+                    </svg>
+                    {medicalIdAction === "copied" ? "Copied" : "Copy Link"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDownloadMedicalIdQr}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-teal px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-brand-teal-hover active:scale-[0.99] sm:min-w-36"
+                    aria-label="Download medical QR code"
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 3v10" />
+                      <path d="m7 8 5 5 5-5" />
+                      <path d="M5 19h14" />
+                    </svg>
+                    {medicalIdAction === "downloaded" ? "Downloaded" : "Download QR"}
+                  </button>
+                </div>
+
+                <p className="mt-5 max-w-sm text-xs font-medium leading-relaxed text-slate-500">
+                  Keep this ID handy for secure telehealth check-ins, message-based sharing, or a printed backup.
+                </p>
               </div>
             </section>
           </div>
@@ -1323,35 +1742,6 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                 onAnchorDateChange={setAppointmentCalendarAnchor}
                 onDateSelect={setSelectedCalendarDate}
               />
-
-              <section className="rounded-xl border border-slate-200 bg-white p-4">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Smart Scheduling</p>
-                <h3 className="mt-1 text-base font-black text-slate-950">{selectedDoctor?.name || "Choose a doctor"}</h3>
-                <p className="mt-1 text-xs font-semibold text-slate-500">
-                  Suggestions use doctor availability and your current appointment windows before the server performs final conflict checks.
-                </p>
-                <div className="mt-4 space-y-2">
-                  {schedulingSuggestions.length ? schedulingSuggestions.map((slot) => (
-                    <button
-                      key={slot.toISOString()}
-                      type="button"
-                      onClick={() => {
-                        setAppointmentDate(toDateKey(slot));
-                        setAppointmentTime(toTimeValue(slot));
-                        setIsBookingOpen(true);
-                      }}
-                      className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 text-left text-xs font-bold text-slate-700 hover:border-brand-teal"
-                    >
-                      <span>{formatDateTime(slot)}</span>
-                      <span className="text-brand-teal">Use</span>
-                    </button>
-                  )) : (
-                    <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs font-semibold text-slate-500">
-                      No low-conflict suggestions found. Choose a doctor or open booking to pick a custom time.
-                    </p>
-                  )}
-                </div>
-              </section>
             </aside>
           </div>
         </section>
@@ -1385,23 +1775,258 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
             chat={<ChatPanel role="patient" messages={session.messages} onSend={session.sendMessage} />}
           />
         ) : (
-          <section className="space-y-4">
-            <h2 className="text-lg font-black">Live Consultation</h2>
-            {confirmedAppointments.length ? (
-              confirmedAppointments.map((booking) => (
-                <AppointmentCard
-                  key={booking.id}
-                  title={booking.doctor.name}
-                  subtitle={booking.doctor.specialty}
-                  scheduledAt={booking.scheduledAt}
-                  status={booking.status}
-                  reason={booking.reason}
-                  actions={<button type="button" onClick={() => startLiveSession(booking)} className="rounded-lg bg-brand-red px-3 py-2 text-xs font-black text-white">Join Consultation</button>}
-                />
-              ))
-            ) : (
-              <EmptyState title="No confirmed live room" body="A doctor must accept your appointment before a room appears here." />
-            )}
+          <section className="space-y-5">
+            <div className="rounded-xl border border-slate-200 bg-white p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Patient Consultation Dashboard</p>
+                  <h2 className="mt-1 text-2xl font-black text-slate-950">Live Consultation Hub</h2>
+                  <p className="mt-2 max-w-2xl text-sm font-semibold text-slate-500">
+                    Track upcoming consultation access, live-room readiness, and post-consultation care without leaving the telehealth workflow.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveModule("book")}
+                  className="rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-700"
+                >
+                  Manage Appointments
+                </button>
+              </div>
+            </div>
+
+            <div className="grid gap-5 xl:grid-cols-[35fr_65fr]">
+              <section className="rounded-xl border border-slate-200 bg-white">
+                <header className="border-b border-slate-200 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">My Timeline</p>
+                  <h3 className="mt-1 text-lg font-black text-slate-950">Consultation Access</h3>
+                  <div className="mt-4 grid grid-cols-3 gap-2 rounded-lg bg-slate-100 p-1">
+                    {CONSULTATION_TIMELINE_FILTERS.map((filter) => (
+                      <button
+                        key={filter.id}
+                        type="button"
+                        onClick={() => setConsultationFilter(filter.id)}
+                        className={`rounded-md px-3 py-2 text-[10px] font-black uppercase transition ${
+                          consultationFilter === filter.id ? "bg-white text-brand-teal shadow-sm" : "text-slate-500 hover:text-slate-800"
+                        }`}
+                      >
+                        {filter.label}
+                      </button>
+                    ))}
+                  </div>
+                </header>
+
+                <div className="max-h-[760px] space-y-3 overflow-y-auto p-4">
+                  {consultationTimeline.length ? consultationTimeline.map((booking) => {
+                    const isSelected = selectedAppointment?.id === booking.id;
+                    const roomReady = Boolean(authorizedRooms[booking.id] || startedAppointmentId === booking.id);
+                    const doctorProfile = doctors.find((doctor) => doctor.id === booking.doctor.id);
+                    const initials = getInitials(booking.doctor.name) || "DR";
+
+                    return (
+                      <button
+                        key={booking.id}
+                        type="button"
+                        onClick={() => setSelectedAppointmentId(booking.id)}
+                        className={`w-full rounded-xl border p-4 text-left transition ${
+                          isSelected ? "border-brand-teal bg-brand-teal/5 shadow-[0_0_0_1px_rgba(20,184,166,0.2)]" : "border-slate-200 bg-white hover:border-brand-teal/40"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          {doctorProfile?.image ? (
+                            <Image src={doctorProfile.image} alt={booking.doctor.name} width={44} height={44} unoptimized className="h-11 w-11 shrink-0 rounded-xl object-cover" />
+                          ) : (
+                            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-teal/10 text-xs font-black text-brand-teal">
+                              {initials}
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-black text-slate-950">{booking.doctor.name}</p>
+                                <p className="mt-1 truncate text-xs font-bold text-brand-teal">{booking.doctor.specialty}</p>
+                              </div>
+                              <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${getAppointmentStatusStyle(booking.status)}`}>
+                                {booking.status}
+                              </span>
+                            </div>
+                            <time dateTime={new Date(booking.scheduledAt).toISOString()} className="mt-3 grid grid-cols-2 gap-2 text-xs font-black text-slate-700">
+                              <span className="rounded-lg bg-slate-50 px-2 py-1">{formatAppointmentFeedDate(booking.scheduledAt)}</span>
+                              <span className="rounded-lg bg-slate-50 px-2 py-1 text-right">{formatAppointmentFeedTime(booking.scheduledAt)}</span>
+                            </time>
+                            {roomReady && <p className="mt-3 rounded-lg bg-brand-red px-2 py-1 text-[10px] font-black uppercase text-white">Join room available</p>}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  }) : (
+                    <EmptyState title="No consultations match this view" body="Book an appointment or switch timeline tabs." />
+                  )}
+                </div>
+              </section>
+
+              <section className="rounded-xl border border-slate-200 bg-white">
+                {selectedAppointment ? (
+                  <div className="space-y-5 p-5">
+                    <div className="rounded-xl border border-slate-200 bg-slate-950 p-5 text-white">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-brand-teal">Action Hub</p>
+                          <h3 className="mt-2 text-2xl font-black">{selectedAppointment.status === "CONFIRMED" && (authorizedRooms[selectedAppointment.id] || startedAppointmentId === selectedAppointment.id) ? "Live Consultation Ready" : selectedAppointment.status === "CONFIRMED" ? "Waiting for Doctor" : selectedAppointment.status === "PENDING" ? "Awaiting Confirmation" : `${selectedAppointment.status.charAt(0)}${selectedAppointment.status.slice(1).toLowerCase()} Consultation`}</h3>
+                          <p className="mt-2 text-sm font-semibold text-slate-300">
+                            {selectedAppointment.status === "PENDING" && "Your appointment is in the clinical queue for doctor review."}
+                            {selectedAppointment.status === "CONFIRMED" && (authorizedRooms[selectedAppointment.id] || startedAppointmentId === selectedAppointment.id) && "The secure WebRTC room has been opened for this consultation."}
+                            {selectedAppointment.status === "CONFIRMED" && !(authorizedRooms[selectedAppointment.id] || startedAppointmentId === selectedAppointment.id) && "Your appointment is confirmed. The join button activates once the doctor starts the live room."}
+                            {selectedAppointment.status === "COMPLETED" && "This consultation is closed. Review notes, prescriptions, and documents below."}
+                            {selectedAppointment.status === "CANCELLED" && "This consultation was cancelled. You can book another appointment with your care team."}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 flex-col gap-2 sm:min-w-56">
+                          {selectedAppointment.status === "PENDING" && isDoctorFollowUp(selectedAppointment) ? (
+                            <>
+                              <button
+                                type="button"
+                                disabled={followUpActionId === selectedAppointment.id}
+                                onClick={() => void handleConfirmFollowUp(selectedAppointment)}
+                                className="rounded-lg bg-brand-teal px-4 py-3 text-xs font-black text-white disabled:bg-slate-600"
+                              >
+                                Confirm Follow-Up
+                              </button>
+                              <button
+                                type="button"
+                                disabled={followUpActionId === selectedAppointment.id}
+                                onClick={() => openFollowUpReschedule(selectedAppointment)}
+                                className="rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-xs font-black text-white disabled:text-slate-400"
+                              >
+                                Request Reschedule
+                              </button>
+                            </>
+                          ) : selectedAppointment.status === "CONFIRMED" ? (
+                            <button
+                              type="button"
+                              onClick={() => startLiveSession(selectedAppointment)}
+                              className={`rounded-lg px-4 py-3 text-xs font-black text-white ${authorizedRooms[selectedAppointment.id] || startedAppointmentId === selectedAppointment.id ? "bg-brand-red" : "bg-brand-teal"}`}
+                            >
+                              {joiningAppointmentId === selectedAppointment.id ? "Joining..." : authorizedRooms[selectedAppointment.id] || startedAppointmentId === selectedAppointment.id ? "Join Live Consultation" : "Waiting for Doctor"}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setActiveModule(selectedAppointment.status === "COMPLETED" ? "history" : "book")}
+                              className="rounded-lg bg-white px-4 py-3 text-xs font-black text-slate-950"
+                            >
+                              {selectedAppointment.status === "COMPLETED" ? "View Medical Record" : "Manage Appointment"}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Appointment Information</p>
+                        <dl className="mt-4 grid gap-3 text-sm">
+                          <div className="flex items-center justify-between gap-3">
+                            <dt className="font-bold text-slate-500">Doctor</dt>
+                            <dd className="text-right font-black text-slate-950">{selectedAppointment.doctor.name}</dd>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <dt className="font-bold text-slate-500">Specialization</dt>
+                            <dd className="text-right font-black text-slate-950">{selectedAppointment.doctor.specialty}</dd>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <dt className="font-bold text-slate-500">Date</dt>
+                            <dd className="text-right font-black text-slate-950">{formatAppointmentFeedDate(selectedAppointment.scheduledAt)}</dd>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <dt className="font-bold text-slate-500">Time</dt>
+                            <dd className="text-right font-black text-slate-950">{formatAppointmentFeedTime(selectedAppointment.scheduledAt)}</dd>
+                          </div>
+                        </dl>
+                      </div>
+
+                      <div className="rounded-xl border border-slate-200 bg-white p-4">
+                        <div className="flex items-start gap-3">
+                          {selectedAppointmentDoctor?.image ? (
+                            <Image src={selectedAppointmentDoctor.image} alt={selectedAppointment.doctor.name} width={48} height={48} unoptimized className="h-12 w-12 shrink-0 rounded-xl object-cover" />
+                          ) : (
+                            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-brand-teal/10 text-sm font-black text-brand-teal">
+                              {getInitials(selectedAppointment.doctor.name) || "DR"}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Reason for Visit</p>
+                            <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-700">
+                              {selectedAppointment.reason || "No reason was provided for this consultation."}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-white">
+                      <div className="flex gap-2 overflow-x-auto border-b border-slate-200 p-3">
+                        {CONSULTATION_HUB_TABS.map((tab) => (
+                          <button
+                            key={tab.id}
+                            type="button"
+                            onClick={() => setConsultationHubTab(tab.id)}
+                            className={`shrink-0 rounded-lg px-3 py-2 text-[10px] font-black uppercase ${
+                              consultationHubTab === tab.id ? "bg-brand-teal text-white" : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            {tab.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="p-4">
+                        {consultationHubTab === "prescriptions" && (
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <p className="text-xs font-black uppercase tracking-wider text-slate-500">Prescription</p>
+                            <p className="mt-2 text-sm font-semibold text-slate-700">{selectedAppointment.prescription || "No prescription has been issued for this consultation yet."}</p>
+                          </div>
+                        )}
+                        {consultationHubTab === "notes" && (
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <p className="text-xs font-black uppercase tracking-wider text-slate-500">Doctor&apos;s Notes</p>
+                            <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-700">{selectedAppointment.notes || "Doctor notes will appear here after clinical documentation is completed."}</p>
+                          </div>
+                        )}
+                        {consultationHubTab === "documents" && (
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <button type="button" onClick={() => downloadMedicalReport(selectedAppointment)} className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-left text-sm font-black text-slate-950">
+                              Download consultation report
+                            </button>
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                              <p className="text-sm font-black text-slate-950">Medical documents</p>
+                              <p className="mt-2 text-xs font-semibold text-slate-500">Doctor-uploaded files and lab attachments will appear here when available.</p>
+                            </div>
+                          </div>
+                        )}
+                        {consultationHubTab === "requirements" && (
+                          <div className="grid gap-3 md:grid-cols-3">
+                            {[
+                              { label: "Identity", body: "Use your registered Healthko account." },
+                              { label: "Device Check", body: "Camera, microphone, and internet ready before joining." },
+                              { label: "Visit Context", body: selectedAppointment.reason ? "Reason for visit is recorded." : "Add context during the consultation." },
+                            ].map((item) => (
+                              <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <p className="text-sm font-black text-slate-950">{item.label}</p>
+                                <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-500">{item.body}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-6">
+                    <EmptyState title="No appointment selected" body="Choose an appointment from My Timeline to load the consultation action hub." />
+                  </div>
+                )}
+              </section>
+            </div>
           </section>
         )
       )}
@@ -1618,7 +2243,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       )}
 
       {activeModule === "settings" && (
-        <PatientSettingsModule patient={patient} />
+        <PatientSettingsModule patient={patient} onToast={showToast} />
       )}
     </DashboardShell>
   );
