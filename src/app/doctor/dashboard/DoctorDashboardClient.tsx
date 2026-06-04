@@ -646,13 +646,14 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     publish: realtime.publish,
     persistKey: `healthko:doctor:${doctor.id}:active-consultation`,
   });
+  const isLiveConsultationActive = Boolean(session.roomId && (session.status === "waiting" || session.status === "connected"));
   const webRTC = useWebRTC({
     roomId: session.roomId,
     role: "doctor",
     getSocket: realtime.getSocket,
     isCameraOn: session.isCameraOn,
     isMicOn: session.isMicOn,
-    isActive: Boolean(session.roomId && (session.status === "waiting" || session.status === "connected")),
+    isActive: isLiveConsultationActive,
     signalingReady: realtime.socketReady,
     onRemoteSessionEnded: () => {
       session.endSession(false);

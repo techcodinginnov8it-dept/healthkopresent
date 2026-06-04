@@ -320,6 +320,108 @@ function VideoStream({ stream, muted, active }: { stream: MediaStream | null; mu
   );
 }
 
+function ConsultationVideoTile({
+  stream,
+  label,
+  detail,
+  active,
+  muted = false,
+  className = "",
+  tone = "teal",
+}: {
+  stream: MediaStream | null;
+  label: string;
+  detail: string;
+  active: boolean;
+  muted?: boolean;
+  className?: string;
+  tone?: "teal" | "slate";
+}) {
+  const ref = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const video = ref.current;
+    if (!video) {
+      return;
+    }
+
+    video.srcObject = stream;
+    void video.play().catch(() => {
+      // Autoplay can still wait for a user interaction depending on browser policy.
+    });
+
+    return () => {
+      video.srcObject = null;
+    };
+  }, [stream]);
+
+  const hasVideo = Boolean(stream?.getVideoTracks().length);
+  const hasAudio = Boolean(stream?.getAudioTracks().length);
+  const showFeed = Boolean(stream && hasVideo);
+
+  return (
+    <div className={`relative overflow-hidden rounded-xl border border-slate-800 bg-slate-950 ${className}`}>
+      {showFeed ? (
+        <video
+          ref={ref}
+          autoPlay
+          playsInline
+          muted={muted}
+          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${active ? "opacity-100" : "opacity-35"}`}
+        />
+      ) : null}
+      <div
+        className={`absolute inset-0 ${
+          showFeed
+            ? "bg-[linear-gradient(180deg,rgba(2,6,23,0.05)_0%,rgba(2,6,23,0.18)_48%,rgba(2,6,23,0.78)_100%)]"
+            : tone === "teal"
+              ? "bg-[radial-gradient(circle_at_top,_rgba(20,184,166,0.28),_transparent_45%)]"
+              : "bg-[radial-gradient(circle_at_top,_rgba(148,163,184,0.22),_transparent_45%)]"
+        }`}
+      />
+      <div className="relative flex h-full flex-col justify-between p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Live feed</p>
+            <h3 className="mt-1 truncate text-sm font-black text-white">{label}</h3>
+            <p className="mt-1 text-xs font-semibold text-slate-200/80">{detail}</p>
+          </div>
+          <span
+            className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${
+              showFeed
+                ? active
+                  ? "bg-emerald-500/15 text-emerald-200"
+                  : "bg-amber-500/15 text-amber-200"
+                : "bg-slate-800/90 text-slate-300"
+            }`}
+          >
+            {showFeed ? (active ? "Camera on" : "Camera off") : "No video"}
+          </span>
+        </div>
+
+        {showFeed ? (
+          <div className="mt-auto flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-950/30 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-100/80 backdrop-blur-sm">
+            <span>{muted ? "Local preview" : "Remote stream"}</span>
+            <span>{hasAudio ? "Audio active" : "Audio unavailable"}</span>
+          </div>
+        ) : (
+          <div className="mt-auto flex flex-1 items-center justify-center p-4 text-center">
+            <div>
+              <div
+                className={`mx-auto h-16 w-16 rounded-full ${
+                  tone === "teal" ? "bg-brand-teal/20" : "bg-slate-700/70"
+                }`}
+              />
+              <p className="mt-4 text-sm font-black text-white">{label}</p>
+              <p className="mt-1 text-xs text-slate-400">{detail}</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 type MediaDeviceControlsProps = {
   devices?: MediaDeviceInfo[];
   cameraDeviceId?: string;
@@ -445,8 +547,8 @@ export function LiveConsultationPanel({
   onRefreshDevices?: () => void;
 }) {
   const statusLabel = status === "connected" ? "Connected" : role === "doctor" ? "Waiting for Patient" : "Waiting room";
-  const localVideoActive = Boolean(localStream?.getVideoTracks().length && isCameraOn);
-  const remoteVideoActive = Boolean(remoteStream?.getVideoTracks().length && counterpartCameraOn);
+  const remoteVideoAvailable = Boolean(remoteStream?.getVideoTracks().length);
+  const remoteVideoActive = remoteVideoAvailable && counterpartCameraOn;
   const connectionLabel =
     connectionState === "connected"
       ? "Media connected"
@@ -492,9 +594,17 @@ export function LiveConsultationPanel({
         </div>
         <div className="relative grid min-h-[520px] gap-4 p-4 pb-28 md:grid-cols-2">
           <div className={`relative min-h-[420px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900 ${remoteVideoActive ? "md:col-span-2" : ""}`}>
-            <VideoStream stream={remoteStream} active={counterpartCameraOn} />
-            <div className={`absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(20,184,166,0.28),_transparent_45%)] ${remoteVideoActive ? "hidden" : ""}`} />
-            <div className={`relative flex h-full items-center justify-center p-6 text-center ${remoteVideoActive ? "hidden" : ""}`}>
+            <ConsultationVideoTile
+              stream={remoteStream}
+              label={counterpartName}
+              detail={counterpartCameraOn ? (role === "doctor" ? "Patient stream" : "Doctor stream") : "Camera disabled"}
+              active={counterpartCameraOn}
+              muted={false}
+              className="h-full min-h-[420px]"
+              tone="teal"
+            />
+            <div className="hidden" />
+            <div className="hidden">
               <div>
                 <div className={`mx-auto h-16 w-16 rounded-full ${counterpartCameraOn ? "bg-brand-teal/20" : "bg-brand-red/30"}`} />
                 <p className="mt-4 text-sm font-black">{counterpartName}</p>
@@ -507,8 +617,16 @@ export function LiveConsultationPanel({
             </div>
           </div>
           <div className={`relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900 ${remoteVideoActive ? "absolute bottom-32 right-6 z-10 h-32 w-44 shadow-2xl shadow-black/50 md:bottom-28 md:right-8 md:h-40 md:w-56" : "min-h-[420px]"}`}>
-            <VideoStream stream={localStream} muted={true} active={isCameraOn} />
-            <div className={`relative flex h-full items-center justify-center p-6 text-center ${localVideoActive ? "hidden" : ""}`}>
+            <ConsultationVideoTile
+              stream={localStream}
+              label="Your stream"
+              detail={isCameraOn ? "Local preview" : "Camera disabled"}
+              active={isCameraOn}
+              muted={true}
+              className="h-full min-h-[420px]"
+              tone="slate"
+            />
+            <div className="hidden">
               <div>
                 <div className={`mx-auto h-16 w-16 rounded-full ${isCameraOn ? "bg-slate-700" : "bg-brand-red/30"}`} />
                 <p className="mt-4 text-sm font-black">Your stream</p>

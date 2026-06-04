@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { DashboardRole, ModuleId } from "@/lib/dashboard/types";
 
 export type DashboardNavItem<TModule extends ModuleId> = {
@@ -121,6 +121,7 @@ export function DashboardShell<TModule extends ModuleId>({
   children: ReactNode;
 }) {
   const isDoctor = role === "doctor";
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const shellBg = isDoctor ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900";
   const sidebarBg = isDoctor ? "bg-slate-950 border-slate-850" : "bg-white border-slate-200";
   const muted = isDoctor ? "text-slate-400" : "text-slate-500";
@@ -128,10 +129,32 @@ export function DashboardShell<TModule extends ModuleId>({
     ? "text-slate-400 hover:bg-slate-900 hover:text-white"
     : "text-slate-500 hover:bg-slate-100 hover:text-slate-950";
 
+  useEffect(() => {
+    if (!mobileNavOpen) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileNavOpen]);
+
   return (
     <div className={`min-h-screen ${shellBg} font-sans lg:flex`}>
+      {mobileNavOpen && (
+        <button
+          type="button"
+          aria-label="Close mobile navigation"
+          className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-sm md:hidden"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      )}
+
       <aside
-        className={`hidden lg:sticky lg:top-0 lg:flex h-screen ${collapsed ? "w-24" : "w-80"} shrink-0 flex-col justify-between overflow-y-auto border-r ${sidebarBg} p-5 transition-all duration-300`}
+        className={`fixed inset-y-0 left-0 z-50 flex w-[min(86vw,22rem)] -translate-x-full flex-col justify-between overflow-y-auto border-r p-5 transition-transform duration-300 md:sticky md:top-0 md:z-auto md:flex md:h-screen md:translate-x-0 md:transition-none md:${collapsed ? "w-24" : "w-24"} lg:${collapsed ? "w-24" : "w-80"} ${mobileNavOpen ? "translate-x-0" : ""} ${sidebarBg}`}
         aria-label={`${role} dashboard navigation`}
       >
         <div className="space-y-6">
@@ -151,7 +174,7 @@ export function DashboardShell<TModule extends ModuleId>({
             <button
               type="button"
               onClick={onToggleCollapsed}
-              className={`flex h-8 w-8 items-center justify-center rounded-lg border ${isDoctor ? "border-slate-800 text-slate-300" : "border-slate-200 text-slate-600"}`}
+              className={`hidden h-8 w-8 items-center justify-center rounded-lg border md:flex ${isDoctor ? "border-slate-800 text-slate-300" : "border-slate-200 text-slate-600"}`}
               aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
               <CollapseIcon collapsed={collapsed} />
@@ -176,7 +199,7 @@ export function DashboardShell<TModule extends ModuleId>({
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-current/10">
                     <NavIcon id={item.id} />
                   </span>
-                  {!collapsed && <span className="min-w-0 flex-1 leading-tight">{item.label}</span>}
+                  {!(collapsed && !mobileNavOpen) && <span className="min-w-0 flex-1 leading-tight">{item.label}</span>}
                 </button>
               );
             })}
@@ -184,7 +207,7 @@ export function DashboardShell<TModule extends ModuleId>({
         </div>
 
         <div className={`space-y-4 border-t pt-5 ${isDoctor ? "border-slate-850" : "border-slate-200"}`}>
-          {!collapsed && (
+          {(!(collapsed && !mobileNavOpen) || mobileNavOpen) && (
             <div className="flex items-start gap-3">
               {profile.image ? (
                 <div className="h-10 w-10 shrink-0 rounded-lg bg-cover bg-center" style={{ backgroundImage: `url(${profile.image})` }} role="img" aria-label={`${profile.name} profile image`} />
@@ -203,18 +226,42 @@ export function DashboardShell<TModule extends ModuleId>({
               </div>
             </div>
           )}
-          {onLogout()}
+          <div className="flex items-center gap-2">
+            <div className="flex-1">{onLogout()}</div>
+            <button
+              type="button"
+              className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-600 md:hidden"
+              onClick={() => setMobileNavOpen(false)}
+              aria-label="Close navigation drawer"
+            >
+              <CollapseIcon collapsed={false} />
+            </button>
+          </div>
         </div>
       </aside>
 
       <div className="flex min-h-screen flex-1 flex-col">
         <header className={`sticky top-0 z-30 border-b ${isDoctor ? "border-slate-850 bg-slate-950/90" : "border-slate-200 bg-white/90"} px-4 py-3 backdrop-blur lg:px-8`}>
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.25em] text-brand-teal">
-                {subtitle}
-              </p>
-              <h1 className="mt-1 font-display text-2xl font-black tracking-tight">{title}</h1>
+            <div className="flex items-start gap-3">
+              <button
+                type="button"
+                className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl border md:hidden ${isDoctor ? "border-slate-800 text-slate-200" : "border-slate-200 text-slate-700"}`}
+                onClick={() => setMobileNavOpen(true)}
+                aria-label="Open mobile navigation"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <path d="M4 7h16" />
+                  <path d="M4 12h16" />
+                  <path d="M4 17h16" />
+                </svg>
+              </button>
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-brand-teal">
+                  {subtitle}
+                </p>
+                <h1 className="mt-1 font-display text-2xl font-black tracking-tight">{title}</h1>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               {statusIndicator}
@@ -240,12 +287,15 @@ export function DashboardShell<TModule extends ModuleId>({
             </div>
           )}
 
-          <div className="mt-3 flex gap-2 overflow-x-auto pb-1 lg:hidden" aria-label="Mobile module navigation">
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1 md:hidden" aria-label="Mobile module navigation">
             {navItems.map((item) => (
               <button
                 key={item.id}
                 type="button"
-                onClick={() => onNavigate(item.id)}
+                onClick={() => {
+                  onNavigate(item.id);
+                  setMobileNavOpen(false);
+                }}
                 className={`flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-xs font-black ${
                   activeModule === item.id ? "bg-brand-teal text-white" : isDoctor ? "bg-slate-900 text-slate-300" : "bg-slate-100 text-slate-600"
                 }`}

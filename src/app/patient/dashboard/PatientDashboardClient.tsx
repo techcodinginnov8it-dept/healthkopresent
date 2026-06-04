@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import QRCode from "qrcode";
 import { logoutPatient } from "@/app/actions/auth";
 import { bookAppointment, confirmFollowUpAppointment, requestFollowUpReschedule } from "@/app/actions/patient";
 import { authorizePatientVideoSession, endVideoSession } from "@/app/actions/video-session";
@@ -43,6 +44,7 @@ type PatientDashboardClientProps = {
   patient: Patient;
   doctors: DashboardDoctor[];
   initialModule?: PatientModuleId;
+  medicalIdUrl: string;
 };
 
 type AppointmentFeedFilter = "all" | "pending" | "confirmed" | "completed" | "cancelled";
@@ -137,6 +139,56 @@ function getMedicalBullets(value?: string | null) {
     .split(/\n|\. /)
     .map((item) => item.replace(/\.$/, "").trim())
     .filter(Boolean);
+}
+
+function getAgeFromDob(dob: string) {
+  const birthDate = new Date(dob);
+  if (Number.isNaN(birthDate.getTime())) {
+    return null;
+  }
+
+  const now = new Date();
+  let age = now.getFullYear() - birthDate.getFullYear();
+  const monthDiff = now.getMonth() - birthDate.getMonth();
+
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birthDate.getDate())) {
+    age -= 1;
+  }
+
+  return age >= 0 ? age : null;
+}
+
+type MedicalInfoFieldProps = {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  emphasized?: boolean;
+};
+
+function MedicalInfoField({ icon, label, value, emphasized = false }: MedicalInfoFieldProps) {
+  return (
+    <div
+      className={[
+        "flex items-start gap-3 rounded-2xl border p-4",
+        emphasized ? "border-red-200 bg-red-50/80" : "border-slate-200 bg-slate-50",
+      ].join(" ")}
+    >
+      <div
+        className={[
+          "mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+          emphasized ? "bg-red-100 text-red-700" : "bg-white text-brand-teal shadow-sm",
+        ].join(" ")}
+      >
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <dt className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">{label}</dt>
+        <dd className={["mt-1 text-sm font-bold leading-snug", emphasized ? "text-red-900" : "text-slate-900"].join(" ")}>
+          {value}
+        </dd>
+      </div>
+    </div>
+  );
 }
 
 function getInitials(value: string) {
@@ -294,34 +346,32 @@ function getSmartSchedulingSuggestions({
   return suggestions;
 }
 
-function PatientQrCode({ value }: { value: string }) {
-  const cells = Array.from({ length: 121 }, (_, index) => {
-    const code = value.charCodeAt(index % Math.max(value.length, 1)) || 0;
-    const row = Math.floor(index / 11);
-    const col = index % 11;
-    const finder =
-      (row < 3 && col < 3) ||
-      (row < 3 && col > 7) ||
-      (row > 7 && col < 3);
-
-    return finder || ((code + row * 7 + col * 13 + index) % 5 < 2);
-  });
-
+function PatientQrCode({ svgMarkup }: { svgMarkup: string }) {
   return (
-    <svg viewBox="0 0 132 132" role="img" aria-label="Patient quick access code" className="h-36 w-36 rounded-xl bg-white p-2">
-      <title>{value}</title>
-      <rect width="132" height="132" rx="10" fill="white" />
-      {cells.map((filled, index) => {
-        if (!filled) {
-          return null;
-        }
-
-        const x = (index % 11) * 12 + 4;
-        const y = Math.floor(index / 11) * 12 + 4;
-        return <rect key={index} x={x} y={y} width="9" height="9" rx="2" fill="#0f766e" />;
-      })}
-    </svg>
+    <div
+      className="grid h-44 w-44 place-items-center rounded-3xl border border-slate-200 bg-white p-3 shadow-inner ring-1 ring-slate-950/5 sm:h-48 sm:w-48 [&>svg]:h-full [&>svg]:w-full"
+      role="img"
+      aria-label="Secure patient medical information QR code"
+    >
+      {svgMarkup ? (
+        <div className="h-full w-full" dangerouslySetInnerHTML={{ __html: svgMarkup }} />
+      ) : (
+        <div className="grid h-full w-full place-items-center rounded-xl bg-slate-50 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+          Generating QR
+        </div>
+      )}
+    </div>
   );
+}
+
+function downloadSvgAsFile(svgMarkup: string, filename: string) {
+  const blob = new Blob([svgMarkup], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function PatientAppointmentMiniCalendar({
@@ -471,7 +521,7 @@ function DoctorProfileModal({
   );
 }
 
-export default function PatientDashboardClient({ patient, doctors, initialModule = "overview" }: PatientDashboardClientProps) {
+export default function PatientDashboardClient({ patient, doctors, initialModule = "overview", medicalIdUrl }: PatientDashboardClientProps) {
   const router = useRouter();
   const [activeModule, setActiveModule] = useDashboardModule<PatientModuleId>(initialModule, PATIENT_MODULES);
   const [collapsed, setCollapsed] = useState(false);
@@ -499,6 +549,8 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
   const [appointmentCalendarAnchor, setAppointmentCalendarAnchor] = useState(() => startOfMonth(new Date()));
   const [selectedCalendarDate, setSelectedCalendarDate] = useState("");
   const [appointmentReferenceTime] = useState(() => new Date());
+  const [medicalIdQrSvg, setMedicalIdQrSvg] = useState("");
+  const [medicalIdAction, setMedicalIdAction] = useState<"idle" | "copied" | "downloaded">("idle");
   const [bookingState, setBookingState] = useState<{ loading: boolean; error: string; success: string }>({
     loading: false,
     error: "",
@@ -513,6 +565,32 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       setToasts((current) => current.filter((toast) => toast.id !== id));
     }, 5000);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    QRCode.toString(medicalIdUrl, {
+      errorCorrectionLevel: "M",
+      margin: 1,
+      type: "svg",
+      width: 256,
+    })
+      .then((svg) => {
+        if (active) {
+          setMedicalIdQrSvg(svg);
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to generate medical ID QR code:", error);
+        if (active) {
+          setMedicalIdQrSvg("");
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [medicalIdUrl]);
 
   const onRealtimeEvent = useCallback((event: RealtimeEvent) => {
     if (
@@ -560,13 +638,14 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     publish: realtime.publish,
     persistKey: `healthko:patient:${patient.id}:active-consultation`,
   });
+  const isLiveConsultationActive = Boolean(session.roomId && (session.status === "waiting" || session.status === "connected"));
   const webRTC = useWebRTC({
     roomId: session.roomId,
     role: "patient",
     getSocket: realtime.getSocket,
     isCameraOn: session.isCameraOn,
     isMicOn: session.isMicOn,
-    isActive: Boolean(session.roomId && session.status === "connected"),
+    isActive: isLiveConsultationActive,
     signalingReady: realtime.socketReady,
     onRemoteSessionEnded: () => {
       session.endSession(false);
@@ -577,6 +656,29 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     },
   });
   const receiveRealtimeEvent = session.receiveRealtimeEvent;
+
+  const handleCopyMedicalIdLink = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(medicalIdUrl);
+      setMedicalIdAction("copied");
+      showToast("success", "Medical profile link copied.");
+      window.setTimeout(() => setMedicalIdAction("idle"), 2000);
+    } catch {
+      showToast("error", "Could not copy the medical profile link.");
+    }
+  }, [medicalIdUrl, showToast]);
+
+  const handleDownloadMedicalIdQr = useCallback(() => {
+    if (!medicalIdQrSvg) {
+      showToast("error", "QR code is still generating.");
+      return;
+    }
+
+    downloadSvgAsFile(medicalIdQrSvg, `healthko-medical-id-${patient.id}.svg`);
+    setMedicalIdAction("downloaded");
+    showToast("success", "QR code downloaded.");
+    window.setTimeout(() => setMedicalIdAction("idle"), 2000);
+  }, [medicalIdQrSvg, patient.id, showToast]);
 
   useEffect(() => {
     receiveRealtimeEvent(realtime.lastEvent);
@@ -917,15 +1019,145 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     medications: patient.currentMedications || "Not recorded",
     emergencyContact: [patient.emergencyContactName, patient.emergencyContactRelation, patient.emergencyContactPhone].filter(Boolean).join(" / ") || "Not recorded",
   };
-  const qrPayload = JSON.stringify({
-    id: patient.id,
-    name: `${patient.firstName} ${patient.lastName}`,
-    dob: patient.dob,
-    phone: patient.phone,
-    email: patient.email,
-    medical: patientMedicalSummary,
-    recentDoctors: recentDoctorNames,
-  });
+  const patientAge = getAgeFromDob(patient.dob);
+  const identityFields = [
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" />
+          <path d="M5 20a7 7 0 0 1 14 0" />
+        </svg>
+      ),
+      label: "Name",
+      value: `${patient.firstName} ${patient.lastName}`,
+    },
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+          <path d="M9 11h6" />
+          <path d="M9 15h4" />
+        </svg>
+      ),
+      label: "Gender",
+      value: patient.gender || "Not specified",
+    },
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="5" width="18" height="16" rx="2" />
+          <path d="M8 3v4" />
+          <path d="M16 3v4" />
+          <path d="M3 10h18" />
+        </svg>
+      ),
+      label: "DOB / Age",
+      value: patientAge ? `${patient.dob} • ${patientAge} years old` : patient.dob,
+    },
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 4h16v16H4z" />
+          <path d="M8 10h8" />
+          <path d="M8 14h6" />
+        </svg>
+      ),
+      label: "Email",
+      value: patient.email,
+    },
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.7-3.1 19.2 19.2 0 0 1-6-6A19.8 19.8 0 0 1 2 4.1 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.2 1.1.6 2.1 1.1 3a2 2 0 0 1-.4 2.1L8.6 10.6a16 16 0 0 0 4.8 4.8l1.8-1.1a2 2 0 0 1 2.1-.4c.9.5 1.9.9 3 1.1A2 2 0 0 1 22 16.9Z" />
+        </svg>
+      ),
+      label: "Phone",
+      value: `${patient.countryCode || ""} ${patient.phone}`.trim(),
+    },
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 21s6-4.8 6-10a6 6 0 1 0-12 0c0 5.2 6 10 6 10Z" />
+          <circle cx="12" cy="11" r="2.5" />
+        </svg>
+      ),
+      label: "Address",
+      value: patientAddress || "No address on file",
+    },
+  ];
+  const vitalFields = [
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 19h16" />
+          <path d="M7 19V9" />
+          <path d="M17 19V5" />
+        </svg>
+      ),
+      label: "Height",
+      value: patientMedicalSummary.height,
+    },
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 7h14l-1 10H6L5 7Z" />
+          <path d="M9 7V5a3 3 0 0 1 6 0v2" />
+          <path d="M8 12h8" />
+        </svg>
+      ),
+      label: "Weight",
+      value: patientMedicalSummary.weight,
+    },
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 21s6-5 6-11a6 6 0 0 0-12 0c0 6 6 11 6 11Z" />
+          <path d="M9.5 11.5h5" />
+        </svg>
+      ),
+      label: "Blood type",
+      value: patientMedicalSummary.bloodType,
+    },
+  ];
+  const riskFields = [
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+          <path d="M10.3 4.3 2.3 18a2 2 0 0 0 1.7 3h16a2 2 0 0 0 1.7-3l-8-13.7a2 2 0 0 0-3.4 0Z" />
+        </svg>
+      ),
+      label: "Allergies",
+      value: patientMedicalSummary.allergies,
+      emphasized: true,
+    },
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 12a8 8 0 1 0 16 0" />
+          <path d="M12 4v5" />
+          <path d="M9.5 8.5 12 11l2.5-2.5" />
+        </svg>
+      ),
+      label: "Conditions",
+      value: patientMedicalSummary.conditions,
+      emphasized: true,
+    },
+    {
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M8 4v16" />
+          <path d="M16 4v16" />
+          <path d="M4 8h16" />
+          <path d="M4 16h16" />
+        </svg>
+      ),
+      label: "Medications",
+      value: patientMedicalSummary.medications,
+      emphasized: true,
+    },
+  ];
 
   return (
     <DashboardShell
@@ -1188,35 +1420,128 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
               { label: "Pending Rx", value: prescriptions.length, helper: "prescription records available" },
             ]}
           />
+
           <div className="grid gap-5 xl:grid-cols-12">
-            <section className="rounded-xl border border-slate-200 bg-white p-5 xl:col-span-7">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Patient Information</p>
-              <h2 className="mt-2 text-lg font-black text-slate-950">{patient.firstName} {patient.lastName}</h2>
-              <dl className="mt-4 grid gap-3 text-sm md:grid-cols-2">
-                <div><dt className="text-xs font-black uppercase text-slate-400">Email</dt><dd className="font-semibold text-slate-800">{patient.email}</dd></div>
-                <div><dt className="text-xs font-black uppercase text-slate-400">Phone</dt><dd className="font-semibold text-slate-800">{patient.countryCode || ""} {patient.phone}</dd></div>
-                <div><dt className="text-xs font-black uppercase text-slate-400">Date of birth</dt><dd className="font-semibold text-slate-800">{patient.dob}</dd></div>
-                <div><dt className="text-xs font-black uppercase text-slate-400">Gender</dt><dd className="font-semibold text-slate-800">{patient.gender || "Not specified"}</dd></div>
-                <div className="md:col-span-2"><dt className="text-xs font-black uppercase text-slate-400">Address</dt><dd className="font-semibold text-slate-800">{patientAddress || "No address on file"}</dd></div>
-                <div><dt className="text-xs font-black uppercase text-slate-400">Height</dt><dd className="font-semibold text-slate-800">{patientMedicalSummary.height}</dd></div>
-                <div><dt className="text-xs font-black uppercase text-slate-400">Weight</dt><dd className="font-semibold text-slate-800">{patientMedicalSummary.weight}</dd></div>
-                <div><dt className="text-xs font-black uppercase text-slate-400">Blood type</dt><dd className="font-semibold text-slate-800">{patientMedicalSummary.bloodType}</dd></div>
-                <div><dt className="text-xs font-black uppercase text-slate-400">Allergies</dt><dd className="font-semibold text-slate-800">{patientMedicalSummary.allergies}</dd></div>
-                <div className="md:col-span-2"><dt className="text-xs font-black uppercase text-slate-400">Existing conditions</dt><dd className="font-semibold text-slate-800">{patientMedicalSummary.conditions}</dd></div>
-                <div className="md:col-span-2"><dt className="text-xs font-black uppercase text-slate-400">Current medications</dt><dd className="font-semibold text-slate-800">{patientMedicalSummary.medications}</dd></div>
-                <div className="md:col-span-2"><dt className="text-xs font-black uppercase text-slate-400">Emergency contact</dt><dd className="font-semibold text-slate-800">{patientMedicalSummary.emergencyContact}</dd></div>
-              </dl>
-            </section>
-            <section className="rounded-xl border border-brand-teal/20 bg-brand-teal/5 p-5 xl:col-span-5">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Patient QR</p>
-              <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row">
-                <PatientQrCode value={qrPayload} />
-                <div>
-                  <p className="text-sm font-black text-slate-950">Quick identity reference</p>
-                  <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-600">
-                    Encodes patient ID, name, DOB, contact, medical profile, and recent care team references for fast verification.
+            <div className="grid gap-5 xl:col-span-7 xl:grid-cols-3">
+              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.24em] text-brand-teal">Identity Profile</p>
+                    <h2 className="mt-2 text-lg font-black text-slate-950">Basic patient details</h2>
+                  </div>
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-teal/10 text-brand-teal">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" />
+                      <path d="M5 20a7 7 0 0 1 14 0" />
+                    </svg>
+                  </div>
+                </div>
+                <dl className="mt-5 grid gap-3">
+                  {identityFields.map((field) => (
+                    <MedicalInfoField key={field.label} icon={field.icon} label={field.label} value={field.value} />
+                  ))}
+                </dl>
+              </section>
+
+              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.24em] text-brand-teal">Vital Health Metrics</p>
+                    <h2 className="mt-2 text-lg font-black text-slate-950">Clinical measurements</h2>
+                  </div>
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 19h16" />
+                      <path d="M7 19V9" />
+                      <path d="M17 19V5" />
+                    </svg>
+                  </div>
+                </div>
+                <dl className="mt-5 grid gap-3">
+                  {vitalFields.map((field) => (
+                    <MedicalInfoField key={field.label} icon={field.icon} label={field.label} value={field.value} />
+                  ))}
+                </dl>
+              </section>
+
+              <section className="rounded-3xl border border-red-200 bg-gradient-to-b from-red-50 to-white p-5 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.24em] text-red-600">Clinical Risk Alerts</p>
+                    <h2 className="mt-2 text-lg font-black text-slate-950">High-priority medical info</h2>
+                  </div>
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-100 text-red-700">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 9v4" />
+                      <path d="M12 17h.01" />
+                      <path d="M10.3 4.3 2.3 18a2 2 0 0 0 1.7 3h16a2 2 0 0 0 1.7-3l-8-13.7a2 2 0 0 0-3.4 0Z" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="mt-5 grid gap-3">
+                  {riskFields.map((field) => (
+                    <MedicalInfoField key={field.label} icon={field.icon} label={field.label} value={field.value} emphasized />
+                  ))}
+                </div>
+              </section>
+            </div>
+
+            <section className="rounded-3xl border border-brand-teal/15 bg-gradient-to-b from-brand-teal/10 via-white to-white p-6 shadow-sm xl:col-span-5">
+              <div className="flex h-full min-h-[28rem] flex-col items-center justify-center text-center">
+                <div className="inline-flex items-center gap-2 rounded-full border border-brand-teal/15 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-brand-teal shadow-sm">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 7a3 3 0 0 1 3-3h1" />
+                    <path d="M16 4h1a3 3 0 0 1 3 3v1" />
+                    <path d="M20 17v1a3 3 0 0 1-3 3h-1" />
+                    <path d="M7 20H6a3 3 0 0 1-3-3v-1" />
+                    <path d="M9 9h6v6H9z" />
+                  </svg>
+                  Digital Medical ID
+                </div>
+
+                <div className="mt-5 rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-inner">
+                  <PatientQrCode svgMarkup={medicalIdQrSvg} />
+                </div>
+
+                <div className="mt-5 w-full max-w-sm">
+                  <h3 className="text-lg font-black text-slate-950 sm:text-xl">Digital Medical ID</h3>
+                  <p className="mt-2 text-sm font-medium leading-relaxed text-slate-600">
+                    Scan to securely share your medical profile with authorized clinicians.
                   </p>
                 </div>
+
+                <div className="mt-5 flex w-full flex-col gap-3 sm:flex-row sm:justify-center">
+                  <button
+                    type="button"
+                    onClick={handleCopyMedicalIdLink}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 shadow-sm transition hover:border-brand-teal hover:text-brand-teal active:scale-[0.99] sm:min-w-36"
+                    aria-label="Copy medical profile link"
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="9" width="11" height="11" rx="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" />
+                    </svg>
+                    {medicalIdAction === "copied" ? "Copied" : "Copy Link"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDownloadMedicalIdQr}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-teal px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-brand-teal-hover active:scale-[0.99] sm:min-w-36"
+                    aria-label="Download medical QR code"
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 3v10" />
+                      <path d="m7 8 5 5 5-5" />
+                      <path d="M5 19h14" />
+                    </svg>
+                    {medicalIdAction === "downloaded" ? "Downloaded" : "Download QR"}
+                  </button>
+                </div>
+
+                <p className="mt-5 max-w-sm text-xs font-medium leading-relaxed text-slate-500">
+                  Keep this ID handy for secure telehealth check-ins, message-based sharing, or a printed backup.
+                </p>
               </div>
             </section>
           </div>

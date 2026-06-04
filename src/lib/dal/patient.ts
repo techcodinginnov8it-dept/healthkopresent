@@ -43,6 +43,7 @@ export const getPatientDashboardData = cache(async () => {
         emergencyContactRelation: true,
         emailVerified: true,
         createdAt: true,
+        updatedAt: true,
         bookings: {
           orderBy: { scheduledAt: "asc" },
           select: {
@@ -116,6 +117,7 @@ function getMockPatientDashboardData(session: { userId: string; email: string })
         emergencyContactRelation: patientData.emergencyContactRelation ?? null,
         emailVerified: patientData.emailVerified,
         createdAt: new Date(patientData.createdAt),
+        updatedAt: new Date(patientData.updatedAt),
         bookings,
       },
     };

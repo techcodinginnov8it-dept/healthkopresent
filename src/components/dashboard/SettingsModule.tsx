@@ -316,7 +316,7 @@ function StickyActionBar({
 }) {
   return (
     <div
-      className={`sticky bottom-0 z-20 -mx-5 -mb-5 mt-2 flex justify-end rounded-b-xl border-t px-5 py-3 backdrop-blur md:col-span-2 xl:col-span-3 ${
+      className={`sticky bottom-0 z-20 -mx-5 -mb-5 mt-2 flex flex-col gap-3 rounded-b-xl border-t px-5 py-3 backdrop-blur sm:flex-row sm:justify-end md:col-span-2 xl:col-span-3 ${
         tone === "dark" ? "border-slate-800 bg-slate-950/90" : "border-slate-200 bg-white/90"
       }`}
     >
@@ -384,7 +384,27 @@ function SettingsLayout<TId extends string>({
 
   return (
     <section className="grid min-h-[calc(100vh-9rem)] gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
-      <aside className={`rounded-xl border p-4 ${isDoctor ? "border-slate-850 bg-slate-900" : "border-slate-200 bg-white"}`}>
+      <nav className="flex gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-white p-2 xl:hidden" aria-label={`${role} settings sections`}>
+        {sections.map((section) => {
+          const active = activeSection === section.id;
+
+          return (
+            <button
+              key={section.id}
+              type="button"
+              onClick={() => onSectionChange(section.id)}
+              className={`shrink-0 rounded-full px-4 py-2 text-xs font-black ${
+                active ? "bg-brand-teal text-white" : "bg-slate-100 text-slate-700"
+              }`}
+              aria-current={active ? "page" : undefined}
+            >
+              {section.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      <aside className={`hidden rounded-xl border p-4 xl:block ${isDoctor ? "border-slate-850 bg-slate-900" : "border-slate-200 bg-white"}`}>
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Settings</p>
         <h2 className={`mt-1 text-lg font-black ${isDoctor ? "text-white" : "text-slate-950"}`}>{title}</h2>
         <p className={`mt-1 text-xs font-semibold ${isDoctor ? "text-slate-400" : "text-slate-500"}`}>{subtitle}</p>

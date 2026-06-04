@@ -1,6 +1,8 @@
 import { getPatientDashboardData } from "@/lib/dal/patient";
 import { getDoctorsList } from "@/app/actions/patient";
 import type { PatientModuleId } from "@/lib/dashboard/types";
+import { buildPatientMedicalIdUrl, createPatientMedicalIdToken } from "@/lib/patient-medical-id";
+import { headers } from "next/headers";
 import PatientDashboardClient from "./PatientDashboardClient";
 
 const PATIENT_MODULES = [
@@ -44,7 +46,19 @@ export default async function PatientDashboardPage({
       scheduledAt: new Date(booking.scheduledAt),
       createdAt: new Date(booking.createdAt),
     })),
+    updatedAt: new Date(patient.updatedAt || patient.createdAt),
   };
+
+  const headersList = await headers();
+  const forwardedProto = headersList.get("x-forwarded-proto");
+  const forwardedHost = headersList.get("x-forwarded-host");
+  const host = forwardedHost || headersList.get("host") || "localhost:3000";
+  const origin = `${forwardedProto || "http"}://${host}`;
+  const medicalIdToken = createPatientMedicalIdToken({
+    patientId: patient.id,
+    profileVersion: new Date(patient.updatedAt || patient.createdAt).toISOString(),
+  });
+  const medicalIdUrl = buildPatientMedicalIdUrl(origin, medicalIdToken);
 
   const serializedDoctors = doctors.map((doc) => ({
     id: doc.id,
@@ -69,6 +83,7 @@ export default async function PatientDashboardPage({
       patient={serializedPatient}
       doctors={serializedDoctors}
       initialModule={initialModule}
+      medicalIdUrl={medicalIdUrl}
     />
   );
 }

@@ -83,6 +83,7 @@ export type DashboardPatient = {
   emergencyContactPhone?: string | null;
   emergencyContactRelation?: string | null;
   emailVerified: boolean;
+  updatedAt?: Date | string;
 };
 
 export type PatientAppointment = {
