@@ -1422,7 +1422,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
           />
 
           <div className="grid gap-5 xl:grid-cols-12">
-            <div className="grid gap-5 lg:grid-cols-2 xl:col-span-7 xl:grid-cols-3">
+            <div className="flex flex-col gap-5 xl:col-span-7">
               <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
@@ -1436,7 +1436,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                     </svg>
                   </div>
                 </div>
-                <dl className="mt-5 grid gap-3">
+                <dl className="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
                   {identityFields.map((field) => (
                     <MedicalInfoField key={field.label} icon={field.icon} label={field.label} value={field.value} />
                   ))}
@@ -1457,14 +1457,14 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                     </svg>
                   </div>
                 </div>
-                <dl className="mt-5 grid gap-3">
+                <dl className="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
                   {vitalFields.map((field) => (
                     <MedicalInfoField key={field.label} icon={field.icon} label={field.label} value={field.value} />
                   ))}
                 </dl>
               </section>
 
-              <section className="overflow-hidden rounded-3xl border border-red-200 bg-gradient-to-b from-red-50 to-white p-5 shadow-sm lg:col-span-2 xl:col-span-1">
+              <section className="overflow-hidden rounded-3xl border border-red-200 bg-gradient-to-b from-red-50 to-white p-5 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-[10px] font-black uppercase tracking-[0.24em] text-red-600">Clinical Risk Alerts</p>
@@ -1478,7 +1478,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                     </svg>
                   </div>
                 </div>
-                <div className="mt-5 grid gap-3">
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
                   {riskFields.map((field) => (
                     <MedicalInfoField key={field.label} icon={field.icon} label={field.label} value={field.value} emphasized />
                   ))}
