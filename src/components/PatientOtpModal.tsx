@@ -9,6 +9,7 @@ type PatientOtpModalProps = {
   otpError: string;
   loading: boolean;
   actionLabel: string;
+  debugOtp?: string;
   onOtpChange: (value: string, idx: number) => void;
   onOtpKeyDown: (event: React.KeyboardEvent<HTMLInputElement>, idx: number) => void;
   onSubmit: () => void;
@@ -25,6 +26,7 @@ export default function PatientOtpModal({
   otpError,
   loading,
   actionLabel,
+  debugOtp,
   onOtpChange,
   onOtpKeyDown,
   onSubmit,
@@ -64,6 +66,12 @@ export default function PatientOtpModal({
           {otpError && (
             <div className="rounded-xl border border-brand-red/15 bg-brand-red/10 p-3 text-center text-xs font-bold text-brand-red">
               {otpError}
+            </div>
+          )}
+
+          {debugOtp && (
+            <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-center text-xs font-bold text-amber-200">
+              Local dev OTP: <span className="font-black tracking-[0.3em]">{debugOtp}</span>
             </div>
           )}
 

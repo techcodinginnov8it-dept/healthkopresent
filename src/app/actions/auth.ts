@@ -5,6 +5,7 @@ import { isPrismaConfigured, prisma } from "@/lib/prisma";
 import { clearPatientSession, createPatientSession } from "@/lib/auth/patient-session";
 import { clearDoctorSession, createDoctorSession } from "@/lib/auth/doctor-session";
 import bcrypt from "bcryptjs";
+import { randomInt } from "crypto";
 import { redirect } from "next/navigation";
 import { mockDb } from "@/lib/mockDb";
 import { cookies } from "next/headers";
@@ -85,6 +86,8 @@ type PatientOtpResponse = {
   email?: string;
   message?: string;
   error?: string;
+  delivery?: "email" | "dev";
+  debugOtp?: string;
 };
 
 type DoctorLoginPayload = {
@@ -175,6 +178,18 @@ async function sendPatientSupabaseOtp({
   }
 }
 
+function isLocalOtpFallbackEnabled() {
+  return process.env.NODE_ENV !== "production";
+}
+
+function generateDevOtp() {
+  return randomInt(100000, 1000000).toString();
+}
+
+function storeMockOtp(email: string, purpose: OtpPurpose, otp: string) {
+  mockDb.createEmailOtp(email, otp, purpose, new Date(Date.now() + 10 * 60 * 1000));
+}
+
 async function issueEmailOtp({
   email,
   purpose,
@@ -184,12 +199,24 @@ async function issueEmailOtp({
   purpose: OtpPurpose;
   firstName?: string;
 }) {
-  await sendPatientSupabaseOtp({
-    email,
-    purpose,
-    firstName,
-  });
-  return { delivery: "email" as const };
+  try {
+    await sendPatientSupabaseOtp({
+      email,
+      purpose,
+      firstName,
+    });
+
+    return { delivery: "email" as const };
+  } catch (error: unknown) {
+    if (!isLocalOtpFallbackEnabled()) {
+      throw error;
+    }
+
+    const debugOtp = generateDevOtp();
+    storeMockOtp(email, purpose, debugOtp);
+    console.warn("[issueEmailOtp] Falling back to local mock OTP:", error);
+    return { delivery: "dev" as const, debugOtp };
+  }
 }
 
 function withOtpDeliveryHint(message: string) {
@@ -231,6 +258,22 @@ async function verifySupabaseEmailOtp(email: string, otp: string) {
 
   const message = lastError instanceof Error ? lastError.message : "Incorrect verification code.";
   throw new Error(message);
+}
+
+async function verifyPatientOtpCode(email: string, otp: string, purpose: OtpPurpose) {
+  if (isLocalOtpFallbackEnabled()) {
+    const latestOtp = mockDb.findLatestOtp(email, purpose);
+    if (latestOtp && !latestOtp.used) {
+      const expiresAt = new Date(latestOtp.expiresAt);
+      if (latestOtp.otp === otp && expiresAt.getTime() > Date.now()) {
+        mockDb.markOtpAsUsed(latestOtp.id);
+        return { delivery: "dev" as const };
+      }
+    }
+  }
+
+  await verifySupabaseEmailOtp(email, otp);
+  return { delivery: "email" as const };
 }
 
 /**
@@ -322,10 +365,9 @@ export async function requestPatientSignupOtp(data: PatientSignupPayload): Promi
       requiresOtp: true,
       purpose: "signup_verify",
       email: createdPatient.email,
-      message: withOtpDeliveryHint(
-        "We sent a 6-digit code to your email to finish setting up your patient account.",
-        otpDelivery.delivery,
-      ),
+      message: withOtpDeliveryHint("We sent a 6-digit code to your email to finish setting up your patient account."),
+      delivery: otpDelivery.delivery,
+      debugOtp: otpDelivery.debugOtp,
     };
   } catch (otpError: unknown) {
     console.error("Supabase OTP send failed. Rolling back patient record creation...", otpError);
@@ -370,7 +412,7 @@ export async function verifyPatientSignupOtp(data: {
         return { success: false, error: "We could not find that patient account." };
       }
 
-      await verifySupabaseEmailOtp(email, otp);
+      await verifyPatientOtpCode(email, otp, "signup_verify");
       mockDb.updatePatient(email, { emailVerified: true });
 
       await createPatientSession({
@@ -404,7 +446,7 @@ export async function verifyPatientSignupOtp(data: {
       return { success: false, error: "We could not find that patient account." };
     }
 
-    await verifySupabaseEmailOtp(email, otp);
+    await verifyPatientOtpCode(email, otp, "signup_verify");
 
     await prisma.patient.update({
       where: { email },
@@ -431,7 +473,7 @@ export async function verifyPatientSignupOtp(data: {
         return { success: false, error: "We could not find that patient account." };
       }
 
-      await verifySupabaseEmailOtp(email, otp);
+      await verifyPatientOtpCode(email, otp, "signup_verify");
 
       mockDb.updatePatient(email, { emailVerified: true });
 
@@ -515,7 +557,9 @@ export async function requestPatientLoginOtp(data: PatientLoginPayload): Promise
       requiresOtp: true,
       purpose,
       email: validatedPatient.email,
-      message: withOtpDeliveryHint(message, otpDelivery.delivery),
+      message: withOtpDeliveryHint(message),
+      delivery: otpDelivery.delivery,
+      debugOtp: otpDelivery.debugOtp,
     };
   } catch (otpError: unknown) {
     console.error("Supabase login OTP send failed:", otpError);
@@ -548,7 +592,7 @@ export async function verifyPatientLoginOtp(data: {
         return { success: false, error: "We could not find that patient account." };
       }
 
-      await verifySupabaseEmailOtp(email, otp);
+      await verifyPatientOtpCode(email, otp, purpose);
 
       if (purpose === "signup_verify" && !patient.emailVerified) {
         mockDb.updatePatient(email, { emailVerified: true });
@@ -585,7 +629,7 @@ export async function verifyPatientLoginOtp(data: {
       return { success: false, error: "We could not find that patient account." };
     }
 
-    await verifySupabaseEmailOtp(email, otp);
+    await verifyPatientOtpCode(email, otp, purpose);
 
     if (purpose === "signup_verify" && !patient.emailVerified) {
       await prisma.patient.update({
@@ -614,7 +658,7 @@ export async function verifyPatientLoginOtp(data: {
         return { success: false, error: "We could not find that patient account." };
       }
 
-      await verifySupabaseEmailOtp(email, otp);
+      await verifyPatientOtpCode(email, otp, purpose);
 
       if (purpose === "signup_verify" && !patient.emailVerified) {
         mockDb.updatePatient(email, { emailVerified: true });

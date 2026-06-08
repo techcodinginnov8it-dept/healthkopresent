@@ -22,6 +22,7 @@ export default function SignInPage() {
   const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
   const [otpError, setOtpError] = useState("");
   const [otpPurpose, setOtpPurpose] = useState<OtpPurpose>("login_verify");
+  const [otpDebugCode, setOtpDebugCode] = useState("");
 
   useEffect(() => {
     if (!showOtpModal) {
@@ -74,6 +75,7 @@ export default function SignInPage() {
     setError("");
     setInfo("");
     setOtpError("");
+    setOtpDebugCode("");
 
     try {
       const res = await requestPatientLoginOtp({ email, password });
@@ -87,6 +89,7 @@ export default function SignInPage() {
       setOtpDigits(["", "", "", "", "", ""]);
       setOtpPurpose(res.purpose || "login_verify");
       setInfo(res.message || "");
+      setOtpDebugCode(res.debugOtp || "");
       setShowOtpModal(true);
     } catch {
       setLoading(false);
@@ -301,16 +304,19 @@ export default function SignInPage() {
         otpError={otpError}
         loading={loading}
         actionLabel={otpPurpose === "signup_verify" ? "Verify & Enter Dashboard" : "Confirm & Sign In"}
+        debugOtp={otpDebugCode}
         onOtpChange={handleOtpChange}
         onOtpKeyDown={handleOtpKeyDown}
         onSubmit={handleVerifyOtp}
         onClose={() => {
           setShowOtpModal(false);
           setOtpError("");
+          setOtpDebugCode("");
         }}
         onClear={() => {
           setOtpDigits(["", "", "", "", "", ""]);
           setOtpError("");
+          setOtpDebugCode("");
           document.getElementById("patient-otp-input-0")?.focus();
         }}
       />

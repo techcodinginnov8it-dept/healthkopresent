@@ -39,6 +39,7 @@ export default function SignUpPage() {
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
   const [otpError, setOtpError] = useState("");
+  const [otpDebugCode, setOtpDebugCode] = useState("");
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const confirmPasswordInputRef = useRef<HTMLInputElement>(null);
 
@@ -168,6 +169,7 @@ export default function SignUpPage() {
     setError("");
     setInfo("");
     setOtpError("");
+    setOtpDebugCode("");
 
     try {
       const res = await requestPatientSignupOtp({
@@ -193,6 +195,7 @@ export default function SignUpPage() {
 
       setOtpDigits(["", "", "", "", "", ""]);
       setInfo(res.message || "We sent your verification code.");
+      setOtpDebugCode(res.debugOtp || "");
       setShowOtpModal(true);
     } catch {
       setLoading(false);
@@ -612,16 +615,19 @@ export default function SignUpPage() {
         otpError={otpError}
         loading={loading}
         actionLabel="Verify Email & Open Dashboard"
+        debugOtp={otpDebugCode}
         onOtpChange={handleOtpChange}
         onOtpKeyDown={handleOtpKeyDown}
         onSubmit={handleVerifyOtp}
         onClose={() => {
           setShowOtpModal(false);
           setOtpError("");
+          setOtpDebugCode("");
         }}
         onClear={() => {
           setOtpDigits(["", "", "", "", "", ""]);
           setOtpError("");
+          setOtpDebugCode("");
           document.getElementById("patient-otp-input-0")?.focus();
         }}
       />
