@@ -11,6 +11,7 @@ type OtpPurpose = "signup_verify" | "login_verify";
 
 export default function SignInPage() {
   const router = useRouter();
+  const otpCooldownKey = "healthko-signin-otp-cooldown-until";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -23,6 +24,15 @@ export default function SignInPage() {
   const [otpError, setOtpError] = useState("");
   const [otpPurpose, setOtpPurpose] = useState<OtpPurpose>("login_verify");
   const [otpDebugCode, setOtpDebugCode] = useState("");
+  const [otpCooldownUntil, setOtpCooldownUntil] = useState(() => {
+    if (typeof window === "undefined") {
+      return 0;
+    }
+
+    const storedCooldown = Number(window.sessionStorage.getItem(otpCooldownKey) || "0");
+    return storedCooldown > Date.now() ? storedCooldown : 0;
+  });
+  const [cooldownTick, setCooldownTick] = useState(0);
 
   useEffect(() => {
     if (!showOtpModal) {
@@ -35,6 +45,20 @@ export default function SignInPage() {
 
     return () => window.clearTimeout(timer);
   }, [showOtpModal]);
+
+  useEffect(() => {
+    if (!otpCooldownUntil) {
+      return;
+    }
+
+    window.sessionStorage.setItem(otpCooldownKey, String(otpCooldownUntil));
+    const interval = window.setInterval(() => setCooldownTick(Date.now()), 1000);
+
+    return () => window.clearInterval(interval);
+  }, [otpCooldownUntil]);
+
+  const cooldownRemaining = Math.max(0, Math.ceil((otpCooldownUntil - cooldownTick) / 1000));
+  const isOtpCooldownActive = cooldownRemaining > 0;
 
   const handleOtpChange = (value: string, idx: number) => {
     const cleaned = value.slice(-1);
@@ -71,6 +95,11 @@ export default function SignInPage() {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (isOtpCooldownActive) {
+      setError(`Please wait ${cooldownRemaining}s before requesting another code.`);
+      return;
+    }
+
     setLoading(true);
     setError("");
     setInfo("");
@@ -90,6 +119,7 @@ export default function SignInPage() {
       setOtpPurpose(res.purpose || "login_verify");
       setInfo(res.message || "");
       setOtpDebugCode(res.debugOtp || "");
+      setOtpCooldownUntil(Date.now() + 60_000);
       setShowOtpModal(true);
     } catch {
       setLoading(false);
@@ -267,10 +297,14 @@ export default function SignInPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || isOtpCooldownActive}
               className="w-full bg-brand-teal hover:bg-brand-teal-hover text-white font-bold text-sm py-3.5 rounded-xl transition-all duration-300 shadow-md shadow-brand-teal/10 hover:-translate-y-0.5 active:translate-y-0 disabled:bg-slate-300 disabled:translate-y-0"
             >
-              {loading ? "Sending Secure Code..." : "Access Secure Dashboard"}
+              {loading
+                ? "Sending Secure Code..."
+                : isOtpCooldownActive
+                  ? `Wait ${cooldownRemaining}s`
+                  : "Access Secure Dashboard"}
             </button>
           </form>
 

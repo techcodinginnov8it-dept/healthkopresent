@@ -19,6 +19,7 @@ const countries = [
 
 export default function SignUpPage() {
   const router = useRouter();
+  const otpCooldownKey = "healthko-signup-otp-cooldown-until";
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -40,6 +41,15 @@ export default function SignUpPage() {
   const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
   const [otpError, setOtpError] = useState("");
   const [otpDebugCode, setOtpDebugCode] = useState("");
+  const [otpCooldownUntil, setOtpCooldownUntil] = useState(() => {
+    if (typeof window === "undefined") {
+      return 0;
+    }
+
+    const storedCooldown = Number(window.sessionStorage.getItem(otpCooldownKey) || "0");
+    return storedCooldown > Date.now() ? storedCooldown : 0;
+  });
+  const [cooldownTick, setCooldownTick] = useState(0);
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const confirmPasswordInputRef = useRef<HTMLInputElement>(null);
 
@@ -76,6 +86,20 @@ export default function SignUpPage() {
       window.clearTimeout(delayedSyncTimer);
     };
   }, []);
+
+  useEffect(() => {
+    if (!otpCooldownUntil) {
+      return;
+    }
+
+    window.sessionStorage.setItem(otpCooldownKey, String(otpCooldownUntil));
+    const interval = window.setInterval(() => setCooldownTick(Date.now()), 1000);
+
+    return () => window.clearInterval(interval);
+  }, [otpCooldownUntil]);
+
+  const cooldownRemaining = Math.max(0, Math.ceil((otpCooldownUntil - cooldownTick) / 1000));
+  const isOtpCooldownActive = cooldownRemaining > 0;
 
   const activeCountry = countries.find((country) => country.code === countryCode) || countries[0];
   const digitsOnly = phone.replace(/\D/g, "");
@@ -165,6 +189,11 @@ export default function SignUpPage() {
       return;
     }
 
+    if (isOtpCooldownActive) {
+      setError(`Please wait ${cooldownRemaining}s before requesting another code.`);
+      return;
+    }
+
     setLoading(true);
     setError("");
     setInfo("");
@@ -196,6 +225,7 @@ export default function SignUpPage() {
       setOtpDigits(["", "", "", "", "", ""]);
       setInfo(res.message || "We sent your verification code.");
       setOtpDebugCode(res.debugOtp || "");
+      setOtpCooldownUntil(Date.now() + 60_000);
       setShowOtpModal(true);
     } catch {
       setLoading(false);
@@ -590,10 +620,14 @@ export default function SignUpPage() {
 
             <button
               type="submit"
-              disabled={isSubmitDisabled}
+              disabled={isSubmitDisabled || isOtpCooldownActive}
               className="w-full bg-brand-teal hover:bg-brand-teal-hover text-white font-bold text-sm py-3.5 rounded-xl transition-all duration-300 shadow-md shadow-brand-teal/10 hover:-translate-y-0.5 active:translate-y-0 disabled:bg-slate-300 disabled:translate-y-0"
             >
-              {loading ? "Creating Account..." : "Create Account & Send OTP"}
+              {loading
+                ? "Creating Account..."
+                : isOtpCooldownActive
+                  ? `Wait ${cooldownRemaining}s`
+                  : "Create Account & Send OTP"}
             </button>
           </form>
 
