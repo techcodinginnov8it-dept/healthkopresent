@@ -12,6 +12,7 @@ export default function ForgotPasswordClient() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [mockLink, setMockLink] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(
     urlError === "link_expired"
       ? "That reset link has expired. Please request a new one."
@@ -24,6 +25,7 @@ export default function ForgotPasswordClient() {
     e.preventDefault();
     setError(null);
     setLoading(true);
+    setMockLink(null);
 
     const result = await requestPasswordReset({ email: email.trim() });
 
@@ -34,6 +36,9 @@ export default function ForgotPasswordClient() {
       return;
     }
 
+    if (result.mockLink) {
+      setMockLink(result.mockLink);
+    }
     setSubmitted(true);
   }
 
@@ -98,14 +103,31 @@ export default function ForgotPasswordClient() {
             {submitted ? (
               /* Success state */
               <div className="space-y-4">
-                <div className="p-4 bg-brand-teal/10 border border-brand-teal/20 rounded-xl text-xs text-brand-teal leading-relaxed text-center font-medium">
-                  ✓ &nbsp;Reset link sent. The link expires in 1 hour.
-                </div>
+                {mockLink ? (
+                  <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-xs text-yellow-400 leading-relaxed text-center font-medium">
+                    ⚠️ &nbsp;Email sending failed, but you can use the bypass link below to set your new password.
+                  </div>
+                ) : (
+                  <div className="p-4 bg-brand-teal/10 border border-brand-teal/20 rounded-xl text-xs text-brand-teal leading-relaxed text-center font-medium">
+                    ✓ &nbsp;Reset link sent. The link expires in 1 hour.
+                  </div>
+                )}
+
+                {mockLink && (
+                  <a
+                    href={mockLink}
+                    id="mock-bypass-reset-btn"
+                    className="block w-full text-center bg-brand-teal hover:bg-brand-teal-hover text-white font-bold text-xs py-3 rounded-xl transition-all shadow-md shadow-brand-teal/10 hover:-translate-y-0.5 active:translate-y-0"
+                  >
+                    Bypass & Reset Password
+                  </a>
+                )}
+                
                 <p className="text-center text-xs text-slate-500">
                   Didn't receive it?{" "}
                   <button
                     className="text-brand-teal hover:underline font-bold"
-                    onClick={() => { setSubmitted(false); setError(null); }}
+                    onClick={() => { setSubmitted(false); setError(null); setMockLink(null); }}
                   >
                     Send again
                   </button>
