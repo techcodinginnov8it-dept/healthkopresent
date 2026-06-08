@@ -17,6 +17,20 @@ const countries = [
   { code: "+other", name: "International", regex: /^\d{7,15}$/, placeholder: "Enter international format", formatHint: "7 to 15 digits" }
 ];
 
+const OTP_REQUEST_COOLDOWN_MS = 5 * 60 * 1000;
+
+function formatOtpCooldown(ms: number) {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (minutes > 0) {
+    return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+  }
+
+  return `${seconds}s`;
+}
+
 export default function SignUpPage() {
   const router = useRouter();
   const otpCooldownKey = "healthko-signup-otp-cooldown-until";
@@ -46,10 +60,14 @@ export default function SignUpPage() {
       return 0;
     }
 
-    const storedCooldown = Number(window.sessionStorage.getItem(otpCooldownKey) || "0");
+    const storedCooldown = Number(
+      window.localStorage.getItem(otpCooldownKey) ||
+        window.sessionStorage.getItem(otpCooldownKey) ||
+        "0"
+    );
     return storedCooldown > Date.now() ? storedCooldown : 0;
   });
-  const [cooldownTick, setCooldownTick] = useState(0);
+  const [cooldownTick, setCooldownTick] = useState(() => Date.now());
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const confirmPasswordInputRef = useRef<HTMLInputElement>(null);
 
@@ -89,17 +107,20 @@ export default function SignUpPage() {
 
   useEffect(() => {
     if (!otpCooldownUntil) {
+      window.sessionStorage.removeItem(otpCooldownKey);
+      window.localStorage.removeItem(otpCooldownKey);
       return;
     }
 
     window.sessionStorage.setItem(otpCooldownKey, String(otpCooldownUntil));
+    window.localStorage.setItem(otpCooldownKey, String(otpCooldownUntil));
     const interval = window.setInterval(() => setCooldownTick(Date.now()), 1000);
 
     return () => window.clearInterval(interval);
   }, [otpCooldownUntil]);
 
-  const cooldownRemaining = Math.max(0, Math.ceil((otpCooldownUntil - cooldownTick) / 1000));
-  const isOtpCooldownActive = cooldownRemaining > 0;
+  const cooldownRemainingMs = Math.max(0, otpCooldownUntil - cooldownTick);
+  const isOtpCooldownActive = cooldownRemainingMs > 0;
 
   const activeCountry = countries.find((country) => country.code === countryCode) || countries[0];
   const digitsOnly = phone.replace(/\D/g, "");
@@ -190,7 +211,7 @@ export default function SignUpPage() {
     }
 
     if (isOtpCooldownActive) {
-      setError(`Please wait ${cooldownRemaining}s before requesting another code.`);
+      setError(`Please wait ${formatOtpCooldown(cooldownRemainingMs)} before requesting another code.`);
       return;
     }
 
@@ -225,7 +246,8 @@ export default function SignUpPage() {
       setOtpDigits(["", "", "", "", "", ""]);
       setInfo(res.message || "We sent your verification code.");
       setOtpDebugCode(res.debugOtp || "");
-      setOtpCooldownUntil(Date.now() + 60_000);
+      setOtpCooldownUntil(Date.now() + OTP_REQUEST_COOLDOWN_MS);
+      setCooldownTick(Date.now());
       setShowOtpModal(true);
     } catch {
       setLoading(false);
@@ -626,9 +648,14 @@ export default function SignUpPage() {
               {loading
                 ? "Creating Account..."
                 : isOtpCooldownActive
-                  ? `Wait ${cooldownRemaining}s`
+                  ? `Wait ${formatOtpCooldown(cooldownRemainingMs)}`
                   : "Create Account & Send OTP"}
             </button>
+            {isOtpCooldownActive && (
+              <p className="px-1 text-[11px] font-semibold text-amber-600">
+                You can request another OTP in {formatOtpCooldown(cooldownRemainingMs)}.
+              </p>
+            )}
           </form>
 
           <div className="text-center text-xs font-semibold text-slate-500 pt-4">
