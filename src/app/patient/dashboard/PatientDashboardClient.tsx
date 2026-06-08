@@ -181,9 +181,9 @@ function MedicalInfoField({ icon, label, value, emphasized = false }: MedicalInf
       >
         {icon}
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1 overflow-hidden">
         <dt className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">{label}</dt>
-        <dd className={["mt-1 text-sm font-bold leading-snug", emphasized ? "text-red-900" : "text-slate-900"].join(" ")}>
+        <dd className={["mt-1 break-all text-sm font-bold leading-snug", emphasized ? "text-red-900" : "text-slate-900"].join(" ")}>
           {value}
         </dd>
       </div>
@@ -1422,14 +1422,14 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
           />
 
           <div className="grid gap-5 xl:grid-cols-12">
-            <div className="grid gap-5 xl:col-span-7 xl:grid-cols-3">
-              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="grid gap-5 lg:grid-cols-2 xl:col-span-7 xl:grid-cols-3">
+              <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-[10px] font-black uppercase tracking-[0.24em] text-brand-teal">Identity Profile</p>
                     <h2 className="mt-2 text-lg font-black text-slate-950">Basic patient details</h2>
                   </div>
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-teal/10 text-brand-teal">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-teal/10 text-brand-teal">
                     <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" />
                       <path d="M5 20a7 7 0 0 1 14 0" />
@@ -1443,13 +1443,13 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                 </dl>
               </section>
 
-              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-[10px] font-black uppercase tracking-[0.24em] text-brand-teal">Vital Health Metrics</p>
                     <h2 className="mt-2 text-lg font-black text-slate-950">Clinical measurements</h2>
                   </div>
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
                     <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M4 19h16" />
                       <path d="M7 19V9" />
@@ -1464,13 +1464,13 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                 </dl>
               </section>
 
-              <section className="rounded-3xl border border-red-200 bg-gradient-to-b from-red-50 to-white p-5 shadow-sm">
+              <section className="overflow-hidden rounded-3xl border border-red-200 bg-gradient-to-b from-red-50 to-white p-5 shadow-sm lg:col-span-2 xl:col-span-1">
                 <div className="flex items-center justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-[10px] font-black uppercase tracking-[0.24em] text-red-600">Clinical Risk Alerts</p>
                     <h2 className="mt-2 text-lg font-black text-slate-950">High-priority medical info</h2>
                   </div>
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-100 text-red-700">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-100 text-red-700">
                     <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 9v4" />
                       <path d="M12 17h.01" />

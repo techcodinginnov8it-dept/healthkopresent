@@ -1,355 +1,207 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { getDoctorSession } from "@/lib/auth/doctor-session";
-import { getPatientSession } from "@/lib/auth/patient-session";
 import { formatDate } from "@/lib/dashboard/format";
 import { isPrismaConfigured, prisma } from "@/lib/prisma";
 import { mockDb } from "@/lib/mockDb";
 import { parsePatientMedicalIdToken } from "@/lib/patient-medical-id";
 
-type MedicalIdViewer = {
-  role: "patient" | "doctor";
-  name: string;
-};
-
-type MedicalIdPatient = {
-  id: string;
+type EmergencyPatient = {
   firstName: string;
   lastName: string;
-  email: string;
-  phone: string;
-  countryCode: string;
   dob: string;
   gender: string | null;
-  address: string | null;
-  city: string | null;
-  state: string | null;
-  zipCode: string | null;
-  country: string | null;
-  image: string | null;
+  bloodType: string | null;
   height: string | null;
   weight: string | null;
-  bloodType: string | null;
   allergies: string | null;
   existingConditions: string | null;
   currentMedications: string | null;
   emergencyContactName: string | null;
   emergencyContactPhone: string | null;
   emergencyContactRelation: string | null;
-  emailVerified: boolean;
+  phone: string;
+  countryCode: string | null;
   updatedAt: Date;
 };
 
-type MedicalIdView = {
-  patient: MedicalIdPatient;
-  viewer: MedicalIdViewer;
-};
-
-function toMedicalIdPatient(patient: {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  countryCode?: string | null;
-  dob: string;
-  gender?: string | null;
-  address?: string | null;
-  city?: string | null;
-  state?: string | null;
-  zipCode?: string | null;
-  country?: string | null;
-  image?: string | null;
-  height?: string | null;
-  weight?: string | null;
-  bloodType?: string | null;
-  allergies?: string | null;
-  existingConditions?: string | null;
-  currentMedications?: string | null;
-  emergencyContactName?: string | null;
-  emergencyContactPhone?: string | null;
-  emergencyContactRelation?: string | null;
-  emailVerified: boolean;
-  updatedAt: Date | string;
-}): MedicalIdPatient {
-  return {
-    id: patient.id,
-    firstName: patient.firstName,
-    lastName: patient.lastName,
-    email: patient.email,
-    phone: patient.phone,
-    countryCode: patient.countryCode || "+1",
-    dob: patient.dob,
-    gender: patient.gender ?? null,
-    address: patient.address ?? null,
-    city: patient.city ?? null,
-    state: patient.state ?? null,
-    zipCode: patient.zipCode ?? null,
-    country: patient.country ?? null,
-    image: patient.image ?? null,
-    height: patient.height ?? null,
-    weight: patient.weight ?? null,
-    bloodType: patient.bloodType ?? null,
-    allergies: patient.allergies ?? null,
-    existingConditions: patient.existingConditions ?? null,
-    currentMedications: patient.currentMedications ?? null,
-    emergencyContactName: patient.emergencyContactName ?? null,
-    emergencyContactPhone: patient.emergencyContactPhone ?? null,
-    emergencyContactRelation: patient.emergencyContactRelation ?? null,
-    emailVerified: patient.emailVerified,
-    updatedAt: new Date(patient.updatedAt),
-  };
-}
-
-async function loadMedicalIdView(token: string): Promise<MedicalIdView | "invalid" | "unauthorized" | "signin"> {
+async function loadEmergencyPatient(token: string): Promise<EmergencyPatient | null> {
   const payload = parsePatientMedicalIdToken(token);
-
-  if (!payload) {
-    return "invalid";
-  }
-
-  const patientSession = await getPatientSession();
-  const doctorSession = await getDoctorSession();
-
-  if (!patientSession && !doctorSession) {
-    return "signin";
-  }
+  if (!payload) return null;
 
   if (!isPrismaConfigured()) {
     const patient = mockDb.findPatientById(payload.patientId);
-
-    if (!patient || new Date(patient.updatedAt).toISOString() !== payload.profileVersion) {
-      return "invalid";
-    }
-
-    if (patientSession?.userId === patient.id) {
-      return {
-        viewer: { role: "patient", name: `${patient.firstName} ${patient.lastName}` },
-        patient: toMedicalIdPatient(patient),
-      };
-    }
-
-    if (doctorSession) {
-      const doctorBookings = mockDb.getBookingsForDoctor(doctorSession.userId);
-      const hasRelationship = doctorBookings.some((booking) => booking.patient?.id === patient.id);
-
-      if (!hasRelationship) {
-        return "unauthorized";
-      }
-
-      return {
-        viewer: { role: "doctor", name: doctorSession.email },
-        patient: toMedicalIdPatient(patient),
-      };
-    }
-
-    return "unauthorized";
+    if (!patient) return null;
+    return {
+      firstName: patient.firstName,
+      lastName: patient.lastName,
+      dob: patient.dob,
+      gender: patient.gender ?? null,
+      bloodType: patient.bloodType ?? null,
+      height: patient.height ?? null,
+      weight: patient.weight ?? null,
+      allergies: patient.allergies ?? null,
+      existingConditions: patient.existingConditions ?? null,
+      currentMedications: patient.currentMedications ?? null,
+      emergencyContactName: patient.emergencyContactName ?? null,
+      emergencyContactPhone: patient.emergencyContactPhone ?? null,
+      emergencyContactRelation: patient.emergencyContactRelation ?? null,
+      phone: patient.phone,
+      countryCode: patient.countryCode ?? null,
+      updatedAt: new Date(patient.updatedAt),
+    };
   }
 
   const patient = await prisma.patient.findUnique({
     where: { id: payload.patientId },
     select: {
-      id: true,
       firstName: true,
       lastName: true,
-      email: true,
-      phone: true,
-      countryCode: true,
       dob: true,
       gender: true,
-      address: true,
-      city: true,
-      state: true,
-      zipCode: true,
-      country: true,
-      image: true,
+      bloodType: true,
       height: true,
       weight: true,
-      bloodType: true,
       allergies: true,
       existingConditions: true,
       currentMedications: true,
       emergencyContactName: true,
       emergencyContactPhone: true,
       emergencyContactRelation: true,
-      emailVerified: true,
+      phone: true,
+      countryCode: true,
       updatedAt: true,
-      bookings: {
-        orderBy: { scheduledAt: "desc" },
-        take: 5,
-        select: {
-          id: true,
-          scheduledAt: true,
-          status: true,
-          reason: true,
-          prescription: true,
-          doctor: {
-            select: {
-              name: true,
-              specialty: true,
-            },
-          },
-        },
-      },
     },
   });
 
-  if (!patient || patient.updatedAt.toISOString() !== payload.profileVersion) {
-    return "invalid";
-  }
+  if (!patient) return null;
 
-  if (patientSession?.userId === patient.id) {
-    return {
-      viewer: { role: "patient", name: `${patient.firstName} ${patient.lastName}` },
-      patient: toMedicalIdPatient(patient),
-    };
-  }
-
-  if (doctorSession) {
-    const consultation = await prisma.consultation.findFirst({
-      where: {
-        doctorId: doctorSession.userId,
-        patientId: patient.id,
-      },
-      select: { id: true },
-    });
-
-    if (!consultation) {
-      return "unauthorized";
-    }
-
-    return {
-      viewer: { role: "doctor", name: doctorSession.email },
-      patient: toMedicalIdPatient(patient),
-    };
-  }
-
-  return "unauthorized";
+  return {
+    firstName: patient.firstName,
+    lastName: patient.lastName,
+    dob: patient.dob,
+    gender: patient.gender ?? null,
+    bloodType: patient.bloodType ?? null,
+    height: patient.height ?? null,
+    weight: patient.weight ?? null,
+    allergies: patient.allergies ?? null,
+    existingConditions: patient.existingConditions ?? null,
+    currentMedications: patient.currentMedications ?? null,
+    emergencyContactName: patient.emergencyContactName ?? null,
+    emergencyContactPhone: patient.emergencyContactPhone ?? null,
+    emergencyContactRelation: patient.emergencyContactRelation ?? null,
+    phone: patient.phone,
+    countryCode: patient.countryCode ?? null,
+    updatedAt: new Date(patient.updatedAt),
+  };
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function CriticalBadge({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-      <dt className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{label}</dt>
-      <dd className="mt-2 text-sm font-semibold text-slate-800">{value}</dd>
+    <div className="rounded-2xl border-2 border-red-200 bg-red-50 p-4">
+      <dt className="text-[10px] font-black uppercase tracking-[0.22em] text-red-500">{label}</dt>
+      <dd className="mt-2 text-sm font-bold leading-snug text-red-900">{value}</dd>
+    </div>
+  );
+}
+
+function InfoBadge({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white/10 p-4">
+      <dt className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">{label}</dt>
+      <dd className="mt-2 text-sm font-bold leading-snug text-white">{value}</dd>
     </div>
   );
 }
 
 export default async function MedicalIdPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const view = await loadMedicalIdView(token);
+  const patient = await loadEmergencyPatient(token);
 
-  if (view === "invalid") {
-    notFound();
-  }
+  if (!patient) notFound();
 
-  if (view === "signin") {
-    return (
-      <main className="min-h-screen bg-slate-950 px-4 py-12 text-white">
-        <div className="mx-auto flex min-h-[calc(100vh-6rem)] w-full max-w-3xl items-center">
-          <section className="w-full rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur">
-            <p className="text-[10px] font-black uppercase tracking-[0.35em] text-brand-teal">Secure access required</p>
-            <h1 className="mt-3 text-3xl font-black text-white">Sign in to view this medical QR record</h1>
-            <p className="mt-3 max-w-2xl text-sm font-medium leading-relaxed text-slate-300">
-              This QR code opens a signed patient profile page. To protect sensitive medical information, you need an authenticated patient or doctor session before the record can be displayed.
-            </p>
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-              <Link href="/signin" className="rounded-xl bg-brand-teal px-5 py-3 text-sm font-black text-white">
-                Patient sign in
-              </Link>
-              <Link href="/doctor/signin" className="rounded-xl border border-white/15 px-5 py-3 text-sm font-black text-white">
-                Doctor sign in
-              </Link>
-            </div>
-          </section>
-        </div>
-      </main>
-    );
-  }
-
-  if (view === "unauthorized") {
-    return (
-      <main className="min-h-screen bg-slate-950 px-4 py-12 text-white">
-        <div className="mx-auto flex min-h-[calc(100vh-6rem)] w-full max-w-3xl items-center">
-          <section className="w-full rounded-3xl border border-red-500/20 bg-red-500/10 p-8 shadow-2xl">
-            <p className="text-[10px] font-black uppercase tracking-[0.35em] text-red-300">Access denied</p>
-            <h1 className="mt-3 text-3xl font-black text-white">This secure record cannot be viewed by the current session</h1>
-            <p className="mt-3 max-w-2xl text-sm font-medium leading-relaxed text-red-100/80">
-              The QR token is valid, but the current signed-in account is not authorized to see this patient record. If you believe you should have access, open the QR from the correct patient session or consult the care team.
-            </p>
-          </section>
-        </div>
-      </main>
-    );
-  }
-
-  const { patient, viewer } = view;
   const fullName = `${patient.firstName} ${patient.lastName}`;
-  const address = [patient.address, patient.city, patient.state, patient.zipCode, patient.country].filter(Boolean).join(", ");
+  const phone = `${patient.countryCode ?? ""} ${patient.phone}`.trim();
 
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-8 text-slate-950">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-        <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl">
-          <div className="bg-gradient-to-r from-brand-teal to-cyan-500 px-8 py-6 text-white">
-            <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/80">HealthKo Medical QR</p>
-            <h1 className="mt-3 text-3xl font-black">{fullName}</h1>
-            <p className="mt-2 max-w-3xl text-sm font-medium text-white/85">
-              Authorized viewer: <span className="font-black">{viewer.role === "doctor" ? "Doctor" : "Patient"}</span>
-              {" "} - record last synced {formatDate(patient.updatedAt)}
-            </p>
-          </div>
+    <main className="min-h-screen bg-slate-950 px-4 py-8">
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-5">
 
-          <div className="grid gap-4 px-8 py-8 lg:grid-cols-[1.15fr_0.85fr]">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              <InfoRow label="Full name" value={fullName} />
-              <InfoRow label="Date of birth" value={patient.dob} />
-              <InfoRow label="Gender" value={patient.gender || "Not specified"} />
-              <InfoRow label="Email" value={patient.email} />
-              <InfoRow label="Phone" value={`${patient.countryCode || ""} ${patient.phone}`.trim()} />
-              <InfoRow label="Blood type" value={patient.bloodType || "Not recorded"} />
-              <InfoRow label="Height" value={patient.height || "Not recorded"} />
-              <InfoRow label="Weight" value={patient.weight || "Not recorded"} />
-              <div className="sm:col-span-2 xl:col-span-3">
-                <InfoRow label="Address" value={address || "No address on file"} />
-              </div>
+        {/* Emergency header */}
+        <header className="overflow-hidden rounded-3xl bg-gradient-to-br from-red-600 to-red-500 p-6 text-white shadow-2xl">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/20">
+              <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 9v4" />
+                <path d="M12 17h.01" />
+                <path d="M10.3 4.3 2.3 18a2 2 0 0 0 1.7 3h16a2 2 0 0 0 1.7-3l-8-13.7a2 2 0 0 0-3.4 0Z" />
+              </svg>
             </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/70">HealthKo · Emergency Medical ID</p>
+              <h1 className="mt-1 text-2xl font-black leading-tight">{fullName}</h1>
+            </div>
+          </div>
+          <p className="mt-4 rounded-xl bg-white/10 px-3 py-2 text-[11px] font-semibold text-white/80">
+            🔒 Cryptographically signed record · Last updated: {formatDate(patient.updatedAt)}
+          </p>
+        </header>
 
-            <aside className="grid gap-4">
-              <div className="rounded-3xl border border-brand-teal/15 bg-brand-teal/5 p-5">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Emergency Contact</p>
-                <p className="mt-3 text-lg font-black text-slate-950">{patient.emergencyContactName || "Not recorded"}</p>
-                <p className="mt-1 text-sm font-semibold text-slate-600">
-                  {patient.emergencyContactRelation || "Relation not recorded"}
-                </p>
-                <p className="mt-4 text-sm font-semibold text-slate-700">
-                  {patient.emergencyContactPhone || "Phone not recorded"}
-                </p>
-              </div>
+        {/* Identity quick-facts */}
+        <section className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl backdrop-blur-sm">
+          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">Patient Identity</p>
+          <dl className="mt-4 grid gap-3 sm:grid-cols-3">
+            <InfoBadge label="Date of Birth" value={patient.dob} />
+            <InfoBadge label="Gender" value={patient.gender || "Not specified"} />
+            <InfoBadge label="Blood Type" value={patient.bloodType || "Not recorded"} />
+            <InfoBadge label="Height" value={patient.height || "Not recorded"} />
+            <InfoBadge label="Weight" value={patient.weight || "Not recorded"} />
+            <InfoBadge label="Phone" value={phone || "Not recorded"} />
+          </dl>
+        </section>
 
-              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Medical Notes</p>
-                <dl className="mt-4 grid gap-3 text-sm">
-                  <div>
-                    <dt className="text-xs font-black uppercase text-slate-400">Allergies</dt>
-                    <dd className="mt-1 font-semibold text-slate-700">{patient.allergies || "Not recorded"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-black uppercase text-slate-400">Existing conditions</dt>
-                    <dd className="mt-1 font-semibold text-slate-700">{patient.existingConditions || "Not recorded"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-black uppercase text-slate-400">Current medications</dt>
-                    <dd className="mt-1 font-semibold text-slate-700">{patient.currentMedications || "Not recorded"}</dd>
-                  </div>
-                </dl>
-              </div>
-            </aside>
+        {/* Critical medical alerts */}
+        <section className="rounded-3xl border border-red-500/25 bg-red-500/8 p-5 shadow-xl">
+          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-red-400">⚠ Critical Medical Alerts</p>
+          <dl className="mt-4 grid gap-3">
+            <CriticalBadge label="Allergies" value={patient.allergies || "None recorded"} />
+            <CriticalBadge label="Existing Conditions" value={patient.existingConditions || "None recorded"} />
+            <CriticalBadge label="Current Medications" value={patient.currentMedications || "None recorded"} />
+          </dl>
+        </section>
+
+        {/* Emergency contact */}
+        <section className="rounded-3xl border border-amber-500/25 bg-amber-500/8 p-5 shadow-xl">
+          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-amber-400">Emergency Contact</p>
+          <div className="mt-4">
+            <p className="text-xl font-black text-white">{patient.emergencyContactName || "Not recorded"}</p>
+            <p className="mt-1 text-sm font-semibold text-slate-400">{patient.emergencyContactRelation || "Relation not recorded"}</p>
+            {patient.emergencyContactPhone ? (
+              <a
+                href={`tel:${patient.emergencyContactPhone}`}
+                className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-amber-500 px-5 py-3 text-sm font-black text-white shadow-lg transition hover:bg-amber-400 active:scale-[0.98]"
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.7-3.1 19.2 19.2 0 0 1-6-6A19.8 19.8 0 0 1 2 4.1 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.2 1.1.6 2.1 1.1 3a2 2 0 0 1-.4 2.1L8.6 10.6a16 16 0 0 0 4.8 4.8l1.8-1.1a2 2 0 0 1 2.1-.4c.9.5 1.9.9 3 1.1A2 2 0 0 1 22 16.9Z" />
+                </svg>
+                Call {patient.emergencyContactPhone}
+              </a>
+            ) : (
+              <p className="mt-3 text-sm font-semibold text-slate-500">Phone not recorded</p>
+            )}
           </div>
         </section>
-        {/* Removed secondary panels to keep the scan result focused on patient identity and medical details. */}
+
+        <footer className="pb-4 text-center">
+          <p className="text-[10px] font-semibold text-slate-600">
+            Powered by{" "}
+            <Link href="/" className="font-black text-brand-teal hover:underline">
+              HealthKo Telehealth
+            </Link>
+            {" "}· Publicly accessible via signed QR · No login required
+          </p>
+        </footer>
+
       </div>
     </main>
   );
