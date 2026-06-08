@@ -29,53 +29,58 @@ async function loadEmergencyPatient(token: string): Promise<EmergencyPatient | n
   const payload = parsePatientMedicalIdToken(token);
   if (!payload) return null;
 
-  if (!isPrismaConfigured()) {
-    const patient = mockDb.findPatientById(payload.patientId);
-    if (!patient) return null;
-    return {
-      firstName: patient.firstName,
-      lastName: patient.lastName,
-      dob: patient.dob,
-      gender: patient.gender ?? null,
-      bloodType: patient.bloodType ?? null,
-      height: patient.height ?? null,
-      weight: patient.weight ?? null,
-      allergies: patient.allergies ?? null,
-      existingConditions: patient.existingConditions ?? null,
-      currentMedications: patient.currentMedications ?? null,
-      emergencyContactName: patient.emergencyContactName ?? null,
-      emergencyContactPhone: patient.emergencyContactPhone ?? null,
-      emergencyContactRelation: patient.emergencyContactRelation ?? null,
-      phone: patient.phone,
-      countryCode: patient.countryCode ?? null,
-      updatedAt: new Date(patient.updatedAt),
-    };
+  if (isPrismaConfigured()) {
+    try {
+      const patient = await prisma.patient.findUnique({
+        where: { id: payload.patientId },
+        select: {
+          firstName: true,
+          lastName: true,
+          dob: true,
+          gender: true,
+          bloodType: true,
+          height: true,
+          weight: true,
+          allergies: true,
+          existingConditions: true,
+          currentMedications: true,
+          emergencyContactName: true,
+          emergencyContactPhone: true,
+          emergencyContactRelation: true,
+          phone: true,
+          countryCode: true,
+          updatedAt: true,
+        },
+      });
+
+      if (patient) {
+        return {
+          firstName: patient.firstName,
+          lastName: patient.lastName,
+          dob: patient.dob,
+          gender: patient.gender ?? null,
+          bloodType: patient.bloodType ?? null,
+          height: patient.height ?? null,
+          weight: patient.weight ?? null,
+          allergies: patient.allergies ?? null,
+          existingConditions: patient.existingConditions ?? null,
+          currentMedications: patient.currentMedications ?? null,
+          emergencyContactName: patient.emergencyContactName ?? null,
+          emergencyContactPhone: patient.emergencyContactPhone ?? null,
+          emergencyContactRelation: patient.emergencyContactRelation ?? null,
+          phone: patient.phone,
+          countryCode: patient.countryCode ?? null,
+          updatedAt: new Date(patient.updatedAt),
+        };
+      }
+    } catch (error) {
+      console.warn("Prisma query in loadEmergencyPatient failed, falling back to mock JSON database:", error);
+    }
   }
 
-  const patient = await prisma.patient.findUnique({
-    where: { id: payload.patientId },
-    select: {
-      firstName: true,
-      lastName: true,
-      dob: true,
-      gender: true,
-      bloodType: true,
-      height: true,
-      weight: true,
-      allergies: true,
-      existingConditions: true,
-      currentMedications: true,
-      emergencyContactName: true,
-      emergencyContactPhone: true,
-      emergencyContactRelation: true,
-      phone: true,
-      countryCode: true,
-      updatedAt: true,
-    },
-  });
-
+  // Fallback to mockDb
+  const patient = mockDb.findPatientById(payload.patientId);
   if (!patient) return null;
-
   return {
     firstName: patient.firstName,
     lastName: patient.lastName,
