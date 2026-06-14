@@ -275,6 +275,10 @@ async function verifyPatientOtpCode(email: string, otp: string, purpose: OtpPurp
   return { delivery: "email" as const };
 }
 
+function isOtpWorkflowEnabled() {
+  return process.env.NEXT_PUBLIC_ENABLE_OTP === "true";
+}
+
 /**
  * Step 1 of patient signup: create the account and email an OTP.
  */
@@ -349,6 +353,29 @@ export async function requestPatientSignupOtp(data: PatientSignupPayload): Promi
       console.error("Signup Mock DB critical failure:", mockErr);
       return { success: false, error: "Failed to create patient account." };
     }
+  }
+
+  if (!isOtpWorkflowEnabled()) {
+    if (isMockDb) {
+      mockDb.updatePatient(createdPatient.email, { emailVerified: true });
+    } else {
+      await prisma.patient.update({
+        where: { email: createdPatient.email },
+        data: { emailVerified: true },
+      });
+    }
+
+    await createPatientSession({
+      userId: createdPatient.id,
+      email: createdPatient.email,
+    });
+
+    return {
+      success: true,
+      requiresOtp: false,
+      email: createdPatient.email,
+      message: "Your account is ready. Redirecting to your dashboard.",
+    };
   }
 
   // Step 2: Attempt to send the verification OTP
@@ -697,7 +724,87 @@ export async function registerPatient(data: PatientSignupPayload) {
 }
 
 export async function loginPatient(data: PatientLoginPayload) {
-  return requestPatientLoginOtp(data);
+  const { email, password } = data;
+
+  if (!email || !password) {
+    return { success: false, error: "Email and password are required" };
+  }
+
+  try {
+    if (!isPrismaConfigured()) {
+      const patientRecord = mockDb.findPatientByEmail(email);
+
+      if (!patientRecord) {
+        return { success: false, error: "Invalid email or password" };
+      }
+
+      const isMatch = await bcrypt.compare(password, patientRecord.password);
+
+      if (!isMatch) {
+        return { success: false, error: "Invalid email or password" };
+      }
+
+      await createPatientSession({
+        userId: patientRecord.id,
+        email: patientRecord.email,
+      });
+
+      return {
+        success: true,
+        email: patientRecord.email,
+        message: "Welcome back. Redirecting to your dashboard.",
+      };
+    }
+
+    const patient = await prisma.patient.findUnique({
+      where: { email },
+    });
+
+    if (!patient) {
+      return { success: false, error: "Invalid email or password" };
+    }
+
+    const isMatch = await bcrypt.compare(password, patient.password);
+
+    if (!isMatch) {
+      return { success: false, error: "Invalid email or password" };
+    }
+
+    await createPatientSession({
+      userId: patient.id,
+      email: patient.email,
+    });
+
+    return {
+      success: true,
+      email: patient.email,
+      message: "Welcome back. Redirecting to your dashboard.",
+    };
+  } catch (error: unknown) {
+    console.warn("Prisma patient login failed, falling back to mock database:", error);
+    const patient = mockDb.findPatientByEmail(email);
+
+    if (!patient) {
+      return { success: false, error: "Invalid email or password" };
+    }
+
+    const isMatch = await bcrypt.compare(password, patient.password);
+
+    if (!isMatch) {
+      return { success: false, error: "Invalid email or password" };
+    }
+
+    await createPatientSession({
+      userId: patient.id,
+      email: patient.email,
+    });
+
+    return {
+      success: true,
+      email: patient.email,
+      message: "Welcome back. Redirecting to your dashboard.",
+    };
+  }
 }
 
 /**

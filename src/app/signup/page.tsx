@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import PatientOtpModal from "@/components/PatientOtpModal";
 import { requestPatientSignupOtp, verifyPatientSignupOtp } from "../actions/auth";
 
+const OTP_ENABLED = process.env.NEXT_PUBLIC_ENABLE_OTP === "true";
+
 const countries = [
   { code: "+1", name: "United States / Canada", regex: /^\d{10}$/, placeholder: "555 123 4567", formatHint: "10 digits" },
   { code: "+44", name: "United Kingdom", regex: /^7\d{9}$/, placeholder: "7123 456789", formatHint: "10 digits starting with 7" },
@@ -210,7 +212,7 @@ export default function SignUpPage() {
       return;
     }
 
-    if (isOtpCooldownActive) {
+    if (OTP_ENABLED && isOtpCooldownActive) {
       setError(`Please wait ${formatOtpCooldown(cooldownRemainingMs)} before requesting another code.`);
       return;
     }
@@ -243,12 +245,18 @@ export default function SignUpPage() {
         return;
       }
 
-      setOtpDigits(["", "", "", "", "", ""]);
       setInfo(res.message || "We sent your verification code.");
-      setOtpDebugCode(res.debugOtp || "");
-      setOtpCooldownUntil(Date.now() + OTP_REQUEST_COOLDOWN_MS);
-      setCooldownTick(Date.now());
-      setShowOtpModal(true);
+      if (OTP_ENABLED && res.requiresOtp) {
+        setOtpDigits(["", "", "", "", "", ""]);
+        setOtpDebugCode(res.debugOtp || "");
+        setOtpCooldownUntil(Date.now() + OTP_REQUEST_COOLDOWN_MS);
+        setCooldownTick(Date.now());
+        setShowOtpModal(true);
+        return;
+      }
+
+      router.push("/patient/dashboard");
+      router.refresh();
     } catch {
       setLoading(false);
       setError("A network error occurred. Please verify your connection.");
@@ -642,16 +650,18 @@ export default function SignUpPage() {
 
             <button
               type="submit"
-              disabled={isSubmitDisabled || isOtpCooldownActive}
+              disabled={isSubmitDisabled || (OTP_ENABLED && isOtpCooldownActive)}
               className="w-full bg-brand-teal hover:bg-brand-teal-hover text-white font-bold text-sm py-3.5 rounded-xl transition-all duration-300 shadow-md shadow-brand-teal/10 hover:-translate-y-0.5 active:translate-y-0 disabled:bg-slate-300 disabled:translate-y-0"
             >
               {loading
                 ? "Creating Account..."
-                : isOtpCooldownActive
+                : OTP_ENABLED && isOtpCooldownActive
                   ? `Wait ${formatOtpCooldown(cooldownRemainingMs)}`
-                  : "Create Account & Send OTP"}
+                  : OTP_ENABLED
+                    ? "Create Account & Send OTP"
+                    : "Create Account"}
             </button>
-            {isOtpCooldownActive && (
+            {OTP_ENABLED && isOtpCooldownActive && (
               <p className="px-1 text-[11px] font-semibold text-amber-600">
                 You can request another OTP in {formatOtpCooldown(cooldownRemainingMs)}.
               </p>
@@ -667,31 +677,33 @@ export default function SignUpPage() {
         </div>
       </div>
 
-      <PatientOtpModal
-        open={showOtpModal}
-        title="Confirm Your Email"
-        description="We emailed you a 6-digit verification code. Enter it here to activate your patient account and unlock your dashboard."
-        email={email}
-        otpDigits={otpDigits}
-        otpError={otpError}
-        loading={loading}
-        actionLabel="Verify Email & Open Dashboard"
-        debugOtp={otpDebugCode}
-        onOtpChange={handleOtpChange}
-        onOtpKeyDown={handleOtpKeyDown}
-        onSubmit={handleVerifyOtp}
-        onClose={() => {
-          setShowOtpModal(false);
-          setOtpError("");
-          setOtpDebugCode("");
-        }}
-        onClear={() => {
-          setOtpDigits(["", "", "", "", "", ""]);
-          setOtpError("");
-          setOtpDebugCode("");
-          document.getElementById("patient-otp-input-0")?.focus();
-        }}
-      />
+      {OTP_ENABLED && (
+        <PatientOtpModal
+          open={showOtpModal}
+          title="Confirm Your Email"
+          description="We emailed you a 6-digit verification code. Enter it here to activate your patient account and unlock your dashboard."
+          email={email}
+          otpDigits={otpDigits}
+          otpError={otpError}
+          loading={loading}
+          actionLabel="Verify Email & Open Dashboard"
+          debugOtp={otpDebugCode}
+          onOtpChange={handleOtpChange}
+          onOtpKeyDown={handleOtpKeyDown}
+          onSubmit={handleVerifyOtp}
+          onClose={() => {
+            setShowOtpModal(false);
+            setOtpError("");
+            setOtpDebugCode("");
+          }}
+          onClear={() => {
+            setOtpDigits(["", "", "", "", "", ""]);
+            setOtpError("");
+            setOtpDebugCode("");
+            document.getElementById("patient-otp-input-0")?.focus();
+          }}
+        />
+      )}
     </div>
   );
 }

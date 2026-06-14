@@ -1,31 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import PatientOtpModal from "@/components/PatientOtpModal";
-import { requestPatientLoginOtp, verifyPatientLoginOtp } from "../actions/auth";
-
-type OtpPurpose = "signup_verify" | "login_verify";
-
-const OTP_REQUEST_COOLDOWN_MS = 5 * 60 * 1000;
-
-function formatOtpCooldown(ms: number) {
-  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-
-  if (minutes > 0) {
-    return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
-  }
-
-  return `${seconds}s`;
-}
+import { loginPatient } from "../actions/auth";
 
 export default function SignInPage() {
   const router = useRouter();
-  const otpCooldownKey = "healthko-signin-otp-cooldown-until";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -33,102 +15,15 @@ export default function SignInPage() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
-  const [showOtpModal, setShowOtpModal] = useState(false);
-  const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
-  const [otpError, setOtpError] = useState("");
-  const [otpPurpose, setOtpPurpose] = useState<OtpPurpose>("login_verify");
-  const [otpDebugCode, setOtpDebugCode] = useState("");
-  const [otpCooldownUntil, setOtpCooldownUntil] = useState(() => {
-    if (typeof window === "undefined") {
-      return 0;
-    }
-
-    const storedCooldown = Number(
-      window.localStorage.getItem(otpCooldownKey) ||
-        window.sessionStorage.getItem(otpCooldownKey) ||
-        "0"
-    );
-    return storedCooldown > Date.now() ? storedCooldown : 0;
-  });
-  const [cooldownTick, setCooldownTick] = useState(() => Date.now());
-
-  useEffect(() => {
-    if (!showOtpModal) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      document.getElementById("patient-otp-input-0")?.focus();
-    }, 100);
-
-    return () => window.clearTimeout(timer);
-  }, [showOtpModal]);
-
-  useEffect(() => {
-    if (!otpCooldownUntil) {
-      window.sessionStorage.removeItem(otpCooldownKey);
-      window.localStorage.removeItem(otpCooldownKey);
-      return;
-    }
-
-    window.sessionStorage.setItem(otpCooldownKey, String(otpCooldownUntil));
-    window.localStorage.setItem(otpCooldownKey, String(otpCooldownUntil));
-    const interval = window.setInterval(() => setCooldownTick(Date.now()), 1000);
-
-    return () => window.clearInterval(interval);
-  }, [otpCooldownUntil]);
-
-  const cooldownRemainingMs = Math.max(0, otpCooldownUntil - cooldownTick);
-  const isOtpCooldownActive = cooldownRemainingMs > 0;
-
-  const handleOtpChange = (value: string, idx: number) => {
-    const cleaned = value.slice(-1);
-    if (cleaned && Number.isNaN(Number(cleaned))) {
-      return;
-    }
-
-    const nextDigits = [...otpDigits];
-    nextDigits[idx] = cleaned;
-    setOtpDigits(nextDigits);
-
-    if (cleaned && idx < 5) {
-      document.getElementById(`patient-otp-input-${idx + 1}`)?.focus();
-    }
-  };
-
-  const handleOtpKeyDown = (event: React.KeyboardEvent<HTMLInputElement>, idx: number) => {
-    if (event.key !== "Backspace") {
-      return;
-    }
-
-    if (!otpDigits[idx] && idx > 0) {
-      const nextDigits = [...otpDigits];
-      nextDigits[idx - 1] = "";
-      setOtpDigits(nextDigits);
-      document.getElementById(`patient-otp-input-${idx - 1}`)?.focus();
-      return;
-    }
-
-    const nextDigits = [...otpDigits];
-    nextDigits[idx] = "";
-    setOtpDigits(nextDigits);
-  };
-
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (isOtpCooldownActive) {
-      setError(`Please wait ${formatOtpCooldown(cooldownRemainingMs)} before requesting another code.`);
-      return;
-    }
 
     setLoading(true);
     setError("");
     setInfo("");
-    setOtpError("");
-    setOtpDebugCode("");
 
     try {
-      const res = await requestPatientLoginOtp({ email, password });
+      const res = await loginPatient({ email, password });
       setLoading(false);
 
       if (!res.success) {
@@ -136,49 +31,12 @@ export default function SignInPage() {
         return;
       }
 
-      setOtpDigits(["", "", "", "", "", ""]);
-      setOtpPurpose(res.purpose || "login_verify");
       setInfo(res.message || "");
-      setOtpDebugCode(res.debugOtp || "");
-      setOtpCooldownUntil(Date.now() + OTP_REQUEST_COOLDOWN_MS);
-      setCooldownTick(Date.now());
-      setShowOtpModal(true);
-    } catch {
-      setLoading(false);
-      setError("A network error occurred. Please verify your connection.");
-    }
-  };
-
-  const handleVerifyOtp = async () => {
-    const otp = otpDigits.join("");
-
-    if (otp.length !== 6) {
-      setOtpError("Please enter the full 6-digit code.");
-      return;
-    }
-
-    setLoading(true);
-    setOtpError("");
-
-    try {
-      const res = await verifyPatientLoginOtp({
-        email,
-        otp,
-        purpose: otpPurpose,
-      });
-
-      setLoading(false);
-
-      if (!res.success) {
-        setOtpError(res.error || "Verification failed.");
-        return;
-      }
-
       router.push("/patient/dashboard");
       router.refresh();
     } catch {
       setLoading(false);
-      setOtpError("A connection error occurred. Please verify your connection.");
+      setError("A network error occurred. Please verify your connection.");
     }
   };
 
@@ -319,20 +177,11 @@ export default function SignInPage() {
 
             <button
               type="submit"
-              disabled={loading || isOtpCooldownActive}
+              disabled={loading}
               className="w-full bg-brand-teal hover:bg-brand-teal-hover text-white font-bold text-sm py-3.5 rounded-xl transition-all duration-300 shadow-md shadow-brand-teal/10 hover:-translate-y-0.5 active:translate-y-0 disabled:bg-slate-300 disabled:translate-y-0"
             >
-              {loading
-                ? "Sending Secure Code..."
-                : isOtpCooldownActive
-                  ? `Wait ${formatOtpCooldown(cooldownRemainingMs)}`
-                  : "Access Secure Dashboard"}
+              {loading ? "Signing in..." : "Access Secure Dashboard"}
             </button>
-            {isOtpCooldownActive && (
-              <p className="px-1 text-[11px] font-semibold text-amber-600">
-                You can request another OTP in {formatOtpCooldown(cooldownRemainingMs)}.
-              </p>
-            )}
           </form>
 
           <div className="text-center text-xs font-semibold text-slate-500 pt-4 space-y-2">
@@ -352,35 +201,6 @@ export default function SignInPage() {
         </div>
       </div>
 
-      <PatientOtpModal
-        open={showOtpModal}
-        title={otpPurpose === "signup_verify" ? "Verify Your Email" : "Email Security Check"}
-        description={
-          otpPurpose === "signup_verify"
-            ? "Your account still needs email verification. Enter the code we sent to activate your patient dashboard."
-            : "Enter the 6-digit code we emailed to you to finish signing in securely."
-        }
-        email={email}
-        otpDigits={otpDigits}
-        otpError={otpError}
-        loading={loading}
-        actionLabel={otpPurpose === "signup_verify" ? "Verify & Enter Dashboard" : "Confirm & Sign In"}
-        debugOtp={otpDebugCode}
-        onOtpChange={handleOtpChange}
-        onOtpKeyDown={handleOtpKeyDown}
-        onSubmit={handleVerifyOtp}
-        onClose={() => {
-          setShowOtpModal(false);
-          setOtpError("");
-          setOtpDebugCode("");
-        }}
-        onClear={() => {
-          setOtpDigits(["", "", "", "", "", ""]);
-          setOtpError("");
-          setOtpDebugCode("");
-          document.getElementById("patient-otp-input-0")?.focus();
-        }}
-      />
     </div>
   );
 }
