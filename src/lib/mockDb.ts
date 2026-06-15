@@ -117,7 +117,7 @@ function getDb(): MockDbSchema {
           id: "doc-sarah-jenkins-123",
           npi: "1982736450",
           email: "s.jenkins@healthko.com",
-          password: bcrypt.hashSync("doctor123", 10),
+          password: bcrypt.hashSync("123456", 10),
           name: "Dr. Sarah Jenkins",
           specialty: "Board-Certified Cardiologist",
           rating: 4.9,
@@ -137,7 +137,7 @@ function getDb(): MockDbSchema {
           id: "doc-marcus-vance-456",
           npi: "1098273645",
           email: "m.vance@healthko.com",
-          password: bcrypt.hashSync("doctor123", 10),
+          password: bcrypt.hashSync("123456", 10),
           name: "Dr. Marcus Vance",
           specialty: "Pediatric Medicine Specialist",
           rating: 4.8,
@@ -157,7 +157,7 @@ function getDb(): MockDbSchema {
           id: "doc-aaliyah-patel-789",
           npi: "1234567890",
           email: "a.patel@healthko.com",
-          password: bcrypt.hashSync("doctor123", 10),
+          password: bcrypt.hashSync("123456", 10),
           name: "Dr. Aaliyah Patel",
           specialty: "Family Practitioner & Telehealth Lead",
           rating: 4.9,
@@ -303,7 +303,7 @@ export const mockDb = {
   getDoctorsList(): Omit<MockDoctor, "password">[] {
     const db = getDb();
     return db.doctors
-      .filter((d) => d.isActive)
+      .filter((d) => d.isActive && d.isVerified)
       .map((doctor) => {
         const rest = { ...doctor } as Partial<MockDoctor>;
         delete rest.password;

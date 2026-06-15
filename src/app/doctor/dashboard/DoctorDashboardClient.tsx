@@ -1147,7 +1147,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
         ))}
       </div>
 
-      {session.activeAppointment && activeModule !== "live" && (session.status === "waiting" || session.status === "connected") && (
+      {session.activeAppointment && activeModule !== "live" && session.status === "connected" && (
         <FloatingConsultationCall
           role="doctor"
           counterpartName={`${session.activeAppointment.patient.firstName} ${session.activeAppointment.patient.lastName}`}
@@ -1155,6 +1155,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
           isCameraOn={session.isCameraOn}
           isMicOn={session.isMicOn}
           counterpartCameraOn={session.counterpartCameraOn}
+          counterpartMicOn={session.counterpartMicOn}
           onToggleCamera={session.toggleCamera}
           onToggleMic={session.toggleMic}
           onEnd={handleEndSession}

@@ -130,8 +130,8 @@ export async function startVideoSession(consultationId: string): Promise<VideoSe
       accessToken: signRoomAccess({ consultationId, roomId, role: "doctor", userId: session.userId }),
     };
   } catch (error: unknown) {
-    console.warn("Prisma startVideoSession failed, using mock video session fallback:", error);
-    return startMockVideoSession(consultationId);
+    console.error("Prisma startVideoSession failed:", error);
+    return { success: false, error: "Could not start the secure video session." };
   }
 }
 
@@ -172,8 +172,8 @@ export async function authorizePatientVideoSession(consultationId: string): Prom
       }),
     };
   } catch (error: unknown) {
-    console.warn("Prisma authorizePatientVideoSession failed, using mock fallback:", error);
-    return authorizeMockPatientVideoSession(consultationId);
+    console.error("Prisma authorizePatientVideoSession failed:", error);
+    return { success: false, error: "Could not authorize secure room access." };
   }
 }
 
@@ -211,7 +211,7 @@ export async function endVideoSession(consultationId: string): Promise<{ success
     revalidatePath("/patient/dashboard");
     return { success: true };
   } catch (error: unknown) {
-    console.warn("Prisma endVideoSession failed, using mock fallback:", error);
-    return endMockVideoSession(consultationId);
+    console.error("Prisma endVideoSession failed:", error);
+    return { success: false, error: "Could not end the secure video session." };
   }
 }

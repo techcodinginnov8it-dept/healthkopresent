@@ -525,7 +525,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
   const router = useRouter();
   const [activeModule, setActiveModule] = useDashboardModule<PatientModuleId>(initialModule, PATIENT_MODULES);
   const [collapsed, setCollapsed] = useState(false);
-  const [selectedDoctorId, setSelectedDoctorId] = useState(doctors[0]?.id || "");
+  const [selectedDoctorId, setSelectedDoctorId] = useState((doctors.find((d) => d.isVerified) ?? doctors[0])?.id || "");
   const [appointmentDate, setAppointmentDate] = useState("");
   const [appointmentTime, setAppointmentTime] = useState("");
   const [reason, setReason] = useState("");
@@ -1304,6 +1304,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
           isCameraOn={session.isCameraOn}
           isMicOn={session.isMicOn}
           counterpartCameraOn={session.counterpartCameraOn}
+          counterpartMicOn={session.counterpartMicOn}
           onToggleCamera={session.toggleCamera}
           onToggleMic={session.toggleMic}
           onEnd={handleEndSession}
@@ -1358,7 +1359,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
               <label className="space-y-1 text-xs font-black uppercase tracking-wider text-slate-500 md:col-span-2">
                 Doctor
                 <select value={selectedDoctorId} onChange={(event) => setSelectedDoctorId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold normal-case text-slate-900">
-                  {doctors.map((doctor) => (
+                  {doctors.filter((d) => d.isVerified).map((doctor) => (
                     <option key={doctor.id} value={doctor.id}>
                       {doctor.name} - {doctor.specialty}
                     </option>
@@ -2212,9 +2213,11 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                 <button type="button" onClick={() => setProfileDoctor(doctor)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-black text-slate-700">
                   View Profile
                 </button>
-                <button type="button" onClick={() => { setSelectedDoctorId(doctor.id); setActiveModule("book"); setIsBookingOpen(true); }} className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-black text-white">
-                  Book with Doctor
-                </button>
+                {doctor.isVerified && (
+                  <button type="button" onClick={() => { setSelectedDoctorId(doctor.id); setActiveModule("book"); setIsBookingOpen(true); }} className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-black text-white">
+                    Book with Doctor
+                  </button>
+                )}
               </div>
             </article>
           ))}
