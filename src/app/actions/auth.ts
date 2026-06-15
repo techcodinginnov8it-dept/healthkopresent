@@ -760,24 +760,45 @@ export async function loginPatient(data: PatientLoginPayload) {
       where: { email },
     });
 
-    if (!patient) {
+    if (patient) {
+      const isMatch = await bcrypt.compare(password, patient.password);
+
+      if (!isMatch) {
+        return { success: false, error: "Invalid email or password" };
+      }
+
+      await createPatientSession({
+        userId: patient.id,
+        email: patient.email,
+      });
+
+      return {
+        success: true,
+        email: patient.email,
+        message: "Welcome back. Redirecting to your dashboard.",
+      };
+    }
+
+    const demoPatient = mockDb.findPatientByEmail(email);
+
+    if (!demoPatient) {
       return { success: false, error: "Invalid email or password" };
     }
 
-    const isMatch = await bcrypt.compare(password, patient.password);
+    const isMatch = await bcrypt.compare(password, demoPatient.password);
 
     if (!isMatch) {
       return { success: false, error: "Invalid email or password" };
     }
 
     await createPatientSession({
-      userId: patient.id,
-      email: patient.email,
+      userId: demoPatient.id,
+      email: demoPatient.email,
     });
 
     return {
       success: true,
-      email: patient.email,
+      email: demoPatient.email,
       message: "Welcome back. Redirecting to your dashboard.",
     };
   } catch (error: unknown) {
