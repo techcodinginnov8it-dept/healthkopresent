@@ -71,7 +71,7 @@ export function useDashboardRealtime(onEvent?: (event: RealtimeEvent) => void) {
   useEffect(() => {
     const socket = io({
       path: SOCKET_PATH,
-      transports: ["websocket"],
+      transports: ["polling", "websocket"],
       reconnection: true,
     });
     socketRef.current = socket;

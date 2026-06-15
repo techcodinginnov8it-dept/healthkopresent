@@ -124,13 +124,14 @@ export function getScheduleConflict(
   appointments: ScheduleAppointment[],
   scheduledAt: Date,
   durationMinutes = DEFAULT_DURATION_MINUTES,
-  excludeAppointmentId?: string
+  excludeAppointmentId?: string,
+  allowedStatuses: string[] = ["CONFIRMED"]
 ) {
   const requestedStart = scheduledAt.getTime();
   const requestedEnd = requestedStart + durationMinutes * 60 * 1000;
 
   return appointments.find((appointment) => {
-    if (appointment.id === excludeAppointmentId || appointment.status !== "CONFIRMED") {
+    if (appointment.id === excludeAppointmentId || !allowedStatuses.includes(appointment.status)) {
       return false;
     }
 

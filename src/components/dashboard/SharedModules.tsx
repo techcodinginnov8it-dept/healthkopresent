@@ -325,6 +325,8 @@ function ConsultationVideoTile({
   label,
   detail,
   active,
+  cameraOn = true,
+  micOn = true,
   muted = false,
   className = "",
   tone = "teal",
@@ -333,6 +335,8 @@ function ConsultationVideoTile({
   label: string;
   detail: string;
   active: boolean;
+  cameraOn?: boolean;
+  micOn?: boolean;
   muted?: boolean;
   className?: string;
   tone?: "teal" | "slate";
@@ -361,13 +365,17 @@ function ConsultationVideoTile({
 
   return (
     <div className={`relative overflow-hidden rounded-xl border border-slate-800 bg-slate-950 ${className}`}>
-      {showFeed ? (
+      {stream ? (
         <video
           ref={ref}
           autoPlay
           playsInline
           muted={muted}
-          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${active ? "opacity-100" : "opacity-35"}`}
+          className={
+            showFeed
+              ? `absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${active ? "opacity-100" : "opacity-35"}`
+              : "sr-only"
+          }
         />
       ) : null}
       <div
@@ -386,17 +394,40 @@ function ConsultationVideoTile({
             <h3 className="mt-1 truncate text-sm font-black text-white">{label}</h3>
             <p className="mt-1 text-xs font-semibold text-slate-200/80">{detail}</p>
           </div>
-          <span
-            className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${
-              showFeed
-                ? active
-                  ? "bg-emerald-500/15 text-emerald-200"
-                  : "bg-amber-500/15 text-amber-200"
-                : "bg-slate-800/90 text-slate-300"
-            }`}
-          >
-            {showFeed ? (active ? "Camera on" : "Camera off") : "No video"}
-          </span>
+          <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+            <span
+              className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${
+                cameraOn
+                  ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/20"
+                  : "bg-rose-500/15 text-rose-300 border border-rose-500/20"
+              }`}
+            >
+              {cameraOn ? "Camera On" : "Camera Off"}
+            </span>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider flex items-center gap-1 ${
+                micOn
+                  ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/20"
+                  : "bg-rose-500/15 text-rose-300 border border-rose-500/20"
+              }`}
+            >
+              {micOn ? (
+                <>
+                  <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+                  </svg>
+                  <span>Mic On</span>
+                </>
+              ) : (
+                <>
+                  <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75 20.25 20.25M9 9.75v2.25a3 3 0 0 0 5.25 2m-.25-6.25v-1.25a3 3 0 0 0-6 0v4.25m4.25 10.25H12V18.75m-6-6v-1.5m12 1.5v-1.5" />
+                  </svg>
+                  <span>Muted</span>
+                </>
+              )}
+            </span>
+          </div>
         </div>
 
         {showFeed ? (
@@ -599,22 +630,12 @@ export function LiveConsultationPanel({
               label={counterpartName}
               detail={counterpartCameraOn ? (role === "doctor" ? "Patient stream" : "Doctor stream") : "Camera disabled"}
               active={counterpartCameraOn}
+              cameraOn={counterpartCameraOn}
+              micOn={counterpartMicOn}
               muted={false}
               className="h-full min-h-[420px]"
               tone="teal"
             />
-            <div className="hidden" />
-            <div className="hidden">
-              <div>
-                <div className={`mx-auto h-16 w-16 rounded-full ${counterpartCameraOn ? "bg-brand-teal/20" : "bg-brand-red/30"}`} />
-                <p className="mt-4 text-sm font-black">{counterpartName}</p>
-                <p className="mt-1 text-xs text-slate-400">
-                  {counterpartCameraOn ? (role === "doctor" ? "Patient stream" : "Doctor stream") : "Camera disabled"}
-                  {" · "}
-                  {counterpartMicOn ? "Audio live" : "Muted"}
-                </p>
-              </div>
-            </div>
           </div>
           <div className={`relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900 ${remoteVideoActive ? "absolute bottom-32 right-6 z-10 h-32 w-44 shadow-2xl shadow-black/50 md:bottom-28 md:right-8 md:h-40 md:w-56" : "min-h-[420px]"}`}>
             <ConsultationVideoTile
@@ -622,6 +643,8 @@ export function LiveConsultationPanel({
               label="Your stream"
               detail={isCameraOn ? "Local preview" : "Camera disabled"}
               active={isCameraOn}
+              cameraOn={isCameraOn}
+              micOn={isMicOn}
               muted={true}
               className="h-full min-h-[420px]"
               tone="slate"
@@ -683,7 +706,6 @@ export function LiveConsultationPanel({
     </div>
   );
 }
-
 export function FloatingConsultationCall({
   role,
   counterpartName,
@@ -691,6 +713,7 @@ export function FloatingConsultationCall({
   isCameraOn,
   isMicOn,
   counterpartCameraOn = true,
+  counterpartMicOn = true,
   localStream = null,
   remoteStream = null,
   connectionState = "new",
@@ -706,6 +729,7 @@ export function FloatingConsultationCall({
   isCameraOn: boolean;
   isMicOn: boolean;
   counterpartCameraOn?: boolean;
+  counterpartMicOn?: boolean;
   localStream?: MediaStream | null;
   remoteStream?: MediaStream | null;
   connectionState?: RTCPeerConnectionState;
@@ -786,6 +810,27 @@ export function FloatingConsultationCall({
       <div className="relative h-44 bg-slate-900">
         <div className="absolute left-3 top-3 z-10 rounded-full border border-white/10 bg-slate-950/70 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-slate-300 backdrop-blur">
           Drag
+        </div>
+        <div className="absolute right-3 top-3 z-10 flex gap-1">
+          {!counterpartCameraOn && (
+            <span className="rounded-full bg-rose-500/80 p-1 text-white backdrop-blur" title="Camera off">
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m16 13 5 3V8l-5 3" />
+                <rect width="14" height="10" x="2" y="7" rx="2" />
+                <path d="M3 3l18 18" />
+              </svg>
+            </span>
+          )}
+          {!counterpartMicOn && (
+            <span className="rounded-full bg-rose-500/80 p-1 text-white backdrop-blur" title="Muted">
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <path d="M12 19v3" />
+                <path d="M3 3l18 18" />
+              </svg>
+            </span>
+          )}
         </div>
         <VideoStream stream={remoteStream} active={counterpartCameraOn} />
         {!remoteVideoActive && (

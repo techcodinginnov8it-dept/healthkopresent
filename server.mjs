@@ -4,6 +4,9 @@ import { readFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import next from "next";
 import { Server } from "socket.io";
+import env from "@next/env";
+
+env.loadEnvConfig(process.cwd());
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = process.env.HOSTNAME || "0.0.0.0";

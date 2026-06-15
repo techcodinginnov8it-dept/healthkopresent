@@ -37,8 +37,8 @@ export default async function DoctorDashboardPage({
   const serializedDoctor = {
     ...doctor,
     bookings: doctor.bookings
-      .filter((booking) => booking.patient !== null && booking.patient !== undefined)
-      .map((booking) => ({
+      .filter((booking: any) => booking.patient !== null && booking.patient !== undefined)
+      .map((booking: any) => ({
         ...booking,
         scheduledAt: new Date(booking.scheduledAt),
         createdAt: new Date(booking.createdAt),

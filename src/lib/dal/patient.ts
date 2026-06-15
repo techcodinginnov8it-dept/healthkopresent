@@ -14,8 +14,11 @@ export const getPatientDashboardData = cache(async () => {
     return getMockPatientDashboardData(session);
   }
 
+  let patient = null;
+  let queryError = false;
+
   try {
-    const patient = await prisma.patient.findUnique({
+    patient = await prisma.patient.findUnique({
       where: { id: session.userId },
       select: {
         id: true,
@@ -67,17 +70,95 @@ export const getPatientDashboardData = cache(async () => {
     });
 
     if (!patient) {
-      redirect("/signin");
-    }
+      // Patient not found in Postgres. Attempt to sync from mockDb on the fly!
+      const mockPatient = mockDb.findPatientById(session.userId) || mockDb.findPatientByEmail(session.email);
+      if (mockPatient) {
+        console.log(`[getPatientDashboardData] Syncing mock patient "${mockPatient.email}" to Postgres on the fly...`);
+        await prisma.patient.create({
+          data: {
+            id: session.userId,
+            firstName: mockPatient.firstName,
+            middleName: mockPatient.middleName,
+            lastName: mockPatient.lastName,
+            suffix: mockPatient.suffix,
+            email: mockPatient.email,
+            countryCode: mockPatient.countryCode,
+            phone: mockPatient.phone,
+            dob: mockPatient.dob,
+            gender: mockPatient.gender,
+            password: mockPatient.password,
+            hipaaConsent: mockPatient.hipaaConsent,
+            emailVerified: mockPatient.emailVerified,
+            isActive: mockPatient.isActive,
+          },
+        });
 
-    return {
-      session,
-      patient,
-    };
+        // Re-query the synced patient
+        patient = await prisma.patient.findUnique({
+          where: { id: session.userId },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            image: true,
+            phone: true,
+            countryCode: true,
+            dob: true,
+            gender: true,
+            address: true,
+            city: true,
+            state: true,
+            zipCode: true,
+            country: true,
+            height: true,
+            weight: true,
+            bloodType: true,
+            allergies: true,
+            existingConditions: true,
+            currentMedications: true,
+            emergencyContactName: true,
+            emergencyContactPhone: true,
+            emergencyContactRelation: true,
+            emailVerified: true,
+            createdAt: true,
+            updatedAt: true,
+            bookings: {
+              orderBy: { scheduledAt: "asc" },
+              select: {
+                id: true,
+                scheduledAt: true,
+                status: true,
+                reason: true,
+                duration: true,
+                prescription: true,
+                createdAt: true,
+                doctor: {
+                  select: {
+                    id: true,
+                    name: true,
+                    specialty: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+      }
+    }
   } catch (error) {
-    console.warn("Prisma getPatientDashboardData failed, falling back to mock JSON database:", error);
-    return getMockPatientDashboardData(session);
+    console.error("Prisma getPatientDashboardData failed:", error);
+    throw error;
   }
+
+  if (!patient) {
+    redirect("/signin");
+  }
+
+  return {
+    session,
+    patient,
+  };
 });
 
 function getMockPatientDashboardData(session: { userId: string; email: string }) {
