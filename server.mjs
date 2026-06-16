@@ -47,13 +47,17 @@ function attachSocketServer(server) {
 });
 
   io.on("connection", (socket) => {
+    console.log(`[Socket] Client connected: ${socket.id} (total: ${io.engine.clientsCount})`);
+
     socket.on("dashboard:event", (event) => {
+      console.log(`[Socket] dashboard:event from ${socket.id} type=${event?.type} actorRole=${event?.actorRole} appointmentId=${event?.appointmentId}`);
       socket.broadcast.emit("dashboard:event", event);
     });
 
     socket.on("webrtc:join-room", ({ roomId }) => {
       if (typeof roomId === "string" && roomId) {
         socket.join(roomId);
+        console.log(`[Socket] ${socket.id} joined room: ${roomId}`);
         socket.to(roomId).emit("webrtc:peer-ready-request");
       }
     });
@@ -92,6 +96,10 @@ function attachSocketServer(server) {
       if (typeof roomId === "string" && roomId) {
         socket.to(roomId).emit("webrtc:session-ended");
       }
+    });
+
+    socket.on("disconnect", (reason) => {
+      console.log(`[Socket] Client disconnected: ${socket.id} reason=${reason} (total: ${io.engine.clientsCount})`);
     });
   });
 }

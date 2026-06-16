@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import React, { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
@@ -592,6 +592,10 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     };
   }, [medicalIdUrl]);
 
+  // Ref holding the set of this patient's appointmentIds — used inside the
+  // socket event callback to guard against cross-patient broadcasts.
+  const patientAppointmentIdsRef = React.useRef<Set<string>>(new Set());
+
   const onRealtimeEvent = useCallback((event: RealtimeEvent) => {
     if (
       event.actorRole === "doctor" &&
@@ -607,6 +611,12 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       )
     ) {
       if (event.type === "session:started" && event.roomId) {
+        // Only act if this appointment belongs to this patient.
+        if (!patientAppointmentIdsRef.current.has(event.appointmentId)) {
+          console.log(`[PatientDashboard] session:started ignored — appointmentId ${event.appointmentId} not in this patient's bookings`);
+          return;
+        }
+        console.log(`[PatientDashboard] session:started received for appointmentId=${event.appointmentId} roomId=${event.roomId}`);
         setAuthorizedRooms((current) => ({ ...current, [event.appointmentId]: event.roomId || "" }));
         if (dismissedStartedId !== event.appointmentId) {
           setStartedAppointmentId(event.appointmentId);
@@ -614,6 +624,10 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       }
 
       if (event.type === "session:ended") {
+        if (!patientAppointmentIdsRef.current.has(event.appointmentId)) {
+          return;
+        }
+        console.log(`[PatientDashboard] session:ended received for appointmentId=${event.appointmentId}`);
         setStartedAppointmentId((current) => current === event.appointmentId ? "" : current);
         setJoiningAppointmentId((current) => current === event.appointmentId ? "" : current);
         setDismissedStartedId((current) => current === event.appointmentId ? "" : current);
@@ -639,6 +653,48 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     persistKey: `healthko:patient:${patient.id}:active-consultation`,
   });
   const isLiveConsultationActive = Boolean(session.roomId && (session.status === "waiting" || session.status === "connected"));
+
+  // Keep the appointment-ID ref in sync so the socket callback can filter
+  // without needing the full appointments array as a dependency.
+  useEffect(() => {
+    patientAppointmentIdsRef.current = new Set(patient.bookings.map((b) => b.id));
+  }, [patient.bookings]);
+
+  // Hydrate authorizedRooms from server data on initial load and every refresh.
+  // This lets patients join a session that the doctor started before the patient
+  // opened their dashboard (no socket event available in that case).
+  // Also triggers the "Doctor started your consultation" modal (startedAppointmentId).
+  useEffect(() => {
+    const rooms: Record<string, string> = {};
+    let firstStartedId = "";
+
+    for (const booking of patient.bookings) {
+      if (booking.videoSession?.status === "STARTED" && booking.videoSession.roomId) {
+        rooms[booking.id] = booking.videoSession.roomId;
+        console.log(`[PatientDashboard] Hydrating room from DB: appointmentId=${booking.id} roomId=${booking.videoSession.roomId}`);
+        // Pick the first un-dismissed started appointment to surface the join modal.
+        if (!firstStartedId && booking.id !== dismissedStartedId) {
+          firstStartedId = booking.id;
+        }
+      }
+    }
+
+    if (Object.keys(rooms).length > 0) {
+      Promise.resolve().then(() => {
+        setAuthorizedRooms((current) => ({ ...rooms, ...current }));
+      });
+    }
+
+    if (firstStartedId) {
+      console.log(`[PatientDashboard] Showing join modal for appointmentId=${firstStartedId}`);
+      Promise.resolve().then(() => {
+        setStartedAppointmentId(firstStartedId);
+      });
+    }
+  // dismissedStartedId intentionally omitted: we only want to re-evaluate when
+  // the server data changes (router.refresh), not when the user dismisses.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patient.bookings]);
   const webRTC = useWebRTC({
     roomId: session.roomId,
     role: "patient",

@@ -100,6 +100,10 @@ export type PatientAppointment = {
     name: string;
     specialty: string;
   };
+  videoSession?: {
+    roomId: string;
+    status: string;
+  } | null;
 };
 
 export type DoctorAppointment = {
