@@ -365,6 +365,7 @@ export const mockDb = {
       .filter((c) => c.patientId === patientId)
       .map((c) => {
         const doctor = this.findDoctorById(c.doctorId);
+        const videoSession = db.videoSessions?.find((vs) => vs.consultationId === c.id) || null;
         return {
           ...c,
           scheduledAt: new Date(c.scheduledAt),
@@ -380,6 +381,9 @@ export const mockDb = {
                 name: "Unknown Doctor",
                 specialty: "General Medicine",
               },
+          videoSession: videoSession
+            ? { roomId: videoSession.roomId, status: videoSession.status }
+            : null,
         };
       })
       .sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());

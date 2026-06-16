@@ -76,16 +76,27 @@ export function useDashboardRealtime(onEvent?: (event: RealtimeEvent) => void) {
     });
     socketRef.current = socket;
 
-    const handleMessage = (event: RealtimeEvent) => commitEvent(event);
+    const handleMessage = (event: RealtimeEvent) => {
+      console.log("[Realtime] Received dashboard:event", event.type, "actorRole:", event.actorRole);
+      commitEvent(event);
+    };
 
     socket.on("dashboard:event", handleMessage);
-    socket.on("reconnect_attempt", () => setReconnectState("reconnecting"));
+    socket.on("reconnect_attempt", () => {
+      console.log("[Realtime] Reconnect attempt...");
+      setReconnectState("reconnecting");
+    });
     socket.on("connect", () => {
+      console.log("[Realtime] Socket connected id:", socket.id);
       setReconnectState(null);
       setSocketReady(true);
     });
-    socket.on("connect_error", () => setReconnectState("offline"));
-    socket.on("disconnect", () => {
+    socket.on("connect_error", (err) => {
+      console.warn("[Realtime] connect_error:", err.message);
+      setReconnectState("offline");
+    });
+    socket.on("disconnect", (reason) => {
+      console.warn("[Realtime] Socket disconnected. Reason:", reason);
       setReconnectState("offline");
       setSocketReady(false);
     });
@@ -100,6 +111,7 @@ export function useDashboardRealtime(onEvent?: (event: RealtimeEvent) => void) {
 
   const publish = useCallback(
     (event: RealtimeEvent) => {
+      console.log("[Realtime] Publishing dashboard:event", event.type, "actorRole:", event.actorRole);
       commitEvent(event);
       socketRef.current?.emit("dashboard:event", event);
     },
