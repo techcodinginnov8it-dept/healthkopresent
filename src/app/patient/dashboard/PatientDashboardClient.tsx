@@ -928,8 +928,13 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
 
     setJoiningAppointmentId(appointment.id);
 
+    console.log("[PatientDashboard] authorizePatientVideoSession starting for", appointment.id);
     const result = await authorizePatientVideoSession(appointment.id);
+    console.log("[PatientDashboard] authorizePatientVideoSession result:", result);
+
     if (!result.success || !result.roomId || !result.accessToken) {
+      console.error("[PatientDashboard] Authorization failed:", result.error);
+      showToast("error", result.error || "Could not authorize video room access.");
       setJoiningAppointmentId("");
       setBlockedAppointment(appointment);
       setActiveModule("live");
