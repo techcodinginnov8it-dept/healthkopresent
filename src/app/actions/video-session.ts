@@ -91,6 +91,15 @@ export async function authorizePatientVideoSession(consultationId: string): Prom
       },
     });
 
+    console.log("[authorizePatientVideoSession] Debug Info:", {
+      consultationId,
+      patientSessionUserId: session?.userId,
+      consultationFound: !!consultation,
+      patientMatch: consultation ? consultation.patientId === session?.userId : false,
+      consultationStatus: consultation?.status,
+      videoSessionStatus: consultation?.videoSession?.status,
+    });
+
     if (
       !consultation ||
       consultation.patientId !== session.userId ||
