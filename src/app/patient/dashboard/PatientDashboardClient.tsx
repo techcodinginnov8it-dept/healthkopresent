@@ -669,7 +669,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     let firstStartedId = "";
 
     for (const booking of patient.bookings) {
-      if (booking.videoSession?.status === "STARTED" && booking.videoSession.roomId) {
+      if (booking.status === "CONFIRMED" && booking.videoSession?.status === "STARTED" && booking.videoSession.roomId) {
         rooms[booking.id] = booking.videoSession.roomId;
         console.log(`[PatientDashboard] Hydrating room from DB: appointmentId=${booking.id} roomId=${booking.videoSession.roomId}`);
         // Pick the first un-dismissed started appointment to surface the join modal.
