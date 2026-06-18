@@ -595,16 +595,6 @@ export function DoctorSettingsModule({
             <ProfileImageUploader label={form.name} image={form.image} onChange={(value) => setField("image", value)} onToast={showToast} />
             <Field label="Full name" value={form.name} onChange={(value) => setField("name", value)} required />
             <Field label="Medical specialty" value={form.specialty} onChange={(value) => setField("specialty", value)} required />
-            <SelectField
-              label="Dashboard status"
-              value={form.status}
-              onChange={(value) => setField("status", value)}
-              options={[
-                { value: "ONLINE", label: "Online" },
-                { value: "BUSY", label: "Busy" },
-                { value: "OFFLINE", label: "Offline" },
-              ]}
-            />
             <Field label="License number" value={form.licenseNumber} onChange={(value) => setField("licenseNumber", value)} />
             <Field label="License state" value={form.licenseState} onChange={(value) => setField("licenseState", value)} />
             <Field label="Contact information" type="email" value={form.email} onChange={(value) => setField("email", value)} required />
@@ -632,6 +622,16 @@ export function DoctorSettingsModule({
             className="grid gap-4 md:grid-cols-2"
           >
             <Field label="Working hours" value={form.availability} onChange={(value) => setField("availability", value)} required />
+            <SelectField
+              label="Availability Status"
+              value={form.status}
+              onChange={(value) => setField("status", value)}
+              options={[
+                { value: "ONLINE", label: "Online" },
+                { value: "BUSY", label: "Busy" },
+                { value: "OFFLINE", label: "Offline" },
+              ]}
+            />
             <Field label="Consultation duration" type="number" value={form.consultationDuration} onChange={(value) => setField("consultationDuration", value)} />
             <SelectField
               label="Duration unit"
@@ -642,7 +642,6 @@ export function DoctorSettingsModule({
                 { value: "hours", label: "Hours" },
               ]}
             />
-            <ReadOnlyTile label="Availability Status" value={doctor.isVerified ? "Verified doctor schedule" : "Pending verification"} />
             <StickyActionBar>
               <button type="submit" disabled={isPending} className="rounded-lg bg-brand-teal px-5 py-3 text-sm font-black text-white disabled:bg-slate-300">
                 {isPending ? "Saving..." : "Save Schedule"}

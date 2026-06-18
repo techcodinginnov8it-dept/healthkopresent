@@ -200,6 +200,28 @@ function getInitials(value: string) {
     .join("");
 }
 
+function getDoctorStatusLabel(status?: string | null) {
+  switch (status) {
+    case "BUSY":
+      return "Busy";
+    case "OFFLINE":
+      return "Offline";
+    default:
+      return "Online";
+  }
+}
+
+function getDoctorStatusStyle(status?: string | null) {
+  switch (status) {
+    case "BUSY":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+    case "OFFLINE":
+      return "border-slate-200 bg-slate-100 text-slate-600";
+    default:
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+}
+
 function isDoctorFollowUp(appointment: PatientAppointment) {
   return appointment.reason?.toLowerCase().startsWith("follow-up") || appointment.notes?.includes("Follow-up requested by doctor");
 }
@@ -487,6 +509,9 @@ function DoctorProfileModal({
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Doctor Profile</p>
               <h2 id="doctor-profile-title" className="mt-1 text-2xl font-black text-slate-950">{doctor.name}</h2>
               <p className="mt-1 text-sm font-bold text-slate-500">{doctor.specialty}</p>
+              <span className={`mt-3 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase ${getDoctorStatusStyle(doctor.status)}`}>
+                {getDoctorStatusLabel(doctor.status)}
+              </span>
             </div>
           </div>
           <button type="button" onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 text-sm font-black text-slate-600 hover:bg-slate-50" aria-label="Close doctor profile">
@@ -607,6 +632,8 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
         event.type === "appointment:referred" ||
         event.type === "session:started" ||
         event.type === "session:ended" ||
+        event.type === "doctor:availability-updated" ||
+        event.type === "doctor:status-updated" ||
         event.type === "notification:new"
       )
     ) {
@@ -1827,13 +1854,6 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
             remoteStream={webRTC.remoteStream}
             connectionState={webRTC.connectionState}
             mediaError={webRTC.error}
-            devices={webRTC.devices}
-            cameraDeviceId={webRTC.cameraDeviceId}
-            microphoneDeviceId={webRTC.microphoneDeviceId}
-            deviceStatus={webRTC.deviceStatus}
-            onCameraDeviceChange={webRTC.setCameraDeviceId}
-            onMicrophoneDeviceChange={webRTC.setMicrophoneDeviceId}
-            onRefreshDevices={() => void webRTC.refreshDevices()}
             chat={<ChatPanel role="patient" messages={session.messages} onSend={session.sendMessage} />}
           />
         ) : (
@@ -2263,11 +2283,16 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                   <p className="text-sm font-black text-slate-950">{doctor.name}</p>
                   <p className="mt-1 text-xs font-bold text-brand-teal">{doctor.specialty}</p>
                 </div>
-                {doctor.isVerified && (
-                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-700">
-                    Verified
+                <div className="flex flex-col items-end gap-2">
+                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${getDoctorStatusStyle(doctor.status)}`}>
+                    {getDoctorStatusLabel(doctor.status)}
                   </span>
-                )}
+                  {doctor.isVerified && (
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-700">
+                      Verified
+                    </span>
+                  )}
+                </div>
               </div>
               <p className="mt-3 text-xs font-semibold text-slate-500">{doctor.availability}</p>
               <div className="mt-4 flex flex-wrap gap-2">

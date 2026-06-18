@@ -30,12 +30,7 @@ export function notificationFromRealtimeEvent(event: RealtimeEvent, recipientRol
   const id = idParts.filter(Boolean).join(":");
 
   if (event.type === "message:new") {
-    return createDashboardNotification({
-      id: `${id}:${event.messageId}`,
-      title: "New secure message",
-      body: event.text,
-      kind: "message",
-    });
+    return null;
   }
 
   if (event.type === "session:started") {
@@ -71,13 +66,10 @@ export function notificationFromRealtimeEvent(event: RealtimeEvent, recipientRol
     });
   }
 
+  // Doctor presence changes are treated as silent state updates so patients
+  // can see the latest availability without getting a notification badge.
   if (event.type === "doctor:availability-updated" || event.type === "doctor:status-updated") {
-    return createDashboardNotification({
-      id: `${event.type}:${event.doctorId}:${Date.now()}`,
-      title: event.title || (event.type === "doctor:status-updated" ? "Doctor status updated" : "Availability updated"),
-      body: event.body || (event.type === "doctor:status-updated" ? "Doctor dashboard status changed." : "Consultation availability changed."),
-      kind: "appointment",
-    });
+    return null;
   }
 
   if (event.type === "notification:new") {

@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { logoutDoctor } from "@/app/actions/auth";
 import { acceptAppointment, cancelAppointment, completeConsultation, referAppointment, rescheduleAppointment, scheduleFollowUpAppointment } from "@/app/actions/doctor";
+import { updateDoctorStatus } from "@/app/actions/settings";
 import { endVideoSession, startVideoSession } from "@/app/actions/video-session";
 import { AppointmentCalendar, type CalendarViewMode } from "@/components/dashboard/AppointmentCalendar";
 import { DashboardShell, type DashboardNavItem } from "@/components/dashboard/DashboardShell";
@@ -152,6 +153,18 @@ function getDoctorStatusMeta(status?: string | null) {
     default:
       return { label: "Online", className: "border-emerald-300/40 bg-emerald-300/10 text-emerald-100" };
   }
+}
+
+const DOCTOR_STATUS_OPTIONS = [
+  { value: "ONLINE", label: "Online" },
+  { value: "BUSY", label: "Busy" },
+  { value: "OFFLINE", label: "Offline" },
+] as const;
+
+type DoctorStatusValue = (typeof DOCTOR_STATUS_OPTIONS)[number]["value"];
+
+function normalizeDoctorStatus(status?: string | null): DoctorStatusValue {
+  return status === "BUSY" || status === "OFFLINE" ? status : "ONLINE";
 }
 
 function PatientOperationsHub({
@@ -589,7 +602,8 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     return today;
   });
   const [doctorAvailability, setDoctorAvailability] = useState(doctor.availability);
-  const [doctorStatus, setDoctorStatus] = useState(doctor.status || "ONLINE");
+  const [doctorStatus, setDoctorStatus] = useState<DoctorStatusValue>(normalizeDoctorStatus(doctor.status));
+  const [isUpdatingStatus, startStatusTransition] = useTransition();
   const [toasts, setToasts] = useState<{ id: string; tone: "success" | "error"; message: string }[]>([]);
 
   const showToast = useCallback((tone: "success" | "error", message: string) => {
@@ -621,13 +635,13 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     if (event.type === "doctor:availability-updated" && event.doctorId === doctor.id) {
       setDoctorAvailability(event.availability);
       if (event.status) {
-        setDoctorStatus(event.status);
+        setDoctorStatus(normalizeDoctorStatus(event.status));
       }
       router.refresh();
     }
 
     if (event.type === "doctor:status-updated" && event.doctorId === doctor.id) {
-      setDoctorStatus(event.status);
+      setDoctorStatus(normalizeDoctorStatus(event.status));
       router.refresh();
     }
   }, [doctor.id, router]);
@@ -641,6 +655,30 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
 
     return null;
   }, [doctor.id, realtime.lastEvent]);
+  const doctorStatusMeta = getDoctorStatusMeta(doctorStatus);
+  const handleDoctorStatusChange = useCallback((nextStatus: DoctorStatusValue) => {
+    const previousStatus = doctorStatus;
+    setDoctorStatus(nextStatus);
+    startStatusTransition(async () => {
+      const result = await updateDoctorStatus(nextStatus);
+      if (!result.success) {
+        showToast("error", result.error || "Could not update doctor status.");
+        setDoctorStatus(previousStatus);
+        return;
+      }
+
+      const statusLabel = nextStatus === "BUSY" ? "Busy" : nextStatus === "OFFLINE" ? "Offline" : "Online";
+      showToast("success", `Status updated to ${statusLabel}.`);
+      realtime.publish({
+        type: "doctor:status-updated",
+        actorRole: "doctor",
+        doctorId: doctor.id,
+        status: nextStatus,
+        title: "Doctor status updated",
+        body: `Doctor availability status is now ${statusLabel}.`,
+      });
+    });
+  }, [doctor.id, doctorStatus, realtime, showToast]);
   const session = useConsultationSession<DoctorAppointment>({
     role: "doctor",
     publish: realtime.publish,
@@ -1090,7 +1128,6 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
   };
 
   const tone = "dark" as const;
-  const doctorStatusMeta = getDoctorStatusMeta(doctorStatus);
 
   return (
     <DashboardShell
@@ -1116,9 +1153,23 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
         />
       }
       statusIndicator={
-        <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${doctorStatusMeta.className}`}>
-          {doctorStatusMeta.label}
-        </span>
+        <label className="flex items-center gap-2 rounded-full border border-slate-800 bg-slate-950 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-200">
+          <span className={`h-2.5 w-2.5 rounded-full ${doctorStatusMeta.label === "Busy" ? "bg-amber-400" : doctorStatusMeta.label === "Offline" ? "bg-slate-500" : "bg-emerald-400"}`} />
+          <span className="sr-only">Update availability status</span>
+          <select
+            value={doctorStatus}
+            onChange={(event) => handleDoctorStatusChange(normalizeDoctorStatus(event.target.value))}
+            disabled={isUpdatingStatus}
+            className="cursor-pointer bg-transparent text-[10px] font-black uppercase tracking-widest text-slate-200 outline-none disabled:cursor-wait"
+            aria-label="Update availability status"
+          >
+            {DOCTOR_STATUS_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
       }
       collapsed={collapsed}
       onToggleCollapsed={() => setCollapsed((value) => !value)}
@@ -1224,13 +1275,6 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
             remoteStream={webRTC.remoteStream}
             connectionState={webRTC.connectionState}
             mediaError={webRTC.error}
-            devices={webRTC.devices}
-            cameraDeviceId={webRTC.cameraDeviceId}
-            microphoneDeviceId={webRTC.microphoneDeviceId}
-            deviceStatus={webRTC.deviceStatus}
-            onCameraDeviceChange={webRTC.setCameraDeviceId}
-            onMicrophoneDeviceChange={webRTC.setMicrophoneDeviceId}
-            onRefreshDevices={() => void webRTC.refreshDevices()}
             chat={<ChatPanel role="doctor" messages={session.messages} onSend={session.sendMessage} />}
             documentation={
               <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
@@ -1614,14 +1658,14 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
           onToast={showToast}
           onProfileUpdated={({ availability, status }) => {
             setDoctorAvailability(availability);
-            setDoctorStatus(status);
+            setDoctorStatus(normalizeDoctorStatus(status));
             showToast("success", "Availability updated and schedule calendar synchronized.");
             realtime.publish({
               type: "doctor:availability-updated",
               actorRole: "doctor",
               doctorId: doctor.id,
               availability,
-              status,
+              status: normalizeDoctorStatus(status),
               title: "Doctor availability updated",
               body: "The consultation calendar schedule was updated.",
             });

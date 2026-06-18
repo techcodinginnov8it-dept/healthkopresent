@@ -69,6 +69,7 @@ export default async function PatientDashboardPage({
     bio: doc.bio,
     image: doc.image,
     availability: doc.availability,
+    status: doc.status,
     consultFee: doc.consultFee !== null ? Number(doc.consultFee) : null,
     rating: doc.rating,
     reviewCount: doc.reviewCount,
