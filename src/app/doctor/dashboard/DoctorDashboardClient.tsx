@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { logoutDoctor } from "@/app/actions/auth";
-import { acceptAppointment, cancelAppointment, completeConsultation, referAppointment, rescheduleAppointment, scheduleFollowUpAppointment } from "@/app/actions/doctor";
+import { acceptAppointment, cancelAppointment, completeConsultation, referAppointment, rescheduleAppointment, scheduleFollowUpAppointment, updateConsultationVitals } from "@/app/actions/doctor";
 import { updateDoctorStatus } from "@/app/actions/settings";
 import { endVideoSession, startVideoSession } from "@/app/actions/video-session";
 import { AppointmentCalendar, type CalendarViewMode } from "@/components/dashboard/AppointmentCalendar";
@@ -24,6 +24,7 @@ import { useDashboardModule } from "@/hooks/useDashboardModule";
 import { useDashboardNotifications } from "@/hooks/useDashboardNotifications";
 import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
 import { useWebRTC } from "@/hooks/useWebRTC";
+import { getTabButtonClassName } from "@/components/dashboard/tabStyles";
 import { formatDateTime } from "@/lib/dashboard/format";
 import { createDashboardNotification } from "@/lib/dashboard/notifications";
 import type {
@@ -68,6 +69,7 @@ type DoctorDashboardClientProps = {
 
 type PatientStatusFilter = "all" | "active" | "pending" | "completed" | "prescriptions";
 type PatientRecordsTab = "records" | "history" | "prescriptions" | "session";
+type ConsultationQueueFilter = "all" | "active" | "completed";
 
 type PatientProfile = DoctorAppointment["patient"] & {
   appointments: DoctorAppointment[];
@@ -106,6 +108,12 @@ const PATIENT_RECORD_TABS: { id: PatientRecordsTab; label: string }[] = [
   { id: "history", label: "History" },
   { id: "prescriptions", label: "Rx" },
   { id: "session", label: "Live" },
+];
+
+const CONSULTATION_QUEUE_FILTERS: { id: ConsultationQueueFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "active", label: "Active" },
+  { id: "completed", label: "Completed" },
 ];
 
 function getPatientDisplayName(patient: Pick<DoctorAppointment["patient"], "firstName" | "lastName">) {
@@ -251,9 +259,7 @@ function PatientOperationsHub({
                 key={filter.id}
                 type="button"
                 onClick={() => onStatusFilterChange(filter.id)}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] font-black uppercase ${
-                  statusFilter === filter.id ? "bg-brand-teal text-white" : "bg-slate-950 text-slate-400"
-                }`}
+                className={getTabButtonClassName({ active: statusFilter === filter.id, tone: "dark" })}
               >
                 {filter.label}
               </button>
@@ -280,7 +286,6 @@ function PatientOperationsHub({
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-black text-white">{getPatientDisplayName(patient)}</p>
-                      <p className="mt-1 truncate text-[11px] font-semibold text-slate-400">{patient.email}</p>
                     </div>
                     {patient.activeAppointment && (
                       <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-200">
@@ -315,12 +320,6 @@ function PatientOperationsHub({
                       {selectedPatient.emailVerified ? "Verified" : "Unverified"}
                     </span>
                   </div>
-                  <p className="mt-2 text-sm font-semibold text-slate-400">
-                    {getPatientAge(selectedPatient.dob)} / {selectedPatient.gender || "Unspecified"} / DOB {selectedPatient.dob}
-                  </p>
-                  <p className="mt-1 text-xs font-semibold text-slate-500">
-                    {selectedPatient.email} / {selectedPatient.countryCode || ""} {selectedPatient.phone}
-                  </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {selectedPatientActiveAppointment ? (
@@ -441,15 +440,13 @@ function PatientOperationsHub({
         <header className="border-b border-slate-850 p-4">
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Records</p>
           <h2 className="mt-1 text-lg font-black text-white">Patient Chart</h2>
-          <div className="mt-3 grid grid-cols-4 gap-1 rounded-lg bg-slate-950 p-1">
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
             {PATIENT_RECORD_TABS.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => onRecordsTabChange(tab.id)}
-                className={`rounded-md px-2 py-1.5 text-[10px] font-black uppercase ${
-                  recordsTab === tab.id ? "bg-brand-teal text-white" : "text-slate-400"
-                }`}
+                className={getTabButtonClassName({ active: recordsTab === tab.id, tone: "dark" })}
               >
                 {tab.label}
               </button>
@@ -594,6 +591,8 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
   const [selectedPatientId, setSelectedPatientId] = useState("");
   const [selectedConsultationId, setSelectedConsultationId] = useState("");
   const [selectedLiveAppointmentId, setSelectedLiveAppointmentId] = useState("");
+  const [consultationQueueFilter, setConsultationQueueFilter] = useState<ConsultationQueueFilter>("all");
+  const [vitalsForm, setVitalsForm] = useState({ bloodPressure: "", heartRate: "", bodyTemperature: "" });
   const [patientRecordsTab, setPatientRecordsTab] = useState<PatientRecordsTab>("records");
   const [patientReferenceTime] = useState(() => Date.now());
   const [calendarAnchorDate, setCalendarAnchorDate] = useState(() => {
@@ -604,6 +603,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
   const [doctorAvailability, setDoctorAvailability] = useState(doctor.availability);
   const [doctorStatus, setDoctorStatus] = useState<DoctorStatusValue>(normalizeDoctorStatus(doctor.status));
   const [isUpdatingStatus, startStatusTransition] = useTransition();
+  const [isSavingVitals, setIsSavingVitals] = useState(false);
   const [toasts, setToasts] = useState<{ id: string; tone: "success" | "error"; message: string }[]>([]);
 
   const showToast = useCallback((tone: "success" | "error", message: string) => {
@@ -706,33 +706,55 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
   }, [realtime.lastEvent, receiveRealtimeEvent]);
 
   const pendingAppointments = useMemo(
-    () => doctor.bookings.filter((booking) => booking.status === "PENDING"),
+    () =>
+      doctor.bookings
+        .filter((booking) => booking.status === "PENDING")
+        .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()),
     [doctor.bookings]
   );
   const confirmedAppointments = useMemo(
-    () => doctor.bookings.filter(
-      (booking) => booking.status === "CONFIRMED" && new Date(booking.scheduledAt).getTime() >= patientReferenceTime
-    ),
+    () =>
+      doctor.bookings
+        .filter((booking) => booking.status === "CONFIRMED" && new Date(booking.scheduledAt).getTime() >= patientReferenceTime)
+        .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()),
     [doctor.bookings, patientReferenceTime]
   );
   const completedConsultations = useMemo(
-    () => doctor.bookings.filter((booking) => booking.status === "COMPLETED"),
+    () =>
+      doctor.bookings
+        .filter((booking) => booking.status === "COMPLETED")
+        .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()),
     [doctor.bookings]
   );
   const consultationQueue = useMemo(
     () =>
       doctor.bookings
         .filter((booking) => booking.status === "CONFIRMED" || booking.status === "COMPLETED")
-        .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()),
+        .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()),
     [doctor.bookings]
+  );
+  const visibleConsultationQueue = useMemo(
+    () =>
+      consultationQueue.filter((booking) => {
+        if (consultationQueueFilter === "active") {
+          return booking.status === "CONFIRMED";
+        }
+
+        if (consultationQueueFilter === "completed") {
+          return booking.status === "COMPLETED";
+        }
+
+        return true;
+      }),
+    [consultationQueue, consultationQueueFilter]
   );
   const selectedLiveAppointment = useMemo(
     () =>
-      consultationQueue.find((booking) => booking.id === selectedLiveAppointmentId) ||
-      consultationQueue.find((booking) => booking.status === "CONFIRMED") ||
-      consultationQueue[0] ||
+      visibleConsultationQueue.find((booking) => booking.id === selectedLiveAppointmentId) ||
+      visibleConsultationQueue.find((booking) => booking.status === "CONFIRMED") ||
+      visibleConsultationQueue[0] ||
       null,
-    [consultationQueue, selectedLiveAppointmentId]
+    [selectedLiveAppointmentId, visibleConsultationQueue]
   );
   const patients = useMemo(() => {
     const map = new Map<string, DoctorAppointment["patient"]>();
@@ -857,6 +879,30 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     );
   }, [selectedConsultationId, selectedPatient]);
 
+  const selectedLiveAppointmentKey = selectedLiveAppointment?.id || "";
+  const selectedLiveAppointmentBloodPressure = selectedLiveAppointment?.bloodPressure || "";
+  const selectedLiveAppointmentHeartRate = selectedLiveAppointment?.heartRate || "";
+  const selectedLiveAppointmentBodyTemperature = selectedLiveAppointment?.bodyTemperature || "";
+
+  useEffect(() => {
+    const nextVitals = selectedLiveAppointmentKey
+      ? {
+          bloodPressure: selectedLiveAppointmentBloodPressure,
+          heartRate: selectedLiveAppointmentHeartRate,
+          bodyTemperature: selectedLiveAppointmentBodyTemperature,
+        }
+      : { bloodPressure: "", heartRate: "", bodyTemperature: "" };
+
+    Promise.resolve().then(() => {
+      setVitalsForm(nextVitals);
+    });
+  }, [
+    selectedLiveAppointmentKey,
+    selectedLiveAppointmentBloodPressure,
+    selectedLiveAppointmentHeartRate,
+    selectedLiveAppointmentBodyTemperature,
+  ]);
+
   const notificationSeed = useMemo<DashboardNotification[]>(
     () => [
       ...pendingAppointments.slice(0, 4).map((booking) =>
@@ -914,10 +960,12 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
       end.setDate(start.getDate() + 7);
     }
 
-    return [...pendingAppointments, ...confirmedAppointments].filter((booking) => {
+    return [...pendingAppointments, ...confirmedAppointments]
+      .filter((booking) => {
       const scheduledAt = new Date(booking.scheduledAt);
       return scheduledAt >= start && scheduledAt < end;
-    });
+      })
+      .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime());
   }, [calendarAnchorDate, calendarView, confirmedAppointments, pendingAppointments]);
 
   const visibleConfirmedAppointments = visibleScheduleAppointments.filter((booking) => booking.status === "CONFIRMED");
@@ -1048,6 +1096,33 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
         body: "Your visit was reassigned to a doctor whose specialization better matches your reason for visit.",
       });
       router.refresh();
+    }
+  };
+
+  const handleSaveVitals = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!selectedLiveAppointment) {
+      return;
+    }
+
+    setIsSavingVitals(true);
+    try {
+      const result = await updateConsultationVitals({
+        consultationId: selectedLiveAppointment.id,
+        bloodPressure: vitalsForm.bloodPressure,
+        heartRate: vitalsForm.heartRate,
+        bodyTemperature: vitalsForm.bodyTemperature,
+      });
+
+      if (result.success) {
+        showToast("success", "Vitals updated and saved to the consultation record.");
+        router.refresh();
+      } else {
+        showToast("error", result.error || "Could not save consultation vitals.");
+      }
+    } finally {
+      setIsSavingVitals(false);
     }
   };
 
@@ -1231,24 +1306,59 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
           <section className="rounded-xl border border-slate-850 bg-slate-900 p-5">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-lg font-black text-white">Clinical Queue</h2>
-              <button type="button" onClick={() => setActiveModule("schedule")} className="rounded-lg bg-brand-teal px-3 py-2 text-xs font-black text-white">
-                Open Appointments
-              </button>
             </div>
             <div className="space-y-3">
               {confirmedAppointments.length ? (
-                confirmedAppointments.map((booking) => (
-                  <AppointmentCard
-                    key={booking.id}
-                    tone={tone}
-                    title={`${booking.patient.firstName} ${booking.patient.lastName}`}
-                    subtitle={`${booking.patient.dob} · ${booking.patient.email}`}
-                    scheduledAt={booking.scheduledAt}
-                    status={booking.status}
-                    reason={booking.reason}
-                    actions={<button type="button" onClick={() => startLiveSession(booking)} className="rounded-lg bg-brand-red px-3 py-2 text-xs font-black text-white">Start Consultation</button>}
-                  />
-                ))
+                confirmedAppointments.map((booking) => {
+                  const patientAgeText = getPatientAge(booking.patient.dob);
+                  const patientGenderText = booking.patient.gender
+                    ? booking.patient.gender.charAt(0).toUpperCase() + booking.patient.gender.slice(1).toLowerCase()
+                    : "Unspecified";
+                  const patientInfo =
+                    patientAgeText === "Age unavailable" ? patientAgeText : `${patientAgeText} old`;
+
+                  return (
+                    <article
+                      key={booking.id}
+                      className="rounded-xl border border-slate-800 bg-slate-950 p-4 text-white transition hover:border-slate-700"
+                    >
+                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(220px,1fr)_auto] lg:items-center">
+                        <div className="min-w-0 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="truncate text-sm font-black text-white">
+                              {booking.patient.firstName} {booking.patient.lastName}
+                            </h3>
+                            <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${getStatusClasses(booking.status)}`}>
+                              {booking.status}
+                            </span>
+                          </div>
+                          <p className="text-xs font-semibold text-slate-400">
+                            {patientInfo} | {patientGenderText}
+                          </p>
+                          <p className="text-xs font-semibold leading-relaxed text-slate-300">
+                            <span className="font-black uppercase tracking-[0.16em] text-slate-500">Reason for Consultation:</span>{" "}
+                            {booking.reason || "No reason provided."}
+                          </p>
+                        </div>
+
+                        <div className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3 text-left lg:text-center">
+                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Live Consultation Schedule</p>
+                          <p className="mt-2 text-sm font-black text-white">{formatDateTime(booking.scheduledAt)}</p>
+                        </div>
+
+                        <div className="flex lg:justify-end">
+                          <button
+                            type="button"
+                            onClick={() => startLiveSession(booking)}
+                            className="w-full rounded-lg bg-brand-red px-4 py-3 text-xs font-black text-white lg:w-auto"
+                          >
+                            Start Consultation
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })
               ) : (
                 <EmptyState title="No confirmed visits" body="Accepted appointments appear in the clinical queue." />
               )}
@@ -1302,9 +1412,21 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Live Consultation</p>
                 <h2 className="mt-1 text-lg font-black text-white">Appointment Queue</h2>
                 <p className="mt-1 text-xs font-semibold text-slate-400">Confirmed and completed consultations update this workspace.</p>
+                <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+                  {CONSULTATION_QUEUE_FILTERS.map((filter) => (
+                    <button
+                      key={filter.id}
+                      type="button"
+                      onClick={() => setConsultationQueueFilter(filter.id)}
+                      className={getTabButtonClassName({ active: consultationQueueFilter === filter.id, tone: "dark" })}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
               </header>
               <div className="max-h-[calc(100vh-15rem)] space-y-3 overflow-y-auto p-4">
-                {consultationQueue.length ? consultationQueue.map((booking) => {
+                {visibleConsultationQueue.length ? visibleConsultationQueue.map((booking) => {
                   const active = selectedLiveAppointment?.id === booking.id;
 
                   return (
@@ -1348,7 +1470,6 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                           </span>
                         </div>
                         <p className="mt-2 text-xs font-semibold text-slate-400">Patient ID: {selectedLiveAppointment.patient.id}</p>
-                        <p className="mt-1 text-xs font-semibold text-slate-500">{selectedLiveAppointment.patient.email} / {selectedLiveAppointment.patient.phone}</p>
                       </div>
                       <button
                         type="button"
@@ -1371,18 +1492,49 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
 
                     <section className="rounded-xl border border-slate-800 bg-slate-950 p-4">
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Vitals</p>
-                      <div className="mt-4 grid gap-3 md:grid-cols-3">
-                        {[
-                          { label: "Blood Pressure", value: "Not recorded" },
-                          { label: "Heart Rate", value: "Not recorded" },
-                          { label: "Body Temperature", value: "Not recorded" },
-                        ].map((vital) => (
-                          <div key={vital.label} className="rounded-lg border border-slate-800 bg-slate-900 p-4">
-                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{vital.label}</p>
-                            <p className="mt-2 text-sm font-black text-white">{vital.value}</p>
-                          </div>
-                        ))}
-                      </div>
+                      <form onSubmit={handleSaveVitals} className="mt-4 space-y-4">
+                        <div className="grid gap-3 md:grid-cols-3">
+                          {[
+                            {
+                              label: "Blood Pressure",
+                              value: vitalsForm.bloodPressure,
+                              placeholder: "120/80 mmHg",
+                              onChange: (value: string) => setVitalsForm((current) => ({ ...current, bloodPressure: value })),
+                            },
+                            {
+                              label: "Heart Rate",
+                              value: vitalsForm.heartRate,
+                              placeholder: "72 bpm",
+                              onChange: (value: string) => setVitalsForm((current) => ({ ...current, heartRate: value })),
+                            },
+                            {
+                              label: "Body Temperature",
+                              value: vitalsForm.bodyTemperature,
+                              placeholder: "36.8 °C",
+                              onChange: (value: string) => setVitalsForm((current) => ({ ...current, bodyTemperature: value })),
+                            },
+                          ].map((vital) => (
+                            <label key={vital.label} className="rounded-lg border border-slate-800 bg-slate-900 p-4">
+                              <span className="block text-[10px] font-black uppercase tracking-wider text-slate-500">{vital.label}</span>
+                              <input
+                                value={vital.value}
+                                onChange={(event) => vital.onChange(event.target.value)}
+                                placeholder={vital.placeholder}
+                                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-black text-white outline-none placeholder:text-slate-600 focus:border-brand-teal"
+                              />
+                            </label>
+                          ))}
+                        </div>
+                        <div className="flex justify-end">
+                          <button
+                            type="submit"
+                            disabled={isSavingVitals}
+                            className="rounded-lg bg-brand-teal px-4 py-2.5 text-xs font-black text-white disabled:bg-slate-800"
+                          >
+                            {isSavingVitals ? "Saving..." : "Update Vitals"}
+                          </button>
+                        </div>
+                      </form>
                     </section>
 
                     <section className="rounded-xl border border-slate-800 bg-slate-950 p-4">
@@ -1479,7 +1631,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
               appointments={visibleScheduleAppointments.map((booking) => ({
                 id: booking.id,
                 title: `${booking.patient.firstName} ${booking.patient.lastName}`,
-                subtitle: booking.reason || booking.patient.email,
+                subtitle: booking.reason || "No reason provided.",
                 scheduledAt: booking.scheduledAt,
                 status: booking.status,
               }))}
@@ -1544,7 +1696,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                       <div className="min-w-0">
                         <p className="truncate text-sm font-black">{booking.patient.firstName} {booking.patient.lastName}</p>
                         <p className="mt-1 text-[11px] font-semibold text-amber-100">{formatDateTime(booking.scheduledAt)}</p>
-                        <p className="mt-1 line-clamp-2 text-xs text-slate-300">{booking.reason || booking.patient.email}</p>
+                        <p className="mt-1 line-clamp-2 text-xs text-slate-300">{booking.reason || "No reason provided."}</p>
                       </div>
                       <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-black uppercase text-amber-100">Request</span>
                     </div>
@@ -1584,7 +1736,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                   <article key={booking.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">
                     <div className="min-w-0">
                       <p className="truncate text-xs font-black text-white">{booking.patient.firstName} {booking.patient.lastName}</p>
-                      <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-400">{booking.reason || booking.patient.email}</p>
+                      <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-400">{booking.reason || "No reason provided."}</p>
                     </div>
                     <time className="shrink-0 text-right text-[11px] font-black text-sky-100">{formatDateTime(booking.scheduledAt)}</time>
                   </article>
@@ -1683,3 +1835,4 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     </DashboardShell>
   );
 }
+

@@ -10,6 +10,7 @@ import { authorizePatientVideoSession, endVideoSession } from "@/app/actions/vid
 import { DashboardShell, type DashboardNavItem } from "@/components/dashboard/DashboardShell";
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
 import { PatientSettingsModule } from "@/components/dashboard/SettingsModule";
+import { getTabButtonClassName } from "@/components/dashboard/tabStyles";
 import {
   ChatPanel,
   EmptyState,
@@ -141,6 +142,19 @@ function getMedicalBullets(value?: string | null) {
     .filter(Boolean);
 }
 
+function formatRecordedVitals(appointment: Pick<PatientAppointment, "bloodPressure" | "heartRate" | "bodyTemperature">) {
+  const bloodPressure = appointment.bloodPressure?.trim() || "Not recorded";
+  const heartRate = appointment.heartRate?.trim() || "Not recorded";
+  const bodyTemperature = appointment.bodyTemperature?.trim() || "Not recorded";
+
+  return { bloodPressure, heartRate, bodyTemperature };
+}
+
+function formatVitalsSummary(appointment: Pick<PatientAppointment, "bloodPressure" | "heartRate" | "bodyTemperature">) {
+  const vitals = formatRecordedVitals(appointment);
+  return `${vitals.bloodPressure} | ${vitals.heartRate} | ${vitals.bodyTemperature}`;
+}
+
 function getAgeFromDob(dob: string) {
   const birthDate = new Date(dob);
   if (Number.isNaN(birthDate.getTime())) {
@@ -231,6 +245,7 @@ function escapePdfText(value: string) {
 }
 
 function downloadMedicalReport(appointment: PatientAppointment) {
+  const vitals = formatRecordedVitals(appointment);
   const reportLines = [
     "Healthko Medical Report",
     "",
@@ -238,6 +253,9 @@ function downloadMedicalReport(appointment: PatientAppointment) {
     `Specialization: ${appointment.doctor.specialty}`,
     `Consultation Date: ${formatDateTime(appointment.scheduledAt)}`,
     `Status: ${appointment.status}`,
+    `Blood Pressure: ${vitals.bloodPressure}`,
+    `Heart Rate: ${vitals.heartRate}`,
+    `Body Temperature: ${vitals.bodyTemperature}`,
     "",
     "Chief Complaint",
     appointment.reason || "No chief complaint recorded.",
@@ -840,6 +858,10 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       null,
     [medicalAccessAppointments, selectedMedicalAppointmentId]
   );
+  const selectedMedicalVitals = useMemo(
+    () => (selectedMedicalAppointment ? formatRecordedVitals(selectedMedicalAppointment) : null),
+    [selectedMedicalAppointment]
+  );
   const selectedDoctor = useMemo(
     () => doctors.find((doctor) => doctor.id === selectedDoctorId),
     [doctors, selectedDoctorId]
@@ -960,7 +982,9 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     console.log("[PatientDashboard] authorizePatientVideoSession result:", result);
 
     if (!result.success || !result.roomId || !result.accessToken) {
-      console.error("[PatientDashboard] Authorization failed:", result.error);
+      if (result.error && result.error !== "The doctor has not started this consultation yet.") {
+        console.error("[PatientDashboard] Authorization failed:", result.error);
+      }
       showToast("error", result.error || "Could not authorize video room access.");
       setJoiningAppointmentId("");
       setBlockedAppointment(appointment);
@@ -1699,9 +1723,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                         key={filter.id}
                         type="button"
                         onClick={() => setAppointmentFilter(filter.id)}
-                        className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] font-black uppercase ${
-                          appointmentFilter === filter.id ? "bg-brand-teal text-white" : "bg-slate-100 text-slate-500"
-                        }`}
+                        className={getTabButtonClassName({ active: appointmentFilter === filter.id, tone: "light" })}
                       >
                         {filter.label}
                       </button>
@@ -1888,9 +1910,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                         key={filter.id}
                         type="button"
                         onClick={() => setConsultationFilter(filter.id)}
-                        className={`rounded-md px-3 py-2 text-[10px] font-black uppercase transition ${
-                          consultationFilter === filter.id ? "bg-white text-brand-teal shadow-sm" : "text-slate-500 hover:text-slate-800"
-                        }`}
+                        className={getTabButtonClassName({ active: consultationFilter === filter.id, tone: "light" })}
                       >
                         {filter.label}
                       </button>
@@ -2053,9 +2073,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                             key={tab.id}
                             type="button"
                             onClick={() => setConsultationHubTab(tab.id)}
-                            className={`shrink-0 rounded-lg px-3 py-2 text-[10px] font-black uppercase ${
-                              consultationHubTab === tab.id ? "bg-brand-teal text-white" : "bg-slate-100 text-slate-500"
-                            }`}
+                            className={getTabButtonClassName({ active: consultationHubTab === tab.id, tone: "light" })}
                           >
                             {tab.label}
                           </button>
@@ -2077,7 +2095,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                         {consultationHubTab === "documents" && (
                           <div className="grid gap-3 md:grid-cols-2">
                             <button type="button" onClick={() => downloadMedicalReport(selectedAppointment)} className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-left text-sm font-black text-slate-950">
-                              Download consultation report
+                              Download Medical Report
                             </button>
                             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                               <p className="text-sm font-black text-slate-950">Medical documents</p>
@@ -2170,7 +2188,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                       onClick={() => downloadMedicalReport(selectedMedicalAppointment)}
                       className="rounded-lg bg-slate-950 px-4 py-3 text-xs font-black text-white"
                     >
-                      Download PDF Report
+                      Download Medical Report
                     </button>
                   </div>
                   <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
@@ -2179,9 +2197,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                         key={tab.id}
                         type="button"
                         onClick={() => setMedicalAccessTab(tab.id)}
-                        className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] font-black uppercase ${
-                          medicalAccessTab === tab.id ? "bg-brand-teal text-white" : "bg-slate-100 text-slate-500"
-                        }`}
+                        className={getTabButtonClassName({ active: medicalAccessTab === tab.id, tone: "light" })}
                       >
                         {tab.label}
                       </button>
@@ -2194,7 +2210,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                     <section className="grid gap-3 md:grid-cols-4">
                       {[
                         { label: "Chief Complaint", value: selectedMedicalAppointment.reason || "No chief complaint recorded." },
-                        { label: "Vitals", value: "Not recorded in this encounter." },
+                        { label: "Vitals", value: selectedMedicalVitals ? formatVitalsSummary(selectedMedicalVitals) : "Not recorded" },
                         { label: "Duration", value: `${selectedMedicalAppointment.duration || DEFAULT_DURATION_MINUTES} minutes` },
                         { label: "Status", value: selectedMedicalAppointment.status },
                       ].map((item) => (

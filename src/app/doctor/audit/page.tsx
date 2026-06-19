@@ -192,7 +192,7 @@ export default function DoctorAuditPage() {
 
       setLoading(false);
       if (res.success && res.auditId) {
-        setSuccessData({ auditId: res.auditId, linked: res.linked });
+        setSuccessData({ auditId: res.auditId, linked: res.linked ?? false });
       } else {
         setError(res.error || "Auditing submission failed. Please verify your NPI details.");
       }

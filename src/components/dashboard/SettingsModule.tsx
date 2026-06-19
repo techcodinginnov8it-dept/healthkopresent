@@ -84,23 +84,23 @@ const blankPasswordForm: PasswordForm = {
 };
 
 const patientSections = [
-  { id: "profile", label: "Profile Management", description: "Identity, contact, address, and ZIP code" },
-  { id: "medical", label: "Medical Profile", description: "Health profile details and emergency contacts" },
-  { id: "security", label: "Account Security", description: "Password, 2FA, devices, and recovery" },
-  { id: "notifications", label: "Notifications", description: "Appointment, consultation, email, and SMS preferences" },
-  { id: "privacy", label: "Privacy", description: "Teleconsultation and data privacy consent" },
-  { id: "support", label: "Support & Help", description: "Help channels and account assistance" },
+  { id: "profile", label: "Profile Management", description: "" },
+  { id: "medical", label: "Medical Profile", description: "" },
+  { id: "security", label: "Account Security", description: "" },
+  { id: "notifications", label: "Notifications", description: "" },
+  { id: "privacy", label: "Privacy", description: "" },
+  { id: "support", label: "Support & Help", description: "" },
 ] as const satisfies readonly SettingsSection<string>[];
 
 const doctorSections = [
-  { id: "professional", label: "Professional Profile", description: "Credentials and patient-facing profile" },
-  { id: "schedule", label: "Schedule & Availability", description: "Working hours and consultation duration" },
-  { id: "consultation", label: "Consultation Settings", description: "Device and admission preferences" },
-  { id: "security", label: "Account Security", description: "Password management" },
-  { id: "notifications", label: "Notification Settings", description: "Appointment and communication alerts" },
-  { id: "prescriptions", label: "Prescription Settings", description: "Signature and templates" },
-  { id: "privacy", label: "Privacy & Consent", description: "Data access and telehealth compliance" },
-  { id: "support", label: "Support & Help", description: "Help channels and account assistance" },
+  { id: "professional", label: "Professional Profile", description: "" },
+  { id: "schedule", label: "Schedule & Availability", description: "" },
+  { id: "consultation", label: "Consultation Settings", description: "" },
+  { id: "security", label: "Account Security", description: "" },
+  { id: "notifications", label: "Notification Settings", description: "" },
+  { id: "prescriptions", label: "Prescription Settings", description: "" },
+  { id: "privacy", label: "Privacy & Consent", description: "" },
+  { id: "support", label: "Support & Help", description: "" },
 ] as const satisfies readonly SettingsSection<string>[];
 
 type PatientSectionId = (typeof patientSections)[number]["id"];
@@ -208,6 +208,26 @@ function SettingsCard({
   );
 }
 
+function FieldGroup({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-slate-200 bg-slate-50 p-5 shadow-sm">
+      <div className="mb-4">
+        <h3 className="text-sm font-black uppercase tracking-[0.16em] text-slate-950">{title}</h3>
+        {description ? <p className="mt-1 text-xs font-semibold text-slate-500">{description}</p> : null}
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{children}</div>
+    </section>
+  );
+}
+
 function SettingsToastStack({ toasts }: { toasts: { id: string; tone: "success" | "error"; message: string }[] }) {
   return (
     <div className="pointer-events-none fixed right-5 top-5 z-[90] flex w-[min(24rem,calc(100vw-2.5rem))] flex-col gap-3">
@@ -228,38 +248,19 @@ function SettingsToastStack({ toasts }: { toasts: { id: string; tone: "success" 
   );
 }
 
-function InitialsAvatar({ label, image }: { label: string; image?: string | null }) {
-  return (
-    <div className="flex items-center gap-4">
-      {image ? (
-        <div
-          className="h-20 w-20 shrink-0 rounded-full border-4 border-white bg-cover bg-center shadow-sm ring-1 ring-slate-200"
-          style={{ backgroundImage: `url(${image})` }}
-          aria-label={`${label} profile image`}
-          role="img"
-        />
-      ) : (
-        <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-4 border-white bg-brand-teal/10 text-xl font-black text-brand-teal shadow-sm ring-1 ring-slate-200">
-          {label.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}
-        </div>
-      )}
-      <div>
-        <p className="text-sm font-black text-slate-950">{label}</p>
-        <p className="mt-1 text-xs font-semibold text-slate-500">Profile identity visible across secure care workflows.</p>
-      </div>
-    </div>
-  );
-}
-
-function ProfileImageUploader({
+function ProfileHeader({
   label,
+  description,
   image,
-  onChange,
+  onUpload,
+  onRemove,
   onToast,
 }: {
   label: string;
+  description: string;
   image?: string | null;
-  onChange: (value: string) => void;
+  onUpload: (file: File) => void;
+  onRemove: () => void;
   onToast: (tone: "success" | "error", message: string) => void;
 }) {
   const handleFile = (event: ChangeEvent<HTMLInputElement>) => {
@@ -278,30 +279,45 @@ function ProfileImageUploader({
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        onChange(reader.result);
-      }
-    };
-    reader.readAsDataURL(file);
+    onUpload(file);
   };
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <InitialsAvatar label={label} image={image} />
-        <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-          <label className="cursor-pointer rounded-lg bg-slate-900 px-4 py-2.5 text-xs font-black text-white">
-            Upload Photo
-            <input type="file" accept="image/*" onChange={handleFile} className="sr-only" />
-          </label>
-          {image && (
-            <button type="button" onClick={() => onChange("")} className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs font-black text-slate-700">
-              Remove Photo
-            </button>
-          )}
+    <div className="flex w-full flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50 p-5 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex min-w-0 items-center gap-4">
+        {image ? (
+          <div
+            className="h-20 w-20 shrink-0 rounded-full border-4 border-white bg-cover bg-center shadow-sm ring-1 ring-slate-200"
+            style={{ backgroundImage: `url(${image})` }}
+            aria-label={`${label} profile image`}
+            role="img"
+          />
+        ) : (
+          <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-4 border-white bg-brand-teal/10 text-xl font-black text-brand-teal shadow-sm ring-1 ring-slate-200">
+            {label
+              .split(" ")
+              .map((part) => part[0])
+              .join("")
+              .slice(0, 2)
+              .toUpperCase()}
+          </div>
+        )}
+        <div className="min-w-0">
+          <p className="truncate text-sm font-black text-slate-950">{label}</p>
+          {description ? <p className="mt-1 text-xs font-semibold text-slate-500">{description}</p> : null}
         </div>
+      </div>
+
+      <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
+        <label className="cursor-pointer rounded-lg bg-slate-900 px-4 py-2.5 text-xs font-black text-white">
+          Upload Photo
+          <input type="file" accept="image/*" onChange={handleFile} className="sr-only" />
+        </label>
+        {image && (
+          <button type="button" onClick={onRemove} className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs font-black text-slate-700">
+            Remove Photo
+          </button>
+        )}
       </div>
     </div>
   );
@@ -425,11 +441,13 @@ function SettingsLayout<TId extends string>({
                       : "border-slate-200 bg-slate-50 text-slate-700 hover:border-brand-teal/40"
                 }`}
                 aria-current={active ? "page" : undefined}
-              >
+                >
                 <span className="block text-sm font-black">{section.label}</span>
-                <span className={`mt-1 block text-[11px] font-semibold ${active ? "text-white/80" : isDoctor ? "text-slate-500" : "text-slate-500"}`}>
-                  {section.description}
-                </span>
+                {section.description ? (
+                  <span className={`mt-1 block text-[11px] font-semibold ${active ? "text-white/80" : isDoctor ? "text-slate-500" : "text-slate-500"}`}>
+                    {section.description}
+                  </span>
+                ) : null}
               </button>
             );
           })}
@@ -550,6 +568,7 @@ export function DoctorSettingsModule({
     email: doctor.email,
     image: doctor.image || "",
     specialty: doctor.specialty,
+    phone: "",
     availability: doctor.availability,
     status: doctor.status || "ONLINE",
     licenseNumber: doctor.licenseNumber || "",
@@ -590,22 +609,56 @@ export function DoctorSettingsModule({
               event.preventDefault();
               saveDoctorProfile("Professional profile updated.");
             }}
-            className="grid gap-4 md:grid-cols-2"
+            className="space-y-5"
           >
-            <ProfileImageUploader label={form.name} image={form.image} onChange={(value) => setField("image", value)} onToast={showToast} />
-            <Field label="Full name" value={form.name} onChange={(value) => setField("name", value)} required />
-            <Field label="Medical specialty" value={form.specialty} onChange={(value) => setField("specialty", value)} required />
-            <Field label="License number" value={form.licenseNumber} onChange={(value) => setField("licenseNumber", value)} />
-            <Field label="License state" value={form.licenseState} onChange={(value) => setField("licenseState", value)} />
-            <Field label="Contact information" type="email" value={form.email} onChange={(value) => setField("email", value)} required />
-            <Field label="Consultation fee" type="number" value={form.consultFee} onChange={(value) => setField("consultFee", value)} />
-            <Field label="Years experience" type="number" value={form.yearsExp} onChange={(value) => setField("yearsExp", value)} />
-            <TextAreaField label="Professional bio" value={form.bio} onChange={(value) => setField("bio", value)} />
-            <StickyActionBar>
+            <ProfileHeader
+              label={form.name}
+              description=""
+              image={form.image}
+              onUpload={(file) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                  if (typeof reader.result === "string") {
+                    setField("image", reader.result);
+                  }
+                };
+                reader.readAsDataURL(file);
+              }}
+              onRemove={() => setField("image", "")}
+              onToast={showToast}
+            />
+
+            <FieldGroup title="Professional Identity">
+              <Field label="Full name" value={form.name} onChange={(value) => setField("name", value)} required />
+              <Field label="Medical specialty" value={form.specialty} onChange={(value) => setField("specialty", value)} required />
+              <Field label="License number" value={form.licenseNumber} onChange={(value) => setField("licenseNumber", value)} />
+              <Field label="License state" value={form.licenseState} onChange={(value) => setField("licenseState", value)} />
+            </FieldGroup>
+
+            <FieldGroup title="Credentials & Practice">
+              <Field label="Years experience" type="number" value={form.yearsExp} onChange={(value) => setField("yearsExp", value)} />
+              <Field label="Consultation fee" type="number" value={form.consultFee} onChange={(value) => setField("consultFee", value)} />
+            </FieldGroup>
+
+            <FieldGroup title="Contact">
+              <Field label="Email" type="email" value={form.email} onChange={(value) => setField("email", value)} required />
+              <Field label="Phone number" value={form.phone} onChange={(value) => setField("phone", value)} />
+            </FieldGroup>
+
+            <section className="rounded-xl border border-slate-200 bg-slate-50 p-5 shadow-sm">
+              <div className="mb-4">
+                <h3 className="text-sm font-black uppercase tracking-[0.16em] text-slate-950">Professional Bio</h3>
+              </div>
+              <div>
+                <TextAreaField label="Professional bio" value={form.bio} onChange={(value) => setField("bio", value)} />
+              </div>
+            </section>
+
+            <div className="flex justify-end pt-1">
               <button type="submit" disabled={isPending} className="rounded-lg bg-brand-teal px-5 py-3 text-sm font-black text-white disabled:bg-slate-300">
                 {isPending ? "Saving..." : "Save Professional Profile"}
               </button>
-            </StickyActionBar>
+            </div>
           </form>
         </SettingsCard>
       );
@@ -800,30 +853,53 @@ export function PatientSettingsModule({
                 router.refresh();
               });
             }}
-            className="grid gap-4 md:grid-cols-2"
+            className="space-y-5"
           >
-            <ProfileImageUploader label={`${form.firstName} ${form.lastName}`} image={form.image} onChange={(value) => setField("image", value)} onToast={showToast} />
-            <Field label="First name" value={form.firstName} onChange={(value) => setField("firstName", value)} required />
-            <Field label="Last name" value={form.lastName} onChange={(value) => setField("lastName", value)} required />
-            <Field label="Date of birth" type="date" value={form.dob} onChange={(value) => setField("dob", value)} required />
-            <Field label="Gender" value={form.gender} onChange={(value) => setField("gender", value)} />
-            <Field label="Email" type="email" value={form.email} onChange={(value) => setField("email", value)} required />
-            <div className="grid grid-cols-[96px_1fr] gap-3">
-              <Field label="Code" value={form.countryCode} onChange={(value) => setField("countryCode", value)} required />
-              <Field label="Contact information" value={form.phone} onChange={(value) => setField("phone", value)} required />
-            </div>
-            <div className="md:col-span-2">
-              <Field label="Address" value={form.address} onChange={(value) => setField("address", value)} />
-            </div>
-            <Field label="City" value={form.city} onChange={(value) => setField("city", value)} />
-            <Field label="State" value={form.state} onChange={(value) => setField("state", value)} />
-            <Field label="ZIP code" value={form.zipCode} onChange={(value) => setField("zipCode", value)} />
-            <Field label="Country" value={form.country} onChange={(value) => setField("country", value)} />
-            <StickyActionBar>
+            <ProfileHeader
+              label={`${form.firstName} ${form.lastName}`}
+              description=""
+              image={form.image}
+              onUpload={(file) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                  if (typeof reader.result === "string") {
+                    setField("image", reader.result);
+                  }
+                };
+                reader.readAsDataURL(file);
+              }}
+              onRemove={() => setField("image", "")}
+              onToast={showToast}
+            />
+
+            <FieldGroup title="Personal Information">
+              <Field label="First name" value={form.firstName} onChange={(value) => setField("firstName", value)} required />
+              <Field label="Last name" value={form.lastName} onChange={(value) => setField("lastName", value)} required />
+              <Field label="Date of birth" type="date" value={form.dob} onChange={(value) => setField("dob", value)} required />
+              <Field label="Gender" value={form.gender} onChange={(value) => setField("gender", value)} />
+            </FieldGroup>
+
+            <FieldGroup title="Contact Information">
+              <Field label="Email address" type="email" value={form.email} onChange={(value) => setField("email", value)} required />
+              <Field label="Country code" value={form.countryCode} onChange={(value) => setField("countryCode", value)} required />
+              <Field label="Contact number" value={form.phone} onChange={(value) => setField("phone", value)} required />
+            </FieldGroup>
+
+            <FieldGroup title="Address Details">
+              <div className="md:col-span-2 xl:col-span-3">
+                <Field label="Address" value={form.address} onChange={(value) => setField("address", value)} />
+              </div>
+              <Field label="City" value={form.city} onChange={(value) => setField("city", value)} />
+              <Field label="State" value={form.state} onChange={(value) => setField("state", value)} />
+              <Field label="ZIP code" value={form.zipCode} onChange={(value) => setField("zipCode", value)} />
+              <Field label="Country" value={form.country} onChange={(value) => setField("country", value)} />
+            </FieldGroup>
+
+            <div className="flex justify-end pt-1">
               <button type="submit" disabled={isPending} className="rounded-lg bg-brand-teal px-5 py-3 text-sm font-black text-white disabled:bg-slate-300">
                 {isPending ? "Saving..." : "Save Patient Profile"}
               </button>
-            </StickyActionBar>
+            </div>
           </form>
         </SettingsCard>
       );

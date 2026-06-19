@@ -1,6 +1,6 @@
 import { getDoctorDashboardData } from "@/lib/dal/doctor";
 import { getDoctorsList } from "@/app/actions/patient";
-import type { DoctorModuleId } from "@/lib/dashboard/types";
+import type { DashboardDoctor, DoctorAppointment, DoctorModuleId } from "@/lib/dashboard/types";
 import DoctorDashboardClient from "./DoctorDashboardClient";
 
 const DOCTOR_MODULES = [
@@ -37,8 +37,8 @@ export default async function DoctorDashboardPage({
   const serializedDoctor = {
     ...doctor,
     bookings: doctor.bookings
-      .filter((booking: any) => booking.patient !== null && booking.patient !== undefined)
-      .map((booking: any) => ({
+      .filter((booking: DoctorAppointment) => booking.patient !== null && booking.patient !== undefined)
+      .map((booking: DoctorAppointment) => ({
         ...booking,
         scheduledAt: new Date(booking.scheduledAt),
         createdAt: new Date(booking.createdAt),
@@ -72,8 +72,8 @@ export default async function DoctorDashboardPage({
   };
 
   const doctors = (doctorsRes.success ? doctorsRes.doctors || [] : [])
-    .filter((candidate) => candidate.id !== doctor.id)
-    .map((candidate) => ({
+    .filter((candidate: DashboardDoctor) => candidate.id !== doctor.id)
+    .map((candidate: DashboardDoctor) => ({
       id: candidate.id,
       name: candidate.name,
       email: candidate.email,

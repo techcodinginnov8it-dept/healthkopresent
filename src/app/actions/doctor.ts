@@ -162,6 +162,13 @@ type CompleteConsultationPayload = {
   reason?: string; // Diagnosis
 };
 
+type UpdateConsultationVitalsPayload = {
+  consultationId: string;
+  bloodPressure: string;
+  heartRate: string;
+  bodyTemperature: string;
+};
+
 type RescheduleAppointmentPayload = {
   consultationId: string;
   scheduledAt: string;
@@ -227,6 +234,65 @@ export async function completeConsultation(data: CompleteConsultationPayload) {
   } catch (error: unknown) {
     console.error("Prisma completeConsultation failed:", error);
     return { success: false, error: "Failed to complete consultation in database." };
+  }
+}
+
+export async function updateConsultationVitals(data: UpdateConsultationVitalsPayload) {
+  try {
+    const session = await requireDoctorSession();
+    const bloodPressure = data.bloodPressure.trim();
+    const heartRate = data.heartRate.trim();
+    const bodyTemperature = data.bodyTemperature.trim();
+
+    if (!data.consultationId) {
+      return { success: false, error: "Consultation is required." };
+    }
+
+    if (!bloodPressure && !heartRate && !bodyTemperature) {
+      return { success: false, error: "Add at least one vital sign before saving." };
+    }
+
+    if (!isPrismaConfigured()) {
+      const existing = mockDb.getBookingsForDoctor(session.userId).find((c) => c.id === data.consultationId);
+      if (!existing) {
+        return { success: false, error: "Consultation not found or unauthorized access." };
+      }
+
+      const updated = mockDb.updateConsultation(data.consultationId, {
+        bloodPressure: bloodPressure || null,
+        heartRate: heartRate || null,
+        bodyTemperature: bodyTemperature || null,
+      });
+
+      revalidatePath("/doctor/dashboard");
+      revalidatePath("/patient/dashboard");
+      return { success: true, consultation: updated };
+    }
+
+    const consultation = await prisma.consultation.findUnique({
+      where: { id: data.consultationId },
+      select: { id: true, doctorId: true },
+    });
+
+    if (!consultation || consultation.doctorId !== session.userId) {
+      return { success: false, error: "Consultation not found or unauthorized access." };
+    }
+
+    const updated = await prisma.consultation.update({
+      where: { id: data.consultationId },
+      data: {
+        bloodPressure: bloodPressure || null,
+        heartRate: heartRate || null,
+        bodyTemperature: bodyTemperature || null,
+      },
+    });
+
+    revalidatePath("/doctor/dashboard");
+    revalidatePath("/patient/dashboard");
+    return { success: true, consultation: updated };
+  } catch (error: unknown) {
+    console.error("updateConsultationVitals failed:", error);
+    return { success: false, error: "Failed to update consultation vitals." };
   }
 }
 

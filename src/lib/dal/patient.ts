@@ -16,6 +16,9 @@ const PATIENT_BOOKINGS_SELECT = {
     reason: true,
     duration: true,
     prescription: true,
+    bloodPressure: true,
+    heartRate: true,
+    bodyTemperature: true,
     createdAt: true,
     doctor: {
       select: {

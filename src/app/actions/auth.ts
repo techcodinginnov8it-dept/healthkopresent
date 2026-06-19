@@ -404,7 +404,7 @@ export async function requestPatientSignupOtp(data: PatientSignupPayload): Promi
     } else {
       await prisma.patient.delete({
         where: { email: createdPatient.email }
-      }).catch((dbDeleteErr) => {
+      }).catch((dbDeleteErr: unknown) => {
         console.error("Failed to delete patient during signup rollback:", dbDeleteErr);
       });
     }
