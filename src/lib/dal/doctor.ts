@@ -94,13 +94,16 @@ export const getDoctorDashboardData = cache(async () => {
         },
       },
     });
-
   } catch (error) {
     console.error("Prisma getDoctorDashboardData failed:", error);
     throw error;
   }
 
   if (!doctor) {
+    const mockDoctor = mockDb.findDoctorById(session.userId);
+    if (mockDoctor) {
+      return getMockDoctorDashboardData(session);
+    }
     redirect("/doctor/signin");
   }
 
