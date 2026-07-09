@@ -996,8 +996,9 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     setDismissedStartedId(appointment.id);
     setJoiningAppointmentId("");
     setBlockedAppointment(null);
+    // enterAuthorizedRoom sets session.roomId + status="connected", which triggers useWebRTC
+    // to initialize and call webrtc:join-room itself — no need to call joinVideoRoom here.
     session.enterAuthorizedRoom(appointment, result.roomId, result.accessToken);
-    realtime.joinVideoRoom(result.roomId);
     setActiveModule("live");
     realtime.publish({
       type: "session:joined",
@@ -1090,13 +1091,10 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
   };
 
   const startLiveSession = (appointment: PatientAppointment) => {
-    if (authorizedRooms[appointment.id]) {
-      void joinAuthorizedSession(appointment);
-      return;
-    }
-
-    setBlockedAppointment(appointment);
-    setActiveModule("live");
+    // Always attempt to authorize — the server action checks the mock/Prisma DB.
+    // This handles both: patient receiving session:started event, and the case
+    // where the patient missed the event (page refresh, late login, etc.).
+    void joinAuthorizedSession(appointment);
   };
 
   const handleEndSession = async () => {

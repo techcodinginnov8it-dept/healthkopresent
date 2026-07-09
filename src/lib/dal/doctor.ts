@@ -14,8 +14,10 @@ export const getDoctorDashboardData = cache(async () => {
     return getMockDoctorDashboardData(session);
   }
 
+  let doctor: any = null;
+
   try {
-    const doctor = await prisma.doctor.findUnique({
+    doctor = await prisma.doctor.findUnique({
       where: { id: session.userId },
       select: {
         id: true,
@@ -95,19 +97,23 @@ export const getDoctorDashboardData = cache(async () => {
         },
       },
     });
-
-    if (!doctor) {
-      redirect("/doctor/signin");
-    }
-
-    return {
-      session,
-      doctor,
-    };
   } catch (error) {
     console.error("Prisma getDoctorDashboardData failed:", error);
     throw error;
   }
+
+  if (!doctor) {
+    const mockDoctor = mockDb.findDoctorById(session.userId);
+    if (mockDoctor) {
+      return getMockDoctorDashboardData(session);
+    }
+    redirect("/doctor/signin");
+  }
+
+  return {
+    session,
+    doctor,
+  };
 });
 
 function getMockDoctorDashboardData(session: { userId: string; email: string }) {

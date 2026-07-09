@@ -88,6 +88,10 @@ export const getPatientDashboardData = cache(async () => {
   }
 
   if (!patient) {
+    const mockPatient = mockDb.findPatientById(session.userId);
+    if (mockPatient) {
+      return getMockPatientDashboardData(session);
+    }
     redirect("/signin");
   }
 
@@ -105,14 +109,16 @@ function getMockPatientDashboardData(session: { userId: string; email: string })
       redirect("/signin");
     }
 
+    const bookings = mockDb.getBookingsForPatient(patientData.id);
+
     return {
       session,
       patient: {
         id: patientData.id,
         firstName: patientData.firstName,
         middleName: patientData.middleName,
-        lastName: patientData.lastName,
         suffix: patientData.suffix,
+        lastName: patientData.lastName,
         email: patientData.email,
         image: patientData.image ?? null,
         phone: patientData.phone,
@@ -136,7 +142,7 @@ function getMockPatientDashboardData(session: { userId: string; email: string })
         emailVerified: patientData.emailVerified,
         createdAt: new Date(patientData.createdAt),
         updatedAt: new Date(patientData.updatedAt),
-        bookings: mockDb.getBookingsForPatient(patientData.id),
+        bookings,
       },
     };
   } catch (mockErr) {
