@@ -1,7 +1,8 @@
 "use server";
 
 import { getErrorMessage } from "@/lib/errors";
-import { prisma } from "@/lib/prisma";
+import { isPrismaConfigured, prisma } from "@/lib/prisma";
+import { mockDb } from "@/lib/mockDb";
 
 export async function submitDoctorAudit(data: {
   npi: string;
@@ -46,6 +47,21 @@ export async function submitDoctorAudit(data: {
     }
     if (!signature || !consent) {
       return { success: false, error: "Legal consent and digital signature are required" };
+    }
+
+    // In development without Prisma, create a mock audit submission
+    if (!isPrismaConfigured()) {
+      const mockAuditId = `audit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      console.warn(
+        "[Audit] Prisma not configured - creating mock audit submission",
+        { mockAuditId, npi, specialty }
+      );
+      return {
+        success: true,
+        auditId: mockAuditId,
+        status: "PENDING",
+        linked: false,
+      };
     }
 
     // Try to find the doctor using either the provided email or NPI
@@ -102,6 +118,148 @@ export async function submitDoctorAudit(data: {
     return {
       success: false,
       error: getErrorMessage(error, "Failed to submit credential audit details"),
+    };
+  }
+}
+
+export async function approveDoctorAudit(auditId: string) {
+  try {
+    if (!auditId) {
+      return { success: false, error: "Audit ID is required" };
+    }
+
+    if (!isPrismaConfigured()) {
+      return { success: false, error: "Database configuration is not available. Please contact support." };
+    }
+
+    const audit = await prisma.doctorAudit.findUnique({
+      where: { id: auditId },
+    });
+
+    if (!audit) {
+      return { success: false, error: "Audit record not found" };
+    }
+
+    if (audit.status === "APPROVED") {
+      return { success: false, error: "This audit is already approved" };
+    }
+
+    const updatedAudit = await prisma.doctorAudit.update({
+      where: { id: auditId },
+      data: { status: "APPROVED" },
+    });
+
+    // If a doctor is linked, mark them as verified and active
+    if (audit.doctorId) {
+      await prisma.doctor.update({
+        where: { id: audit.doctorId },
+        data: {
+          isVerified: true,
+          isActive: true,
+        },
+      });
+    }
+
+    return {
+      success: true,
+      message: "Doctor credentials approved successfully",
+      auditId: updatedAudit.id,
+      status: updatedAudit.status,
+    };
+  } catch (error: unknown) {
+    console.error("Doctor Audit Approval Error:", error);
+    return {
+      success: false,
+      error: getErrorMessage(error, "Failed to approve doctor credentials"),
+    };
+  }
+}
+
+export async function rejectDoctorAudit(auditId: string, reason?: string) {
+  try {
+    if (!auditId) {
+      return { success: false, error: "Audit ID is required" };
+    }
+
+    if (!isPrismaConfigured()) {
+      return { success: false, error: "Database configuration is not available. Please contact support." };
+    }
+
+    const audit = await prisma.doctorAudit.findUnique({
+      where: { id: auditId },
+    });
+
+    if (!audit) {
+      return { success: false, error: "Audit record not found" };
+    }
+
+    if (audit.status === "REJECTED") {
+      return { success: false, error: "This audit is already rejected" };
+    }
+
+    const updatedAudit = await prisma.doctorAudit.update({
+      where: { id: auditId },
+      data: { status: "REJECTED" },
+    });
+
+    // If a doctor is linked, mark them as not verified
+    if (audit.doctorId) {
+      await prisma.doctor.update({
+        where: { id: audit.doctorId },
+        data: { isVerified: false },
+      });
+    }
+
+    return {
+      success: true,
+      message: reason ? `Rejected: ${reason}` : "Doctor credentials rejected",
+      auditId: updatedAudit.id,
+      status: updatedAudit.status,
+    };
+  } catch (error: unknown) {
+    console.error("Doctor Audit Rejection Error:", error);
+    return {
+      success: false,
+      error: getErrorMessage(error, "Failed to reject doctor credentials"),
+    };
+  }
+}
+
+export async function getPendingDoctorAudits() {
+  try {
+    if (!isPrismaConfigured()) {
+      // Return empty array for mock DB (not implemented yet)
+      return {
+        success: true,
+        audits: [],
+      };
+    }
+
+    const audits = await prisma.doctorAudit.findMany({
+      where: { status: "PENDING" },
+      include: {
+        doctor: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            specialty: true,
+          },
+        },
+      },
+      orderBy: { submittedAt: "desc" },
+    });
+
+    return {
+      success: true,
+      audits,
+    };
+  } catch (error: unknown) {
+    console.error("Fetch Pending Audits Error:", error);
+    return {
+      success: false,
+      audits: [],
+      error: getErrorMessage(error, "Failed to fetch pending audits"),
     };
   }
 }

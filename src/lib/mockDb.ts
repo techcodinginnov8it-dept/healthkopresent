@@ -103,12 +103,31 @@ export type MockVideoSession = {
   updatedAt: string;
 };
 
+export type MockDoctorAudit = {
+  id: string;
+  doctorId: string | null;
+  npi: string;
+  licenseNumber: string;
+  licenseState: string;
+  specialty: string;
+  medicalSchool: string;
+  gradYear: number;
+  yearsExp: number;
+  documentName: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  signature: string;
+  consent: boolean;
+  submittedAt: string;
+  updatedAt: string;
+};
+
 type MockDbSchema = {
   patients: MockPatient[];
   doctors: MockDoctor[];
   consultations: MockConsultation[];
   emailOtps: MockEmailOtp[];
   videoSessions?: MockVideoSession[];
+  audits?: MockDoctorAudit[];
 };
 
 function getDb(): MockDbSchema {
@@ -184,6 +203,7 @@ function getDb(): MockDbSchema {
         consultations: [],
         emailOtps: [],
         videoSessions: [],
+        audits: [],
       };
 
       fs.writeFileSync(DB_PATH, JSON.stringify(initialDb, null, 2), "utf8");
@@ -193,6 +213,7 @@ function getDb(): MockDbSchema {
     const raw = fs.readFileSync(DB_PATH, "utf8");
     const parsed = JSON.parse(raw) as MockDbSchema;
     parsed.videoSessions ||= [];
+    parsed.audits ||= [];
     return parsed;
   } catch (error) {
     console.error("Error reading mock database, using empty state:", error);
@@ -312,6 +333,62 @@ export const mockDb = {
         delete rest.password;
         return rest as Omit<MockDoctor, "password">;
       });
+  },
+
+  getAdminMetrics() {
+    const db = getDb();
+    const totalPatients = db.patients.length;
+    const totalDoctors = db.doctors.length;
+    const activePatients = db.patients.filter((patient) => patient.isActive).length;
+    const activeDoctors = db.doctors.filter((doctor) => doctor.isActive).length;
+    const onlineDoctors = db.doctors.filter(
+      (doctor) => doctor.isActive && doctor.status?.toUpperCase() === "ONLINE"
+    ).length;
+    const offlineDoctors = db.doctors.filter(
+      (doctor) => doctor.isActive && doctor.status?.toUpperCase() !== "ONLINE"
+    ).length;
+    const totalConsultations = db.consultations.length;
+
+    const now = new Date();
+    const dayStart = new Date(now);
+    dayStart.setHours(0, 0, 0, 0);
+    const weekStart = new Date(dayStart);
+    weekStart.setDate(weekStart.getDate() - 6);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const countByRange = (records: { createdAt: string }[], from: Date) =>
+      records.filter((record) => new Date(record.createdAt) >= from).length;
+
+    const dailyNewPatients = countByRange(db.patients, dayStart);
+    const weeklyNewPatients = countByRange(db.patients, weekStart);
+    const monthlyNewPatients = countByRange(db.patients, monthStart);
+
+    const dailyNewDoctors = countByRange(db.doctors, dayStart);
+    const weeklyNewDoctors = countByRange(db.doctors, weekStart);
+    const monthlyNewDoctors = countByRange(db.doctors, monthStart);
+
+    const dailyConsultations = countByRange(db.consultations, dayStart);
+    const weeklyConsultations = countByRange(db.consultations, weekStart);
+    const monthlyConsultations = countByRange(db.consultations, monthStart);
+
+    return {
+      totalPatients,
+      totalDoctors,
+      activePatients,
+      activeDoctors,
+      onlineDoctors,
+      offlineDoctors,
+      totalConsultations,
+      dailyNewPatients,
+      weeklyNewPatients,
+      monthlyNewPatients,
+      dailyNewDoctors,
+      weeklyNewDoctors,
+      monthlyNewDoctors,
+      dailyConsultations,
+      weeklyConsultations,
+      monthlyConsultations,
+    };
   },
 
   // --- OTPs ---

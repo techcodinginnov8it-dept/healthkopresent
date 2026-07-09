@@ -1,6 +1,24 @@
 {
   "patients": [
     {
+      "firstName": "Demo",
+      "middleName": null,
+      "lastName": "Patient",
+      "suffix": null,
+      "email": "patient@healthko.com",
+      "countryCode": "+63",
+      "phone": "9999999999",
+      "dob": "1990-01-01",
+      "gender": "Female",
+      "password": "$2a$10$GKRhPVU715yCQTPmoyEc5uMZMyZwUcIAM.wojMkY6kgqmorRIpb0O",
+      "hipaaConsent": true,
+      "emailVerified": true,
+      "id": "pat-demo-patient",
+      "isActive": true,
+      "createdAt": "2026-07-10T00:00:00.000Z",
+      "updatedAt": "2026-07-10T00:00:00.000Z"
+    },
+    {
       "firstName": "Jane",
       "middleName": null,
       "lastName": "Lesh",
@@ -179,6 +197,26 @@
     }
   ],
   "doctors": [
+    {
+      "id": "doc-demo-doctor",
+      "name": "Dr. Demo Doctor",
+      "npi": "1111111111",
+      "email": "doctor@healthko.com",
+      "password": "$2a$10$GKRhPVU715yCQTPmoyEc5uMZMyZwUcIAM.wojMkY6kgqmorRIpb0O",
+      "specialty": "Family Medicine",
+      "bio": "Demo doctor account for local testing.",
+      "image": null,
+      "languages": ["English"],
+      "rating": 5,
+      "reviewCount": 1,
+      "availability": "Mon - Fri, 9AM - 5PM",
+      "consultFee": 100,
+      "isActive": true,
+      "isFeatured": true,
+      "isVerified": true,
+      "createdAt": "2026-07-10T00:00:00.000Z",
+      "updatedAt": "2026-07-10T00:00:00.000Z"
+    },
     {
       "id": "doc-sarah-jenkins-123",
       "npi": "1982736450",
