@@ -48,6 +48,9 @@ export const getDoctorDashboardData = cache(async () => {
             reason: true,
             notes: true,
             prescription: true,
+            bloodPressure: true,
+            heartRate: true,
+            bodyTemperature: true,
             duration: true,
             createdAt: true,
             patient: {

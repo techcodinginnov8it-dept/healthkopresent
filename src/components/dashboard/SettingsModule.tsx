@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import type { ChangeEvent, ReactNode } from "react";
-import { useCallback, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import {
   updateDoctorPassword,
   updateDoctorProfile,
@@ -12,6 +12,7 @@ import {
 import { formatDate } from "@/lib/dashboard/format";
 
 type DoctorSettingsData = {
+  id: string;
   name: string;
   email: string;
   image?: string | null;
@@ -39,6 +40,7 @@ type DoctorSettingsData = {
 };
 
 type PatientSettingsData = {
+  id: string;
   firstName: string;
   lastName: string;
   email: string;
@@ -77,30 +79,75 @@ type SettingsSection<TId extends string> = {
   description: string;
 };
 
+type DoctorProfileFormState = {
+  name: string;
+  email: string;
+  image: string;
+  specialty: string;
+  phone: string;
+  availability: string;
+  status: string;
+  licenseNumber: string;
+  licenseState: string;
+  bio: string;
+  consultFee: string;
+  yearsExp: string;
+  consultationDuration: string;
+  consultationDurationUnit: string;
+  admitMode: string;
+};
+
+type PatientProfileFormState = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  image: string;
+  countryCode: string;
+  phone: string;
+  dob: string;
+  gender: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
+  height: string;
+  weight: string;
+  bloodType: string;
+  allergies: string;
+  existingConditions: string;
+  currentMedications: string;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+  emergencyContactRelation: string;
+};
+
 const blankPasswordForm: PasswordForm = {
   currentPassword: "",
   newPassword: "",
   confirmPassword: "",
 };
 
+const SETTINGS_DRAFT_VERSION = 1;
+
 const patientSections = [
-  { id: "profile", label: "Profile Management", description: "Identity, contact, address, and ZIP code" },
-  { id: "medical", label: "Medical Profile", description: "Health profile details and emergency contacts" },
-  { id: "security", label: "Account Security", description: "Password, 2FA, devices, and recovery" },
-  { id: "notifications", label: "Notifications", description: "Appointment, consultation, email, and SMS preferences" },
-  { id: "privacy", label: "Privacy", description: "Teleconsultation and data privacy consent" },
-  { id: "support", label: "Support & Help", description: "Help channels and account assistance" },
+  { id: "profile", label: "Profile Management", description: "" },
+  { id: "medical", label: "Medical Profile", description: "" },
+  { id: "security", label: "Account Security", description: "" },
+  { id: "notifications", label: "Notifications", description: "" },
+  { id: "privacy", label: "Privacy", description: "" },
+  { id: "support", label: "Support & Help", description: "" },
 ] as const satisfies readonly SettingsSection<string>[];
 
 const doctorSections = [
-  { id: "professional", label: "Professional Profile", description: "Credentials and patient-facing profile" },
-  { id: "schedule", label: "Schedule & Availability", description: "Working hours and consultation duration" },
-  { id: "consultation", label: "Consultation Settings", description: "Device and admission preferences" },
-  { id: "security", label: "Account Security", description: "Password management" },
-  { id: "notifications", label: "Notification Settings", description: "Appointment and communication alerts" },
-  { id: "prescriptions", label: "Prescription Settings", description: "Signature and templates" },
-  { id: "privacy", label: "Privacy & Consent", description: "Data access and telehealth compliance" },
-  { id: "support", label: "Support & Help", description: "Help channels and account assistance" },
+  { id: "professional", label: "Professional Profile", description: "" },
+  { id: "schedule", label: "Schedule & Availability", description: "" },
+  { id: "consultation", label: "Consultation Settings", description: "" },
+  { id: "security", label: "Account Security", description: "" },
+  { id: "notifications", label: "Notification Settings", description: "" },
+  { id: "prescriptions", label: "Prescription Settings", description: "" },
+  { id: "privacy", label: "Privacy & Consent", description: "" },
+  { id: "support", label: "Support & Help", description: "" },
 ] as const satisfies readonly SettingsSection<string>[];
 
 type PatientSectionId = (typeof patientSections)[number]["id"];
@@ -208,6 +255,26 @@ function SettingsCard({
   );
 }
 
+function FieldGroup({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-slate-200 bg-slate-50 p-5 shadow-sm">
+      <div className="mb-4">
+        <h3 className="text-sm font-black uppercase tracking-[0.16em] text-slate-950">{title}</h3>
+        {description ? <p className="mt-1 text-xs font-semibold text-slate-500">{description}</p> : null}
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{children}</div>
+    </section>
+  );
+}
+
 function SettingsToastStack({ toasts }: { toasts: { id: string; tone: "success" | "error"; message: string }[] }) {
   return (
     <div className="pointer-events-none fixed right-5 top-5 z-[90] flex w-[min(24rem,calc(100vw-2.5rem))] flex-col gap-3">
@@ -228,38 +295,141 @@ function SettingsToastStack({ toasts }: { toasts: { id: string; tone: "success" 
   );
 }
 
-function InitialsAvatar({ label, image }: { label: string; image?: string | null }) {
+function isRenderableProfileImage(src?: string | null) {
+  if (!src) {
+    return false;
+  }
+
+  return /^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(src) || /^https?:\/\//i.test(src) || src.startsWith("/");
+}
+
+function getSettingsDraftKey(role: "doctor" | "patient", accountId: string) {
+  return `healthko:settings-draft:${role}:${accountId}`;
+}
+
+function readSettingsDraft<T>(key: string): T | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as { version?: number; form?: T };
+    if (!parsed || parsed.version !== SETTINGS_DRAFT_VERSION || !parsed.form) {
+      return null;
+    }
+
+    return parsed.form;
+  } catch {
+    return null;
+  }
+}
+
+function writeSettingsDraft<T>(key: string, form: T) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({
+        version: SETTINGS_DRAFT_VERSION,
+        savedAt: Date.now(),
+        form,
+      }),
+    );
+  } catch {
+    // Ignore storage quota and privacy-mode failures.
+  }
+}
+
+function clearSettingsDraft(key: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function ProfileImagePreviewModal({
+  label,
+  image,
+  onClose,
+}: {
+  label: string;
+  image: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
+
   return (
-    <div className="flex items-center gap-4">
-      {image ? (
-        <div
-          className="h-20 w-20 shrink-0 rounded-full border-4 border-white bg-cover bg-center shadow-sm ring-1 ring-slate-200"
-          style={{ backgroundImage: `url(${image})` }}
-          aria-label={`${label} profile image`}
-          role="img"
-        />
-      ) : (
-        <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-4 border-white bg-brand-teal/10 text-xl font-black text-brand-teal shadow-sm ring-1 ring-slate-200">
-          {label.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${label} profile image preview`}
+      onClick={onClose}
+    >
+      <div
+        className="relative flex w-[min(92vw,56rem)] max-w-full items-center justify-center rounded-[2rem] border border-white/10 bg-slate-950 p-5 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/5 text-xl font-black text-white hover:bg-white/10"
+            aria-label="Close preview"
+          >
+            ×
+          </button>
         </div>
-      )}
-      <div>
-        <p className="text-sm font-black text-slate-950">{label}</p>
-        <p className="mt-1 text-xs font-semibold text-slate-500">Profile identity visible across secure care workflows.</p>
+        <div className="relative aspect-square w-full overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/20">
+          <img src={image} alt={`${label} profile preview`} className="h-full w-full object-cover" />
+        </div>
       </div>
     </div>
   );
 }
 
-function ProfileImageUploader({
+function ProfileHeader({
   label,
+  description,
   image,
-  onChange,
+  onUpload,
+  onRemove,
+  onPreview,
   onToast,
 }: {
   label: string;
+  description: string;
   image?: string | null;
-  onChange: (value: string) => void;
+  onUpload: (file: File) => void;
+  onRemove: () => void;
+  onPreview: () => void;
   onToast: (tone: "success" | "error", message: string) => void;
 }) {
   const handleFile = (event: ChangeEvent<HTMLInputElement>) => {
@@ -278,30 +448,50 @@ function ProfileImageUploader({
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        onChange(reader.result);
-      }
-    };
-    reader.readAsDataURL(file);
+    onUpload(file);
   };
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <InitialsAvatar label={label} image={image} />
-        <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-          <label className="cursor-pointer rounded-lg bg-slate-900 px-4 py-2.5 text-xs font-black text-white">
-            Upload Photo
-            <input type="file" accept="image/*" onChange={handleFile} className="sr-only" />
-          </label>
-          {image && (
-            <button type="button" onClick={() => onChange("")} className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs font-black text-slate-700">
-              Remove Photo
-            </button>
-          )}
+    <div className="flex w-full flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50 p-5 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex min-w-0 items-center gap-4">
+        {isRenderableProfileImage(image) ? (
+          <button
+            type="button"
+            onClick={onPreview}
+            className="group relative h-20 w-20 shrink-0 overflow-hidden rounded-full border-4 border-white shadow-sm ring-1 ring-slate-200 transition hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-brand-teal focus:ring-offset-2 focus:ring-offset-slate-50"
+            aria-label={`View enlarged profile image for ${label}`}
+          >
+            <img src={image ?? ""} alt={`${label} profile image`} className="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
+            <span className="absolute inset-x-0 bottom-0 bg-slate-950/65 px-2 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-white opacity-0 transition group-hover:opacity-100">
+              View
+            </span>
+          </button>
+        ) : (
+          <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-4 border-white bg-brand-teal/10 text-xl font-black text-brand-teal shadow-sm ring-1 ring-slate-200">
+            {label
+              .split(" ")
+              .map((part) => part[0])
+              .join("")
+              .slice(0, 2)
+              .toUpperCase()}
+          </div>
+        )}
+        <div className="min-w-0">
+          <p className="truncate text-sm font-black text-slate-950">{label}</p>
+          {description ? <p className="mt-1 text-xs font-semibold text-slate-500">{description}</p> : null}
         </div>
+      </div>
+
+      <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
+        <label className="cursor-pointer rounded-lg bg-slate-900 px-4 py-2.5 text-xs font-black text-white">
+          Upload Photo
+          <input type="file" accept="image/*" onChange={handleFile} className="sr-only" />
+        </label>
+        {image && (
+          <button type="button" onClick={onRemove} className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs font-black text-slate-700">
+            Remove Photo
+          </button>
+        )}
       </div>
     </div>
   );
@@ -425,11 +615,13 @@ function SettingsLayout<TId extends string>({
                       : "border-slate-200 bg-slate-50 text-slate-700 hover:border-brand-teal/40"
                 }`}
                 aria-current={active ? "page" : undefined}
-              >
+                >
                 <span className="block text-sm font-black">{section.label}</span>
-                <span className={`mt-1 block text-[11px] font-semibold ${active ? "text-white/80" : isDoctor ? "text-slate-500" : "text-slate-500"}`}>
-                  {section.description}
-                </span>
+                {section.description ? (
+                  <span className={`mt-1 block text-[11px] font-semibold ${active ? "text-white/80" : isDoctor ? "text-slate-500" : "text-slate-500"}`}>
+                    {section.description}
+                  </span>
+                ) : null}
               </button>
             );
           })}
@@ -469,7 +661,7 @@ function PasswordManagement({
   };
 
   return (
-    <SettingsCard title="Password Management" body="Update your password after confirming the current one.">
+    <SettingsCard title="Password Management" body="">
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -511,7 +703,7 @@ function AccountSecurityContent({
   return (
     <div className="space-y-4">
       <PasswordManagement role={role} onToast={onToast} />
-      <SettingsCard title="Security Overview" body="Role-based sessions use signed, HTTP-only cookies.">
+      <SettingsCard title="Security Overview" body="">
         <div className="grid gap-3 md:grid-cols-3">
           <ReadOnlyTile label="Account Status" value={verified ? "Verified" : "Verification pending"} />
           <ReadOnlyTile label="Joined" value={formatDate(createdAt)} />
@@ -519,7 +711,7 @@ function AccountSecurityContent({
         </div>
       </SettingsCard>
       {role === "patient" && (
-        <SettingsCard title="Two-Factor, Devices, Login Activity, and Recovery" body="These controls are represented for workflow planning and require dedicated persistence tables before they can be edited.">
+        <SettingsCard title="Two-Factor, Devices, Login Activity, and Recovery" body="">
           <div className="grid gap-3 md:grid-cols-2">
             <PlaceholderTile title="Two-Factor Authentication" body="Not yet stored in the active account schema." />
             <PlaceholderTile title="Login Activity History" body="Security event history needs an account activity table." />
@@ -535,21 +727,27 @@ function AccountSecurityContent({
 export function DoctorSettingsModule({
   doctor,
   onProfileUpdated,
+  onProfileImageChange,
   onToast,
 }: {
   doctor: DoctorSettingsData;
   onProfileUpdated?: (profile: { availability: string; status: string }) => void;
+  onProfileImageChange?: (image: string) => void;
   onToast?: (tone: "success" | "error", message: string) => void;
 }) {
   const router = useRouter();
   const { toasts, showToast: showLocalToast } = useSettingsToasts();
   const showToast = onToast ?? showLocalToast;
   const [activeSection, setActiveSection] = useState<DoctorSectionId>("professional");
-  const [form, setForm] = useState({
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const draftKey = getSettingsDraftKey("doctor", doctor.id);
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const [form, setForm] = useState<DoctorProfileFormState>(() => ({
     name: doctor.name,
     email: doctor.email,
     image: doctor.image || "",
     specialty: doctor.specialty,
+    phone: "",
     availability: doctor.availability,
     status: doctor.status || "ONLINE",
     licenseNumber: doctor.licenseNumber || "",
@@ -560,12 +758,41 @@ export function DoctorSettingsModule({
     consultationDuration: doctor.consultationDuration?.toString() || "30",
     consultationDurationUnit: doctor.consultationDurationUnit || "minutes",
     admitMode: "manual",
-  });
+  }));
   const [isPending, startTransition] = useTransition();
 
   const setField = useCallback((field: keyof typeof form, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const restored = readSettingsDraft<DoctorProfileFormState>(draftKey);
+      if (restored) {
+        setForm((current) => ({ ...current, ...restored }));
+      }
+
+      setDraftHydrated(true);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [draftKey, showToast]);
+
+  useEffect(() => {
+    onProfileImageChange?.(form.image);
+  }, [form.image, onProfileImageChange]);
+
+  useEffect(() => {
+    if (!draftHydrated) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      writeSettingsDraft(draftKey, form);
+    }, 200);
+
+    return () => window.clearTimeout(timer);
+  }, [draftHydrated, draftKey, form]);
 
   const saveDoctorProfile = useCallback((message: string) => {
     startTransition(async () => {
@@ -577,45 +804,71 @@ export function DoctorSettingsModule({
 
       showToast("success", message);
       onProfileUpdated?.({ availability: form.availability, status: form.status });
+      clearSettingsDraft(draftKey);
       router.refresh();
     });
-  }, [form, onProfileUpdated, router, showToast]);
+  }, [draftKey, form, onProfileUpdated, router, showToast]);
 
   const activeContent = useMemo(() => {
     if (activeSection === "professional") {
       return (
-        <SettingsCard title="Professional Profile" body="Manage the professional identity patients see before and during care.">
+        <SettingsCard title="Professional Profile" body="">
           <form
             onSubmit={(event) => {
               event.preventDefault();
               saveDoctorProfile("Professional profile updated.");
             }}
-            className="grid gap-4 md:grid-cols-2"
+            className="space-y-5"
           >
-            <ProfileImageUploader label={form.name} image={form.image} onChange={(value) => setField("image", value)} onToast={showToast} />
-            <Field label="Full name" value={form.name} onChange={(value) => setField("name", value)} required />
-            <Field label="Medical specialty" value={form.specialty} onChange={(value) => setField("specialty", value)} required />
-            <SelectField
-              label="Dashboard status"
-              value={form.status}
-              onChange={(value) => setField("status", value)}
-              options={[
-                { value: "ONLINE", label: "Online" },
-                { value: "BUSY", label: "Busy" },
-                { value: "OFFLINE", label: "Offline" },
-              ]}
+            <ProfileHeader
+              label={form.name}
+              description=""
+              image={form.image}
+              onUpload={(file) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                  if (typeof reader.result === "string") {
+                    setField("image", reader.result);
+                  }
+                };
+                reader.readAsDataURL(file);
+              }}
+              onPreview={() => setPreviewImage(form.image ?? null)}
+              onRemove={() => setField("image", "")}
+              onToast={showToast}
             />
-            <Field label="License number" value={form.licenseNumber} onChange={(value) => setField("licenseNumber", value)} />
-            <Field label="License state" value={form.licenseState} onChange={(value) => setField("licenseState", value)} />
-            <Field label="Contact information" type="email" value={form.email} onChange={(value) => setField("email", value)} required />
-            <Field label="Consultation fee" type="number" value={form.consultFee} onChange={(value) => setField("consultFee", value)} />
-            <Field label="Years experience" type="number" value={form.yearsExp} onChange={(value) => setField("yearsExp", value)} />
-            <TextAreaField label="Professional bio" value={form.bio} onChange={(value) => setField("bio", value)} />
-            <StickyActionBar>
+
+            <FieldGroup title="Professional Identity">
+              <Field label="Full name" value={form.name} onChange={(value) => setField("name", value)} required />
+              <Field label="Medical specialty" value={form.specialty} onChange={(value) => setField("specialty", value)} required />
+              <Field label="License number" value={form.licenseNumber} onChange={(value) => setField("licenseNumber", value)} />
+              <Field label="License state" value={form.licenseState} onChange={(value) => setField("licenseState", value)} />
+            </FieldGroup>
+
+            <FieldGroup title="Credentials & Practice">
+              <Field label="Years experience" type="number" value={form.yearsExp} onChange={(value) => setField("yearsExp", value)} />
+              <Field label="Consultation fee" type="number" value={form.consultFee} onChange={(value) => setField("consultFee", value)} />
+            </FieldGroup>
+
+            <FieldGroup title="Contact">
+              <Field label="Email" type="email" value={form.email} onChange={(value) => setField("email", value)} required />
+              <Field label="Phone number" value={form.phone} onChange={(value) => setField("phone", value)} />
+            </FieldGroup>
+
+            <section className="rounded-xl border border-slate-200 bg-slate-50 p-5 shadow-sm">
+              <div className="mb-4">
+                <h3 className="text-sm font-black uppercase tracking-[0.16em] text-slate-950">Professional Bio</h3>
+              </div>
+              <div>
+                <TextAreaField label="Professional bio" value={form.bio} onChange={(value) => setField("bio", value)} />
+              </div>
+            </section>
+
+            <div className="flex justify-end pt-1">
               <button type="submit" disabled={isPending} className="rounded-lg bg-brand-teal px-5 py-3 text-sm font-black text-white disabled:bg-slate-300">
                 {isPending ? "Saving..." : "Save Professional Profile"}
               </button>
-            </StickyActionBar>
+            </div>
           </form>
         </SettingsCard>
       );
@@ -623,7 +876,7 @@ export function DoctorSettingsModule({
 
     if (activeSection === "schedule") {
       return (
-        <SettingsCard title="Schedule & Availability" body="Availability is synchronized with appointment suggestions and scheduling tools.">
+        <SettingsCard title="Schedule & Availability" body="">
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -632,6 +885,16 @@ export function DoctorSettingsModule({
             className="grid gap-4 md:grid-cols-2"
           >
             <Field label="Working hours" value={form.availability} onChange={(value) => setField("availability", value)} required />
+            <SelectField
+              label="Availability Status"
+              value={form.status}
+              onChange={(value) => setField("status", value)}
+              options={[
+                { value: "ONLINE", label: "Online" },
+                { value: "BUSY", label: "Busy" },
+                { value: "OFFLINE", label: "Offline" },
+              ]}
+            />
             <Field label="Consultation duration" type="number" value={form.consultationDuration} onChange={(value) => setField("consultationDuration", value)} />
             <SelectField
               label="Duration unit"
@@ -642,7 +905,6 @@ export function DoctorSettingsModule({
                 { value: "hours", label: "Hours" },
               ]}
             />
-            <ReadOnlyTile label="Availability Status" value={doctor.isVerified ? "Verified doctor schedule" : "Pending verification"} />
             <StickyActionBar>
               <button type="submit" disabled={isPending} className="rounded-lg bg-brand-teal px-5 py-3 text-sm font-black text-white disabled:bg-slate-300">
                 {isPending ? "Saving..." : "Save Schedule"}
@@ -655,7 +917,7 @@ export function DoctorSettingsModule({
 
     if (activeSection === "consultation") {
       return (
-        <SettingsCard title="Consultation Settings" body="Camera and microphone controls are used by the live consultation room.">
+        <SettingsCard title="Consultation Settings" body="">
           <div className="grid gap-3 md:grid-cols-2">
             <PlaceholderTile title="Camera Selection" body="Managed inside the active live consultation room device selector." />
             <PlaceholderTile title="Microphone Selection" body="Managed inside the active live consultation room device selector." />
@@ -672,7 +934,7 @@ export function DoctorSettingsModule({
 
     if (activeSection === "notifications") {
       return (
-        <SettingsCard title="Notification Settings" body="These preferences connect to existing dashboard alerts and realtime notifications.">
+        <SettingsCard title="Notification Settings" body="">
           <div className="grid gap-3 md:grid-cols-2">
             <ToggleRow label="Appointment Updates" description="New requests, approvals, reschedules, and cancellations." />
             <ToggleRow label="Consultation Reminders" description="Live room and follow-up reminders." />
@@ -685,7 +947,7 @@ export function DoctorSettingsModule({
 
     if (activeSection === "prescriptions") {
       return (
-        <SettingsCard title="Prescription Settings" body="Prescription output uses current consultation documentation until template storage is added.">
+        <SettingsCard title="Prescription Settings" body="">
           <div className="grid gap-3 md:grid-cols-2">
             <PlaceholderTile title="Digital Signature Upload" body="Requires a secure file storage field before upload persistence can be enabled." />
             <PlaceholderTile title="Prescription Templates" body="Reusable templates need a prescription template table." />
@@ -696,7 +958,7 @@ export function DoctorSettingsModule({
 
     if (activeSection === "privacy") {
       return (
-        <SettingsCard title="Privacy & Consent" body="Clinical access follows doctor authentication and role-based consultation ownership.">
+        <SettingsCard title="Privacy & Consent" body="">
           <div className="grid gap-3 md:grid-cols-2">
             <ToggleRow label="Patient Data Access Permissions" description="Access is limited to assigned consultations and patient records." />
             <ToggleRow label="Telehealth Compliance Acknowledgment" description="Doctor account operates under Healthko telehealth workflow policies." checked={doctor.isVerified} />
@@ -706,7 +968,7 @@ export function DoctorSettingsModule({
     }
 
     return (
-      <SettingsCard title="Support & Help" body="Credential review and support context for the doctor account.">
+      <SettingsCard title="Support & Help" body="">
         <div className="space-y-3">
           <ReadOnlyTile label="NPI" value={doctor.npi} />
           {doctor.audits?.length ? (
@@ -728,13 +990,20 @@ export function DoctorSettingsModule({
   return (
     <>
       {!onToast && <SettingsToastStack toasts={toasts} />}
+      {previewImage ? (
+        <ProfileImagePreviewModal
+          label={form.name}
+          image={previewImage}
+          onClose={() => setPreviewImage(null)}
+        />
+      ) : null}
       <SettingsLayout
         role="doctor"
         sections={doctorSections}
         activeSection={activeSection}
         onSectionChange={setActiveSection}
         title="Doctor Settings"
-        subtitle="Manage professional, clinical, account, and compliance settings."
+        subtitle=""
       >
         {activeContent}
       </SettingsLayout>
@@ -744,16 +1013,21 @@ export function DoctorSettingsModule({
 
 export function PatientSettingsModule({
   patient,
+  onProfileImageChange,
   onToast,
 }: {
   patient: PatientSettingsData;
+  onProfileImageChange?: (image: string) => void;
   onToast?: (tone: "success" | "error", message: string) => void;
 }) {
   const router = useRouter();
   const { toasts, showToast: showLocalToast } = useSettingsToasts();
   const showToast = onToast ?? showLocalToast;
   const [activeSection, setActiveSection] = useState<PatientSectionId>("profile");
-  const [form, setForm] = useState({
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const draftKey = getSettingsDraftKey("patient", patient.id);
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const [form, setForm] = useState<PatientProfileFormState>(() => ({
     firstName: patient.firstName,
     lastName: patient.lastName,
     email: patient.email,
@@ -776,17 +1050,46 @@ export function PatientSettingsModule({
     emergencyContactName: patient.emergencyContactName || "",
     emergencyContactPhone: patient.emergencyContactPhone || "",
     emergencyContactRelation: patient.emergencyContactRelation || "",
-  });
+  }));
   const [isPending, startTransition] = useTransition();
 
   const setField = useCallback((field: keyof typeof form, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
   }, []);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const restored = readSettingsDraft<PatientProfileFormState>(draftKey);
+      if (restored) {
+        setForm((current) => ({ ...current, ...restored }));
+      }
+
+      setDraftHydrated(true);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [draftKey, showToast]);
+
+  useEffect(() => {
+    onProfileImageChange?.(form.image);
+  }, [form.image, onProfileImageChange]);
+
+  useEffect(() => {
+    if (!draftHydrated) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      writeSettingsDraft(draftKey, form);
+    }, 200);
+
+    return () => window.clearTimeout(timer);
+  }, [draftHydrated, draftKey, form]);
+
   const activeContent = useMemo(() => {
     if (activeSection === "profile") {
       return (
-        <SettingsCard title="Profile Management" body="Manage identity, contact, address, and ZIP code information used for care coordination.">
+        <SettingsCard title="Profile Management" body="">
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -798,33 +1101,58 @@ export function PatientSettingsModule({
                 }
 
                 showToast("success", "Patient profile updated.");
+                clearSettingsDraft(draftKey);
                 router.refresh();
               });
             }}
-            className="grid gap-4 md:grid-cols-2"
+            className="space-y-5"
           >
-            <ProfileImageUploader label={`${form.firstName} ${form.lastName}`} image={form.image} onChange={(value) => setField("image", value)} onToast={showToast} />
-            <Field label="First name" value={form.firstName} onChange={(value) => setField("firstName", value)} required />
-            <Field label="Last name" value={form.lastName} onChange={(value) => setField("lastName", value)} required />
-            <Field label="Date of birth" type="date" value={form.dob} onChange={(value) => setField("dob", value)} required />
-            <Field label="Gender" value={form.gender} onChange={(value) => setField("gender", value)} />
-            <Field label="Email" type="email" value={form.email} onChange={(value) => setField("email", value)} required />
-            <div className="grid grid-cols-[96px_1fr] gap-3">
-              <Field label="Code" value={form.countryCode} onChange={(value) => setField("countryCode", value)} required />
-              <Field label="Contact information" value={form.phone} onChange={(value) => setField("phone", value)} required />
-            </div>
-            <div className="md:col-span-2">
-              <Field label="Address" value={form.address} onChange={(value) => setField("address", value)} />
-            </div>
-            <Field label="City" value={form.city} onChange={(value) => setField("city", value)} />
-            <Field label="State" value={form.state} onChange={(value) => setField("state", value)} />
-            <Field label="ZIP code" value={form.zipCode} onChange={(value) => setField("zipCode", value)} />
-            <Field label="Country" value={form.country} onChange={(value) => setField("country", value)} />
-            <StickyActionBar>
+            <ProfileHeader
+              label={`${form.firstName} ${form.lastName}`}
+              description=""
+              image={form.image}
+              onUpload={(file) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                  if (typeof reader.result === "string") {
+                    setField("image", reader.result);
+                  }
+                };
+                reader.readAsDataURL(file);
+              }}
+              onPreview={() => setPreviewImage(form.image)}
+              onRemove={() => setField("image", "")}
+              onToast={showToast}
+            />
+
+            <FieldGroup title="Personal Information">
+              <Field label="First name" value={form.firstName} onChange={(value) => setField("firstName", value)} required />
+              <Field label="Last name" value={form.lastName} onChange={(value) => setField("lastName", value)} required />
+              <Field label="Date of birth" type="date" value={form.dob} onChange={(value) => setField("dob", value)} required />
+              <Field label="Gender" value={form.gender} onChange={(value) => setField("gender", value)} />
+            </FieldGroup>
+
+            <FieldGroup title="Contact Information">
+              <Field label="Email address" type="email" value={form.email} onChange={(value) => setField("email", value)} required />
+              <Field label="Country code" value={form.countryCode} onChange={(value) => setField("countryCode", value)} required />
+              <Field label="Contact number" value={form.phone} onChange={(value) => setField("phone", value)} required />
+            </FieldGroup>
+
+            <FieldGroup title="Address Details">
+              <div className="md:col-span-2 xl:col-span-3">
+                <Field label="Address" value={form.address} onChange={(value) => setField("address", value)} />
+              </div>
+              <Field label="City" value={form.city} onChange={(value) => setField("city", value)} />
+              <Field label="State" value={form.state} onChange={(value) => setField("state", value)} />
+              <Field label="ZIP code" value={form.zipCode} onChange={(value) => setField("zipCode", value)} />
+              <Field label="Country" value={form.country} onChange={(value) => setField("country", value)} />
+            </FieldGroup>
+
+            <div className="flex justify-end pt-1">
               <button type="submit" disabled={isPending} className="rounded-lg bg-brand-teal px-5 py-3 text-sm font-black text-white disabled:bg-slate-300">
                 {isPending ? "Saving..." : "Save Patient Profile"}
               </button>
-            </StickyActionBar>
+            </div>
           </form>
         </SettingsCard>
       );
@@ -832,7 +1160,7 @@ export function PatientSettingsModule({
 
     if (activeSection === "medical") {
       return (
-        <SettingsCard title="Medical Profile" body="Manage medical details used by patient overview, QR, and doctor clinical context.">
+        <SettingsCard title="Medical Profile" body="">
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -844,6 +1172,7 @@ export function PatientSettingsModule({
                 }
 
                 showToast("success", "Medical profile updated.");
+                clearSettingsDraft(draftKey);
                 router.refresh();
               });
             }}
@@ -879,7 +1208,7 @@ export function PatientSettingsModule({
 
     if (activeSection === "notifications") {
       return (
-        <SettingsCard title="Notifications" body="Dashboard notifications use the existing realtime alert system. Preference storage can be added when notification preferences are modeled.">
+        <SettingsCard title="Notifications" body="">
           <div className="grid gap-3 md:grid-cols-2">
             <ToggleRow label="Appointment Reminders" description="Pending, confirmed, and rescheduled appointment reminders." />
             <ToggleRow label="Consultation Notifications" description="Live room, session, and consultation status alerts." />
@@ -892,7 +1221,7 @@ export function PatientSettingsModule({
 
     if (activeSection === "privacy") {
       return (
-        <SettingsCard title="Privacy" body="Consent status follows current patient account and telehealth workflow requirements.">
+        <SettingsCard title="Privacy" body="">
           <div className="grid gap-3 md:grid-cols-2">
             <ToggleRow label="Teleconsultation Consent" description="Consent is required before participating in telehealth consultations." />
             <ToggleRow label="Data Privacy Consent" description="Healthko protects clinical access through role-based dashboard sessions." checked={patient.emailVerified} />
@@ -902,7 +1231,7 @@ export function PatientSettingsModule({
     }
 
     return (
-      <SettingsCard title="Support & Help" body="Account assistance and care workflow support.">
+      <SettingsCard title="Support & Help" body="">
         <div className="grid gap-3 md:grid-cols-2">
           <ReadOnlyTile label="Account Email" value={patient.email} />
           <ReadOnlyTile label="Joined" value={formatDate(patient.createdAt)} />
@@ -911,18 +1240,25 @@ export function PatientSettingsModule({
         </div>
       </SettingsCard>
     );
-  }, [activeSection, form, isPending, patient.createdAt, patient.email, patient.emailVerified, router, setField, showToast]);
+  }, [activeSection, draftKey, form, isPending, patient.createdAt, patient.email, patient.emailVerified, router, setField, showToast]);
 
   return (
     <>
       {!onToast && <SettingsToastStack toasts={toasts} />}
+      {previewImage ? (
+        <ProfileImagePreviewModal
+          label={`${form.firstName} ${form.lastName}`}
+          image={previewImage}
+          onClose={() => setPreviewImage(null)}
+        />
+      ) : null}
       <SettingsLayout
         role="patient"
         sections={patientSections}
         activeSection={activeSection}
         onSectionChange={setActiveSection}
         title="Patient Settings"
-        subtitle="Manage profile, medical, account, privacy, and support settings."
+        subtitle=""
       >
         {activeContent}
       </SettingsLayout>

@@ -74,6 +74,9 @@ export type MockConsultation = {
   reason: string | null;
   notes: string | null;
   prescription: string | null;
+  bloodPressure: string | null;
+  heartRate: string | null;
+  bodyTemperature: string | null;
   duration: number;
   createdAt: string;
   updatedAt: string;
@@ -450,6 +453,9 @@ export const mockDb = {
       reason: data.reason,
       notes: null,
       prescription: null,
+      bloodPressure: null,
+      heartRate: null,
+      bodyTemperature: null,
       duration: data.duration,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

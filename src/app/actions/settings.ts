@@ -215,6 +215,46 @@ export async function updateDoctorProfile(data: DoctorProfilePayload): Promise<A
   }
 }
 
+export async function updateDoctorStatus(status: string): Promise<ActionResult> {
+  const nextStatus = normalizeDoctorStatus(status);
+
+  try {
+    const session = await requireDoctorSession();
+
+    await prisma.doctor.update({
+      where: { id: session.userId },
+      data: { status: nextStatus },
+    });
+
+    revalidatePath("/doctor/dashboard");
+    revalidatePath("/patient/dashboard");
+
+    return { success: true };
+  } catch (error: unknown) {
+    console.warn("Prisma updateDoctorStatus failed, falling back to mock JSON database:", error);
+    try {
+      const session = await requireDoctorSession();
+      const doctor = mockDb.findDoctorById(session.userId);
+
+      if (!doctor) {
+        return { success: false, error: "Doctor account was not found." };
+      }
+
+      mockDb.updateDoctor(session.userId, {
+        status: nextStatus,
+      });
+
+      revalidatePath("/doctor/dashboard");
+      revalidatePath("/patient/dashboard");
+
+      return { success: true };
+    } catch (mockErr) {
+      console.error("Doctor status mock fallback failed:", mockErr);
+      return { success: false, error: "Could not update doctor status." };
+    }
+  }
+}
+
 export async function updatePatientProfile(data: PatientProfilePayload): Promise<ActionResult> {
   try {
     const session = await requirePatientSession();

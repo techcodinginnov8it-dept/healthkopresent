@@ -125,6 +125,7 @@ export function DashboardShell<TModule extends ModuleId>({
   const shellBg = isDoctor ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900";
   const sidebarBg = isDoctor ? "bg-slate-950 border-slate-850" : "bg-white border-slate-200";
   const muted = isDoctor ? "text-slate-400" : "text-slate-500";
+  const sidebarWidth = collapsed ? "md:w-24 lg:w-24" : "md:w-80 lg:w-80";
   const navIdle = isDoctor
     ? "text-slate-400 hover:bg-slate-900 hover:text-white"
     : "text-slate-500 hover:bg-slate-100 hover:text-slate-950";
@@ -154,12 +155,12 @@ export function DashboardShell<TModule extends ModuleId>({
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-[min(86vw,22rem)] -translate-x-full flex-col justify-between overflow-y-auto border-r p-5 transition-transform duration-300 md:sticky md:top-0 md:z-auto md:flex md:h-screen md:translate-x-0 md:transition-none md:${collapsed ? "w-24" : "w-24"} lg:${collapsed ? "w-24" : "w-80"} ${mobileNavOpen ? "translate-x-0" : ""} ${sidebarBg}`}
+        className={`fixed inset-y-0 left-0 z-50 flex w-[min(86vw,22rem)] -translate-x-full flex-col justify-between overflow-y-auto border-r p-5 transition-all duration-300 md:sticky md:top-0 md:z-auto md:h-screen md:translate-x-0 md:overflow-hidden ${sidebarWidth} ${mobileNavOpen ? "translate-x-0" : ""} ${sidebarBg}`}
         aria-label={`${role} dashboard navigation`}
       >
         <div className="space-y-6">
-          <div className="flex items-center justify-between gap-3">
-            <span className="flex items-center gap-1 select-none">
+          <div className={`flex items-center gap-3 ${collapsed ? "justify-center" : "justify-between"}`}>
+            <span className={`flex select-none items-center gap-1 ${collapsed ? "justify-center" : ""}`}>
               <span className="font-display text-xl tracking-tight">
                 <span className="text-brand-red font-black">H</span>
                 {!collapsed && (
@@ -190,16 +191,16 @@ export function DashboardShell<TModule extends ModuleId>({
                   key={item.id}
                   type="button"
                   onClick={() => onNavigate(item.id)}
-                  className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold transition-colors ${
+                  className={`flex min-h-11 w-full items-center rounded-xl py-2.5 text-left text-sm font-bold transition-all duration-200 ${
                     isActive ? "bg-brand-teal text-white shadow-sm shadow-brand-teal/20" : navIdle
-                  }`}
+                  } ${collapsed ? "justify-center px-2" : "gap-3 px-3"}`}
                   aria-current={isActive ? "page" : undefined}
                   title={collapsed ? item.label : undefined}
                 >
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-current/10">
                     <NavIcon id={item.id} />
                   </span>
-                  {!(collapsed && !mobileNavOpen) && <span className="min-w-0 flex-1 leading-tight">{item.label}</span>}
+                  {!collapsed && <span className="min-w-0 flex-1 leading-tight">{item.label}</span>}
                 </button>
               );
             })}
@@ -207,7 +208,7 @@ export function DashboardShell<TModule extends ModuleId>({
         </div>
 
         <div className={`space-y-4 border-t pt-5 ${isDoctor ? "border-slate-850" : "border-slate-200"}`}>
-          {(!(collapsed && !mobileNavOpen) || mobileNavOpen) && (
+          {!collapsed && (
             <div className="flex items-start gap-3">
               {profile.image ? (
                 <div className="h-10 w-10 shrink-0 rounded-lg bg-cover bg-center" style={{ backgroundImage: `url(${profile.image})` }} role="img" aria-label={`${profile.name} profile image`} />
@@ -226,8 +227,8 @@ export function DashboardShell<TModule extends ModuleId>({
               </div>
             </div>
           )}
-          <div className="flex items-center gap-2">
-            <div className="flex-1">{onLogout()}</div>
+          <div className={`flex items-center gap-2 ${collapsed ? "justify-center" : ""}`}>
+            <div className={collapsed ? "w-full [&>*]:w-full" : "flex-1"}>{onLogout()}</div>
             <button
               type="button"
               className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-600 md:hidden"
@@ -266,18 +267,6 @@ export function DashboardShell<TModule extends ModuleId>({
             <div className="flex items-center gap-2">
               {statusIndicator}
               {notificationBell}
-              <span
-                className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${
-                  connectionState === "connected"
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : connectionState === "reconnecting"
-                      ? "border-amber-200 bg-amber-50 text-amber-700"
-                      : "border-brand-red/20 bg-brand-red/10 text-brand-red"
-                }`}
-                aria-live="polite"
-              >
-                {connectionState === "connected" ? "Realtime online" : connectionState === "reconnecting" ? "Reconnecting" : "Offline"}
-              </span>
             </div>
           </div>
 
