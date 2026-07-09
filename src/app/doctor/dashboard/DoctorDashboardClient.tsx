@@ -574,6 +574,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
   const router = useRouter();
   const [activeModule, setActiveModule] = useDashboardModule<DoctorModuleId>(initialModule, DOCTOR_MODULES);
   const [collapsed, setCollapsed] = useState(false);
+  const [sidebarImage, setSidebarImage] = useState<string | null>(doctor.image ?? null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [clinicalNotes, setClinicalNotes] = useState("");
   const [prescriptionText, setPrescriptionText] = useState("");
@@ -605,6 +606,10 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
   const [isUpdatingStatus, startStatusTransition] = useTransition();
   const [isSavingVitals, setIsSavingVitals] = useState(false);
   const [toasts, setToasts] = useState<{ id: string; tone: "success" | "error"; message: string }[]>([]);
+
+  useEffect(() => {
+    setSidebarImage(doctor.image ?? null);
+  }, [doctor.image]);
 
   const showToast = useCallback((tone: "success" | "error", message: string) => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -1215,7 +1220,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
         name: doctor.name,
         detail: doctor.specialty,
         meta: `NPI ${doctor.npi}`,
-        image: doctor.image,
+        image: sidebarImage,
       }}
       connectionState={realtime.connectionState}
       notificationBell={
@@ -1298,9 +1303,9 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
           <StatGrid
             tone="dark"
             stats={[
-              { label: "Pending", value: pendingAppointments.length, helper: "requests awaiting authorization" },
-              { label: "Confirmed", value: confirmedAppointments.length, helper: "live-ready consultations" },
-              { label: "Patients", value: patients.length, helper: "distinct patient records" },
+              { label: "Pending", value: pendingAppointments.length },
+              { label: "Confirmed", value: confirmedAppointments.length },
+              { label: "Patients", value: patients.length },
             ]}
           />
           <section className="rounded-xl border border-slate-850 bg-slate-900 p-5">
@@ -1411,7 +1416,6 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
               <header className="border-b border-slate-850 p-4">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Live Consultation</p>
                 <h2 className="mt-1 text-lg font-black text-white">Appointment Queue</h2>
-                <p className="mt-1 text-xs font-semibold text-slate-400">Confirmed and completed consultations update this workspace.</p>
                 <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
                   {CONSULTATION_QUEUE_FILTERS.map((filter) => (
                     <button
@@ -1600,9 +1604,6 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Main Stage</p>
                   <h2 className="mt-1 text-2xl font-black">Consultation Calendar</h2>
-                  <p className="mt-2 max-w-2xl text-sm font-semibold text-slate-400">
-                    Drag appointment blocks to rebook within open availability. Confirmed visits and pending requests update across dashboards.
-                  </p>
                   <p className="mt-2 text-xs font-black uppercase tracking-[0.18em] text-slate-500">
                     Availability: {doctorAvailability}
                   </p>
@@ -1807,6 +1808,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
       {activeModule === "settings" && (
         <DoctorSettingsModule
           doctor={{ ...doctor, availability: doctorAvailability, status: doctorStatus }}
+          onProfileImageChange={(image) => setSidebarImage(image || null)}
           onToast={showToast}
           onProfileUpdated={({ availability, status }) => {
             setDoctorAvailability(availability);

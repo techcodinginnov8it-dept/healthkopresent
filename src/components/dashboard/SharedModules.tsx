@@ -48,7 +48,7 @@ export function StatGrid({
   stats,
   tone = "light",
 }: {
-  stats: { label: string; value: string | number; helper: string }[];
+  stats: { label: string; value: string | number; helper?: string }[];
   tone?: "light" | "dark";
 }) {
   const gridColumns = stats.length >= 4 ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-3";
@@ -64,7 +64,7 @@ export function StatGrid({
         >
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">{stat.label}</p>
           <p className="mt-3 font-display text-3xl font-black">{stat.value}</p>
-          <p className={`mt-1 text-xs font-semibold ${tone === "dark" ? "text-slate-400" : "text-slate-500"}`}>{stat.helper}</p>
+          {stat.helper ? <p className={`mt-1 text-xs font-semibold ${tone === "dark" ? "text-slate-400" : "text-slate-500"}`}>{stat.helper}</p> : null}
         </div>
       ))}
     </div>

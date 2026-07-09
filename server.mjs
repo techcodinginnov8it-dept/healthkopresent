@@ -9,7 +9,7 @@ import env from "@next/env";
 env.loadEnvConfig(process.cwd());
 
 const dev = process.env.NODE_ENV !== "production";
-const hostname = process.env.HOSTNAME || "0.0.0.0";
+const hostname = process.env.HOSTNAME || "::";
 const port = Number.parseInt(process.env.PORT || "3000", 10);
 const httpsPort = Number.parseInt(process.env.HTTPS_PORT || "", 10);
 const httpsPfxPath = process.env.HTTPS_PFX_PATH;

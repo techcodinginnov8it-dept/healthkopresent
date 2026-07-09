@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatDateTime } from "@/lib/dashboard/format";
 import type { DashboardNotification, DashboardRole } from "@/lib/dashboard/types";
 
@@ -44,6 +44,22 @@ export function NotificationBell({
   const [open, setOpen] = useState(false);
   const isDoctor = role === "doctor";
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open]);
+
   return (
     <div className="relative">
       <button
@@ -62,6 +78,15 @@ export function NotificationBell({
           </span>
         ) : null}
       </button>
+
+      {open && (
+        <button
+          type="button"
+          aria-label="Close notifications"
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-40 cursor-default bg-transparent"
+        />
+      )}
 
       {open && (
         <div

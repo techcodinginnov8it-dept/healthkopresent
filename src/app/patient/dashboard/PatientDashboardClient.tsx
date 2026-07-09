@@ -236,6 +236,14 @@ function getDoctorStatusStyle(status?: string | null) {
   }
 }
 
+function isRenderableProfileImage(src?: string | null) {
+  if (!src) {
+    return false;
+  }
+
+  return /^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(src) || /^https?:\/\//i.test(src) || src.startsWith("/");
+}
+
 function isDoctorFollowUp(appointment: PatientAppointment) {
   return appointment.reason?.toLowerCase().startsWith("follow-up") || appointment.notes?.includes("Follow-up requested by doctor");
 }
@@ -437,7 +445,7 @@ function PatientAppointmentMiniCalendar({
   const monthLabel = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(anchorDate);
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4">
+    <section className="rounded-[18px] border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,92,122,.06)] p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Mini Calendar</p>
@@ -500,9 +508,11 @@ function PatientAppointmentMiniCalendar({
 function DoctorProfileModal({
   doctor,
   onClose,
+  onPreviewImage,
 }: {
   doctor: DashboardDoctor;
   onClose: () => void;
+  onPreviewImage: (src: string, label: string) => void;
 }) {
   const initials = doctor.name
     .split(" ")
@@ -513,11 +523,18 @@ function DoctorProfileModal({
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/70 p-4 backdrop-blur" role="dialog" aria-modal="true" aria-labelledby="doctor-profile-title">
-      <section className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-2xl">
+      <section className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[18px] border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,92,122,.06)] shadow-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
           <div className="flex min-w-0 items-center gap-4">
-            {doctor.image ? (
-              <Image src={doctor.image} alt={doctor.name} width={64} height={64} unoptimized className="h-16 w-16 shrink-0 rounded-xl object-cover" />
+            {isRenderableProfileImage(doctor.image) ? (
+              <button
+                type="button"
+                onClick={() => onPreviewImage(doctor.image!, doctor.name)}
+                className="group relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-slate-200 shadow-sm transition hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-brand-teal focus:ring-offset-2"
+                aria-label={`View enlarged profile image for ${doctor.name}`}
+              >
+                <Image src={doctor.image!} alt={doctor.name} width={64} height={64} unoptimized className="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
+              </button>
             ) : (
               <div className="grid h-16 w-16 shrink-0 place-items-center rounded-xl bg-brand-teal/10 text-lg font-black text-brand-teal">
                 {initials || "DR"}
@@ -546,7 +563,7 @@ function DoctorProfileModal({
             { label: "NPI", value: doctor.npi || "Not provided" },
             { label: "Consult Fee", value: formatPhilippinePeso(doctor.consultFee) },
           ].map((item) => (
-            <div key={item.label} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
               <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{item.label}</p>
               <p className="mt-1 text-sm font-black text-slate-800">{item.value}</p>
             </div>
@@ -564,10 +581,71 @@ function DoctorProfileModal({
   );
 }
 
+function ProfileImagePreviewModal({
+  label,
+  image,
+  onClose,
+}: {
+  label: string;
+  image: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${label} profile image preview`}
+      onClick={onClose}
+    >
+      <div
+        className="relative flex w-[min(92vw,56rem)] max-w-full items-center justify-center rounded-[2rem] border border-white/10 bg-slate-950 p-5 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-4 top-4 z-10 grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-slate-950/80 text-xl font-black text-white hover:bg-white/10"
+          aria-label="Close preview"
+        >
+          X
+        </button>
+        <div className="relative aspect-square w-full overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/20">
+          <Image
+            src={image}
+            alt={`${label} profile preview`}
+            fill
+            sizes="(max-width: 768px) 92vw, 56rem"
+            unoptimized
+            className="object-cover"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PatientDashboardClient({ patient, doctors, initialModule = "overview", medicalIdUrl }: PatientDashboardClientProps) {
   const router = useRouter();
   const [activeModule, setActiveModule] = useDashboardModule<PatientModuleId>(initialModule, PATIENT_MODULES);
   const [collapsed, setCollapsed] = useState(false);
+  const [sidebarImage, setSidebarImage] = useState<string | null>(patient.image ?? null);
   const [selectedDoctorId, setSelectedDoctorId] = useState((doctors.find((d) => d.isVerified) ?? doctors[0])?.id || "");
   const [appointmentDate, setAppointmentDate] = useState("");
   const [appointmentTime, setAppointmentTime] = useState("");
@@ -593,6 +671,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
   const [selectedCalendarDate, setSelectedCalendarDate] = useState("");
   const [appointmentReferenceTime] = useState(() => new Date());
   const [medicalIdQrSvg, setMedicalIdQrSvg] = useState("");
+  const [previewImage, setPreviewImage] = useState<{ src: string; label: string } | null>(null);
   const [medicalIdAction, setMedicalIdAction] = useState<"idle" | "copied" | "downloaded">("idle");
   const [bookingState, setBookingState] = useState<{ loading: boolean; error: string; success: string }>({
     loading: false,
@@ -601,12 +680,20 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
   });
   const [toasts, setToasts] = useState<{ id: string; tone: "success" | "error"; message: string }[]>([]);
 
+  useEffect(() => {
+    setSidebarImage(patient.image ?? null);
+  }, [patient.image]);
+
   const showToast = useCallback((tone: "success" | "error", message: string) => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     setToasts((current) => [...current, { id, tone, message }]);
     window.setTimeout(() => {
       setToasts((current) => current.filter((toast) => toast.id !== id));
     }, 5000);
+  }, []);
+
+  const openProfilePreview = useCallback((src: string, label: string) => {
+    setPreviewImage({ src, label });
   }, []);
 
   useEffect(() => {
@@ -1279,8 +1366,8 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       profile={{
         name: `${patient.firstName} ${patient.lastName}`,
         detail: patient.email,
-        meta: patient.emailVerified ? "Email verified" : "Email pending verification",
-        image: patient.image,
+        meta: undefined,
+        image: sidebarImage,
       }}
       connectionState={realtime.connectionState}
       notificationBell={
@@ -1303,6 +1390,13 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
         </form>
       )}
     >
+      {previewImage ? (
+        <ProfileImagePreviewModal
+          label={previewImage.label}
+          image={previewImage.src}
+          onClose={() => setPreviewImage(null)}
+        />
+      ) : null}
       <div className="fixed right-5 top-5 z-[80] flex w-[min(24rem,calc(100vw-2.5rem))] flex-col gap-3">
         {toasts.map((toast) => (
           <div
@@ -1319,11 +1413,11 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
         ))}
       </div>
 
-      {profileDoctor && <DoctorProfileModal doctor={profileDoctor} onClose={() => setProfileDoctor(null)} />}
+      {profileDoctor && <DoctorProfileModal doctor={profileDoctor} onClose={() => setProfileDoctor(null)} onPreviewImage={openProfilePreview} />}
 
       {rescheduleAppointment && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/70 p-4 backdrop-blur" role="dialog" aria-modal="true">
-          <section className="w-full max-w-xl rounded-xl border border-slate-200 bg-white p-5 shadow-2xl">
+          <section className="w-full max-w-xl rounded-[18px] border border-slate-200 bg-white p-5 shadow-[0_2px_12px_rgba(15,92,122,.06)] shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.25em] text-brand-teal">Follow-Up Reschedule</p>
@@ -1342,7 +1436,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
               </button>
             </div>
             <form onSubmit={handleRequestFollowUpReschedule} className="mt-5 grid gap-4 md:grid-cols-2">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 md:col-span-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2">
                 <p className="text-xs font-black text-slate-950">{rescheduleAppointment.doctor.name}</p>
                 <p className="mt-1 text-[11px] font-semibold text-slate-500">
                   Current follow-up: {formatDateTime(rescheduleAppointment.scheduledAt)}
@@ -1377,7 +1471,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                 <button
                   type="submit"
                   disabled={followUpActionId === rescheduleAppointment.id}
-                  className="rounded-lg bg-brand-teal px-4 py-2.5 text-xs font-black text-white disabled:bg-slate-300"
+                  className="rounded-xl bg-brand-teal px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-brand-teal-hover disabled:bg-slate-300"
                 >
                   {followUpActionId === rescheduleAppointment.id ? "Sending..." : "Send Request"}
                 </button>
@@ -1454,7 +1548,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
 
       {isBookingOpen && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/70 p-4 backdrop-blur" role="dialog" aria-modal="true">
-          <section className="w-full max-w-3xl rounded-xl border border-slate-200 bg-white p-5 shadow-2xl">
+          <section className="w-full max-w-3xl rounded-[18px] border border-slate-200 bg-white p-5 shadow-[0_2px_12px_rgba(15,92,122,.06)] shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.25em] text-brand-teal">Appointments</p>
@@ -1489,7 +1583,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                   This time overlaps with one of your active consultations. Pick a suggested slot or choose another time.
                 </div>
               )}
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2">
+              <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-3 md:col-span-2">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Suggested slots</p>
                 <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
                   {schedulingSuggestions.length ? schedulingSuggestions.map((slot) => (
@@ -1513,7 +1607,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                 Visit reason
                 <textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={4} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold normal-case text-slate-900" />
               </label>
-              <button type="submit" disabled={bookingState.loading} className="rounded-lg bg-brand-teal px-4 py-3 text-sm font-black text-white disabled:bg-slate-300 md:col-span-2">
+              <button type="submit" disabled={bookingState.loading} className="rounded-xl bg-brand-teal px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-teal-hover disabled:bg-slate-300 md:col-span-2">
                 {bookingState.loading ? "Sending request..." : "Send Appointment Request"}
               </button>
             </form>
@@ -1525,16 +1619,16 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
         <div className="space-y-6">
           <StatGrid
             stats={[
-              { label: "Upcoming Consultations", value: upcomingAppointments.length, helper: "scheduled and requested visits" },
-              { label: "Recent Doctors", value: recentDoctorNames.length, helper: "clinicians connected to your care" },
-              { label: "Completed", value: completedAppointments.length, helper: "closed consultations" },
-              { label: "Pending Rx", value: prescriptions.length, helper: "prescription records available" },
+              { label: "Upcoming Consultations", value: upcomingAppointments.length },
+              { label: "Recent Doctors", value: recentDoctorNames.length },
+              { label: "Completed", value: completedAppointments.length },
+              { label: "Pending Rx", value: prescriptions.length },
             ]}
           />
 
           <div className="grid gap-5 xl:grid-cols-12">
             <div className="flex flex-col gap-5 xl:col-span-7">
-              <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <section className="overflow-hidden rounded-[18px] border border-slate-200 bg-white p-5 shadow-[0_2px_12px_rgba(15,92,122,.06)]">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-[10px] font-black uppercase tracking-[0.24em] text-brand-teal">Identity Profile</p>
@@ -1554,7 +1648,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                 </dl>
               </section>
 
-              <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <section className="overflow-hidden rounded-[18px] border border-slate-200 bg-white p-5 shadow-[0_2px_12px_rgba(15,92,122,.06)]">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-[10px] font-black uppercase tracking-[0.24em] text-brand-teal">Vital Health Metrics</p>
@@ -1575,7 +1669,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                 </dl>
               </section>
 
-              <section className="overflow-hidden rounded-3xl border border-red-200 bg-gradient-to-b from-red-50 to-white p-5 shadow-sm">
+              <section className="overflow-hidden rounded-[18px] border border-red-200 bg-red-50 p-5 shadow-[0_2px_12px_rgba(15,92,122,.04)]">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-[10px] font-black uppercase tracking-[0.24em] text-red-600">Clinical Risk Alerts</p>
@@ -1597,7 +1691,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
               </section>
             </div>
 
-            <section className="rounded-3xl border border-brand-teal/15 bg-gradient-to-b from-brand-teal/10 via-white to-white p-6 shadow-sm xl:col-span-5">
+            <section className="rounded-[18px] border border-slate-200 bg-white p-6 shadow-[0_2px_12px_rgba(15,92,122,.06)] xl:col-span-5">
               <div className="flex h-full min-h-[28rem] flex-col items-center justify-center text-center">
                 <div className="inline-flex items-center gap-2 rounded-full border border-brand-teal/15 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-brand-teal shadow-sm">
                   <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -1610,7 +1704,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                   Digital Medical ID
                 </div>
 
-                <div className="mt-5 rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-inner">
+                <div className="mt-5 rounded-[20px] border border-slate-200 bg-white p-4 shadow-[0_2px_12px_rgba(15,92,122,.04)]">
                   <PatientQrCode svgMarkup={medicalIdQrSvg} />
                 </div>
 
@@ -1625,7 +1719,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                   <button
                     type="button"
                     onClick={handleCopyMedicalIdLink}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 shadow-sm transition hover:border-brand-teal hover:text-brand-teal active:scale-[0.99] sm:min-w-36"
+                    className="inline-flex items-center justify-center gap-2 rounded-[18px] border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,92,122,.06)] px-4 py-3 text-sm font-black text-slate-800 shadow-sm transition hover:border-brand-teal hover:text-brand-teal active:scale-[0.99] sm:min-w-36"
                     aria-label="Copy medical profile link"
                   >
                     <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1661,20 +1755,17 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
 
       {activeModule === "book" && (
         <section className="space-y-5">
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="rounded-[18px] border border-slate-200 bg-white p-5 shadow-[0_2px_12px_rgba(15,92,122,.06)]">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Appointments</p>
                 <h2 className="mt-1 text-2xl font-black text-slate-950">Consultation Timeline</h2>
-                <p className="mt-2 max-w-2xl text-sm font-semibold text-slate-500">
-                  Track requests, doctor approvals, live-room readiness, prescriptions, and follow-up care without leaving the telehealth workflow.
-                </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => setActiveModule("doctors")}
-                  className="rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-700"
+                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-semibold text-slate-700"
                 >
                   Doctor Directory
                 </button>
@@ -1684,7 +1775,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                     setBookingState({ loading: false, error: "", success: "" });
                     setIsBookingOpen(true);
                   }}
-                  className="rounded-lg bg-brand-teal px-4 py-2.5 text-xs font-black text-white"
+                  className="rounded-xl bg-brand-teal px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-brand-teal-hover"
                 >
                   Book Appointment
                 </button>
@@ -1697,7 +1788,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                 { label: "Completed", value: completedAppointments.length },
                 { label: "Prescriptions", value: prescriptions.length },
               ].map((stat) => (
-                <div key={stat.label} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                <div key={stat.label} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                   <p className="text-2xl font-black text-slate-950">{stat.value}</p>
                   <p className="mt-1 text-[10px] font-black uppercase tracking-wider text-slate-500">{stat.label}</p>
                 </div>
@@ -1706,7 +1797,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
           </div>
 
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-            <section className="rounded-xl border border-slate-200 bg-white">
+            <section className="rounded-[18px] border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,92,122,.06)]">
               <header className="border-b border-slate-200 p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
@@ -1811,7 +1902,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                               type="button"
                               disabled={followUpActionId === selectedAppointment.id}
                               onClick={() => void handleConfirmFollowUp(selectedAppointment)}
-                              className="rounded-lg bg-brand-teal px-4 py-2.5 text-xs font-black text-white disabled:bg-slate-300"
+                              className="rounded-xl bg-brand-teal px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-brand-teal-hover disabled:bg-slate-300"
                             >
                               Confirm Follow-Up
                             </button>
@@ -1830,7 +1921,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                         <button
                           type="button"
                           onClick={() => startLiveSession(selectedAppointment)}
-                          className="w-full rounded-lg bg-brand-red px-4 py-3 text-xs font-black text-white"
+                          className="w-full rounded-xl bg-brand-red px-4 py-3 text-xs font-semibold text-white transition hover:bg-brand-red-hover"
                         >
                           {authorizedRooms[selectedAppointment.id] ? "Join Consultation" : "Check Live Room"}
                         </button>
@@ -1878,19 +1969,16 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
           />
         ) : (
           <section className="space-y-5">
-            <div className="rounded-xl border border-slate-200 bg-white p-5">
+            <div className="rounded-[18px] border border-slate-200 bg-white p-5 shadow-[0_2px_12px_rgba(15,92,122,.06)]">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Patient Consultation Dashboard</p>
-                  <h2 className="mt-1 text-2xl font-black text-slate-950">Live Consultation Hub</h2>
-                  <p className="mt-2 max-w-2xl text-sm font-semibold text-slate-500">
-                    Track upcoming consultation access, live-room readiness, and post-consultation care without leaving the telehealth workflow.
-                  </p>
-                </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Patient Consultation Dashboard</p>
+                <h2 className="mt-1 text-2xl font-black text-slate-950">Live Consultation Hub</h2>
+              </div>
                 <button
                   type="button"
                   onClick={() => setActiveModule("book")}
-                  className="rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-700"
+                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-semibold text-slate-700"
                 >
                   Manage Appointments
                 </button>
@@ -1898,7 +1986,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
             </div>
 
             <div className="grid gap-5 xl:grid-cols-[35fr_65fr]">
-              <section className="rounded-xl border border-slate-200 bg-white">
+              <section className="rounded-[18px] border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,92,122,.06)]">
                 <header className="border-b border-slate-200 p-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">My Timeline</p>
                   <h3 className="mt-1 text-lg font-black text-slate-950">Consultation Access</h3>
@@ -1933,8 +2021,26 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                         }`}
                       >
                         <div className="flex items-start gap-3">
-                          {doctorProfile?.image ? (
-                            <Image src={doctorProfile.image} alt={booking.doctor.name} width={44} height={44} unoptimized className="h-11 w-11 shrink-0 rounded-xl object-cover" />
+                          {isRenderableProfileImage(doctorProfile?.image) ? (
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openProfilePreview(doctorProfile!.image!, booking.doctor.name);
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  openProfilePreview(doctorProfile!.image!, booking.doctor.name);
+                                }
+                              }}
+                              className="group relative h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-slate-200 shadow-sm transition hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-brand-teal focus:ring-offset-2"
+                              aria-label={`View enlarged profile image for ${booking.doctor.name}`}
+                            >
+                              <Image src={doctorProfile!.image!} alt={booking.doctor.name} width={44} height={44} unoptimized className="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
+                            </span>
                           ) : (
                             <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-teal/10 text-xs font-black text-brand-teal">
                               {initials}
@@ -1954,7 +2060,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                               <span className="rounded-lg bg-slate-50 px-2 py-1">{formatAppointmentFeedDate(booking.scheduledAt)}</span>
                               <span className="rounded-lg bg-slate-50 px-2 py-1 text-right">{formatAppointmentFeedTime(booking.scheduledAt)}</span>
                             </time>
-                            {roomReady && <p className="mt-3 rounded-lg bg-brand-red px-2 py-1 text-[10px] font-black uppercase text-white">Join room available</p>}
+                            {roomReady && <p className="mt-3 rounded-full bg-brand-red px-2 py-1 text-[10px] font-semibold uppercase text-white">Join room available</p>}
                           </div>
                         </div>
                       </button>
@@ -1965,7 +2071,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                 </div>
               </section>
 
-              <section className="rounded-xl border border-slate-200 bg-white">
+              <section className="rounded-[18px] border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,92,122,.06)]">
                 {selectedAppointment ? (
                   <div className="space-y-5 p-5">
                     <div className="rounded-xl border border-slate-200 bg-slate-950 p-5 text-white">
@@ -1996,7 +2102,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                                 type="button"
                                 disabled={followUpActionId === selectedAppointment.id}
                                 onClick={() => openFollowUpReschedule(selectedAppointment)}
-                                className="rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-xs font-black text-white disabled:text-slate-400"
+                                className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-xs font-semibold text-white disabled:text-slate-400"
                               >
                                 Request Reschedule
                               </button>
@@ -2013,7 +2119,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                             <button
                               type="button"
                               onClick={() => setActiveModule(selectedAppointment.status === "COMPLETED" ? "history" : "book")}
-                              className="rounded-lg bg-white px-4 py-3 text-xs font-black text-slate-950"
+                              className="rounded-xl bg-white px-4 py-3 text-xs font-semibold text-slate-950"
                             >
                               {selectedAppointment.status === "COMPLETED" ? "View Medical Record" : "Manage Appointment"}
                             </button>
@@ -2023,7 +2129,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                     </div>
 
                     <div className="grid gap-4 lg:grid-cols-2">
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-4">
                         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Appointment Information</p>
                         <dl className="mt-4 grid gap-3 text-sm">
                           <div className="flex items-center justify-between gap-3">
@@ -2045,10 +2151,28 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                         </dl>
                       </div>
 
-                      <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="rounded-[18px] border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,92,122,.06)] p-4">
                         <div className="flex items-start gap-3">
-                          {selectedAppointmentDoctor?.image ? (
-                            <Image src={selectedAppointmentDoctor.image} alt={selectedAppointment.doctor.name} width={48} height={48} unoptimized className="h-12 w-12 shrink-0 rounded-xl object-cover" />
+                          {isRenderableProfileImage(selectedAppointmentDoctor?.image) ? (
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openProfilePreview(selectedAppointmentDoctor!.image!, selectedAppointment.doctor.name);
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  openProfilePreview(selectedAppointmentDoctor!.image!, selectedAppointment.doctor.name);
+                                }
+                              }}
+                              className="group relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-slate-200 shadow-sm transition hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-brand-teal focus:ring-offset-2"
+                              aria-label={`View enlarged profile image for ${selectedAppointment.doctor.name}`}
+                            >
+                              <Image src={selectedAppointmentDoctor!.image!} alt={selectedAppointment.doctor.name} width={48} height={48} unoptimized className="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
+                            </span>
                           ) : (
                             <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-brand-teal/10 text-sm font-black text-brand-teal">
                               {getInitials(selectedAppointment.doctor.name) || "DR"}
@@ -2064,7 +2188,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                       </div>
                     </div>
 
-                    <div className="rounded-xl border border-slate-200 bg-white">
+                    <div className="rounded-[18px] border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,92,122,.06)]">
                       <div className="flex gap-2 overflow-x-auto border-b border-slate-200 p-3">
                         {CONSULTATION_HUB_TABS.map((tab) => (
                           <button
@@ -2079,23 +2203,23 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                       </div>
                       <div className="p-4">
                         {consultationHubTab === "prescriptions" && (
-                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                          <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-4">
                             <p className="text-xs font-black uppercase tracking-wider text-slate-500">Prescription</p>
                             <p className="mt-2 text-sm font-semibold text-slate-700">{selectedAppointment.prescription || "No prescription has been issued for this consultation yet."}</p>
                           </div>
                         )}
                         {consultationHubTab === "notes" && (
-                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                          <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-4">
                             <p className="text-xs font-black uppercase tracking-wider text-slate-500">Doctor&apos;s Notes</p>
                             <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-700">{selectedAppointment.notes || "Doctor notes will appear here after clinical documentation is completed."}</p>
                           </div>
                         )}
                         {consultationHubTab === "documents" && (
                           <div className="grid gap-3 md:grid-cols-2">
-                            <button type="button" onClick={() => downloadMedicalReport(selectedAppointment)} className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-left text-sm font-black text-slate-950">
+                            <button type="button" onClick={() => downloadMedicalReport(selectedAppointment)} className="rounded-[18px] border border-slate-200 bg-slate-50 p-4 text-left text-sm font-black text-slate-950">
                               Download Medical Report
                             </button>
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-4">
                               <p className="text-sm font-black text-slate-950">Medical documents</p>
                               <p className="mt-2 text-xs font-semibold text-slate-500">Doctor-uploaded files and lab attachments will appear here when available.</p>
                             </div>
@@ -2108,7 +2232,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                               { label: "Device Check", body: "Camera, microphone, and internet ready before joining." },
                               { label: "Visit Context", body: selectedAppointment.reason ? "Reason for visit is recorded." : "Add context during the consultation." },
                             ].map((item) => (
-                              <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                              <div key={item.label} className="rounded-[18px] border border-slate-200 bg-slate-50 p-4">
                                 <p className="text-sm font-black text-slate-950">{item.label}</p>
                                 <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-500">{item.body}</p>
                               </div>
@@ -2131,11 +2255,10 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
 
       {activeModule === "history" && (
         <section className="grid min-h-[calc(100vh-9rem)] gap-5 xl:grid-cols-[35fr_65fr]">
-          <aside className="min-h-0 rounded-xl border border-slate-200 bg-white">
+          <aside className="min-h-0 rounded-[18px] border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,92,122,.06)]">
             <header className="border-b border-slate-200 p-4">
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Medical Access</p>
               <h2 className="mt-1 text-lg font-black text-slate-950">Consultation Timeline</h2>
-              <p className="mt-1 text-xs font-semibold text-slate-500">Select an encounter to review clinical documentation.</p>
             </header>
             <div className="max-h-[calc(100vh-15rem)] space-y-2 overflow-y-auto p-3">
               {medicalAccessAppointments.length ? medicalAccessAppointments.map((booking) => {
@@ -2170,7 +2293,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
             </div>
           </aside>
 
-          <section className="min-w-0 rounded-xl border border-slate-200 bg-white">
+          <section className="min-w-0 rounded-[18px] border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,92,122,.06)]">
             {selectedMedicalAppointment ? (
               <div className="flex h-full flex-col">
                 <header className="border-b border-slate-200 p-5">
@@ -2184,7 +2307,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                     <button
                       type="button"
                       onClick={() => downloadMedicalReport(selectedMedicalAppointment)}
-                      className="rounded-lg bg-slate-950 px-4 py-3 text-xs font-black text-white"
+                      className="rounded-xl bg-brand-teal px-4 py-3 text-xs font-semibold text-white transition hover:bg-brand-teal-hover"
                     >
                       Download Medical Report
                     </button>
@@ -2212,7 +2335,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                         { label: "Duration", value: `${selectedMedicalAppointment.duration || DEFAULT_DURATION_MINUTES} minutes` },
                         { label: "Status", value: selectedMedicalAppointment.status },
                       ].map((item) => (
-                        <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <div key={item.label} className="rounded-[18px] border border-slate-200 bg-slate-50 p-4">
                           <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{item.label}</p>
                           <p className="mt-2 text-sm font-black leading-relaxed text-slate-800">{item.value}</p>
                         </div>
@@ -2222,7 +2345,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
 
                   {medicalAccessTab === "assessment" && (
                     <section className="space-y-4">
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                      <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-5">
                         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Doctor Assessment And Plan</p>
                         <ul className="mt-4 space-y-3">
                           {(getMedicalBullets(selectedMedicalAppointment.notes).length ? getMedicalBullets(selectedMedicalAppointment.notes) : ["No doctor assessment has been documented for this encounter."]).map((item) => (
@@ -2243,18 +2366,18 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                   )}
 
                   {medicalAccessTab === "prescriptions" && (
-                    <section className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                    <section className="rounded-[18px] border border-slate-200 bg-slate-50 p-5">
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Prescriptions</p>
-                      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="mt-4 rounded-[18px] border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,92,122,.06)] p-4">
                         <p className="text-base font-black text-slate-950">{selectedMedicalAppointment.prescription || "No prescription issued"}</p>
                         <div className="mt-4 grid gap-3 md:grid-cols-2">
-                          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                             <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Directions</p>
                             <p className="mt-2 text-sm font-semibold text-slate-700">
                               {selectedMedicalAppointment.prescription ? "Follow the prescribing doctor's instructions and confirm dosage before taking medication." : "No medication directions available."}
                             </p>
                           </div>
-                          <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                          <div className="rounded-xl border border-red-200 bg-red-50 p-3">
                             <p className="text-[10px] font-black uppercase tracking-wider text-brand-red">Warnings</p>
                             <p className="mt-2 text-sm font-semibold text-red-800">
                               Report allergies, side effects, pregnancy, or medication conflicts to your care team before use.
@@ -2291,7 +2414,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       {activeModule === "doctors" && (
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {doctors.map((doctor) => (
-            <article key={doctor.id} className="rounded-xl border border-slate-200 bg-white p-5">
+            <article key={doctor.id} className="rounded-[18px] border border-slate-200 bg-white p-5 shadow-[0_2px_12px_rgba(15,92,122,.06)]">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-black text-slate-950">{doctor.name}</p>
@@ -2329,7 +2452,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       {activeModule === "notifications" && (
         <section className="space-y-3">
           {dashboardNotifications.notifications.length ? dashboardNotifications.notifications.map((item) => (
-            <article key={item.id} className="rounded-xl border border-slate-200 bg-white p-4">
+            <article key={item.id} className="rounded-[18px] border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,92,122,.06)] p-4">
               <p className="text-sm font-black text-slate-950">{item.title}</p>
               <p className="mt-1 text-xs font-semibold text-slate-500">{item.body}</p>
               <p className="mt-2 text-[10px] font-black uppercase tracking-wider text-slate-400">{item.kind || "system"} / {formatDateTime(item.createdAt)}</p>
@@ -2339,14 +2462,18 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       )}
 
       {activeModule === "billing" && (
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <section className="rounded-[18px] border border-slate-200 bg-white p-5 shadow-[0_2px_12px_rgba(15,92,122,.06)]">
           <h2 className="text-lg font-black">Payments & Billing</h2>
           <p className="mt-2 text-sm font-semibold text-slate-500">No outstanding patient balances. Payment records will attach to confirmed consultations.</p>
         </section>
       )}
 
       {activeModule === "settings" && (
-        <PatientSettingsModule patient={patient} onToast={showToast} />
+        <PatientSettingsModule
+          patient={patient}
+          onProfileImageChange={(image) => setSidebarImage(image || null)}
+          onToast={showToast}
+        />
       )}
     </DashboardShell>
   );
