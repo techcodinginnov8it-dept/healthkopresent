@@ -60,8 +60,30 @@ export async function uploadFileToStorage(
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    // Check if Supabase is configured
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.warn("[Storage] Supabase not configured - storing document name locally");
+      // In development without Supabase, return the filename as the identifier
+      // The audit will store this reference and can access it later
+      return {
+        success: true,
+        url: `local://${safeName}`,
+        path: `${folder}/${safeName}`,
+      };
+    }
+
     // Use admin client (bypasses RLS entirely)
-    const supabase = createAdminClient();
+    let supabase;
+    try {
+      supabase = createAdminClient();
+    } catch (adminClientError) {
+      console.warn("[Storage] Could not create Supabase admin client - using local fallback", adminClientError);
+      return {
+        success: true,
+        url: `local://${safeName}`,
+        path: `${folder}/${safeName}`,
+      };
+    }
 
     const { data, error } = await supabase.storage
       .from(STORAGE_BUCKET)

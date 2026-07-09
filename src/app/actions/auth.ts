@@ -4,6 +4,7 @@ import { createClient as createSupabaseServerClient } from "@/utils/supabase/ser
 import { isPrismaConfigured, prisma } from "@/lib/prisma";
 import { clearPatientSession, createPatientSession } from "@/lib/auth/patient-session";
 import { clearDoctorSession, createDoctorSession } from "@/lib/auth/doctor-session";
+import { clearAdminSession, createAdminSession } from "@/lib/auth/admin-session";
 import bcrypt from "bcryptjs";
 import { randomInt } from "crypto";
 import { redirect } from "next/navigation";
@@ -96,6 +97,9 @@ type DoctorLoginPayload = {
   securityKey?: string;
 };
 
+const ADMIN_EMAIL = "admin@healthko.com";
+const ADMIN_PASSWORD_HASH = "$2a$10$GKRhPVU715yCQTPmoyEc5uMZMyZwUcIAM.wojMkY6kgqmorRIpb0O";
+
 async function validateMockPatientLogin({ email, password }: PatientLoginPayload) {
   const patient = mockDb.findPatientByEmail(email);
 
@@ -123,6 +127,14 @@ async function loginMockDoctor({ emailOrNpi, password, securityKey }: DoctorLogi
   const doctor = mockDb.findDoctorByEmailOrNpi(emailOrNpi);
   if (!doctor) {
     return { success: false, error: "No physician matches these credentials" };
+  }
+
+  if (!doctor.isActive) {
+    return { success: false, error: "Your physician account has been deactivated" };
+  }
+
+  if (!doctor.isVerified) {
+    return { success: false, error: "Your credentials are pending verification. An admin will review your submission shortly" };
   }
 
   const isMatch = await bcrypt.compare(password, doctor.password);
@@ -921,6 +933,14 @@ export async function loginDoctor(data: DoctorLoginPayload) {
       return { success: false, error: "No physician matches these credentials" };
     }
 
+    if (!doctor.isActive) {
+      return { success: false, error: "Your physician account has been deactivated" };
+    }
+
+    if (!doctor.isVerified) {
+      return { success: false, error: "Your credentials are pending verification. An admin will review your submission shortly" };
+    }
+
     const isMatch = await bcrypt.compare(password, doctor.password);
     console.log("[loginDoctor] bcrypt.compare result:", isMatch, "| input password:", JSON.stringify(password));
     if (!isMatch) {
@@ -957,7 +977,44 @@ export async function loginDoctor(data: DoctorLoginPayload) {
   }
 }
 
+export async function loginAdmin(data: { email: string; password: string }) {
+  const normalizedEmail = data.email?.trim().toLowerCase();
+  const password = data.password ?? "";
+
+  if (!normalizedEmail || !password) {
+    return { success: false, error: "Email and password are required" };
+  }
+
+  if (normalizedEmail !== ADMIN_EMAIL.toLowerCase()) {
+    return { success: false, error: "Invalid admin credentials" };
+  }
+
+  const isMatch = await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
+  if (!isMatch) {
+    return { success: false, error: "Invalid admin credentials" };
+  }
+
+  await createAdminSession({
+    userId: "admin",
+    email: ADMIN_EMAIL,
+  });
+
+  return {
+    success: true,
+    admin: {
+      id: "admin",
+      email: ADMIN_EMAIL,
+      role: "admin",
+    },
+  };
+}
+
 export async function logoutDoctor() {
   await clearDoctorSession();
   redirect("/doctor/signin");
+}
+
+export async function logoutAdmin() {
+  await clearAdminSession();
+  redirect("/admin/signin");
 }
