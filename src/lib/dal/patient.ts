@@ -106,7 +106,6 @@ export const getPatientDashboardData = cache(async () => {
     });
   } catch (error) {
     console.error("[getPatientDashboardData] Prisma query failed:", error);
-    throw error;
   }
 
   if (!patient) {

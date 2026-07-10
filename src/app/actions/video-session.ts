@@ -40,7 +40,31 @@ export async function startVideoSession(consultationId: string): Promise<VideoSe
   try {
     const session = await requireDoctorSession();
 
-    if (!isPrismaConfigured()) {
+    let roomId = "";
+
+    if (isPrismaConfigured()) {
+      const consultation = await prisma.consultation.findUnique({
+        where: { id: consultationId },
+        select: { id: true, doctorId: true, status: true },
+      });
+
+      if (!consultation || consultation.doctorId !== session.userId || consultation.status !== "CONFIRMED") {
+        return { success: false, error: "Only the assigned doctor can start a confirmed consultation." };
+      }
+
+      // Reuse existing roomId if the session was already created (e.g. doctor reopened tab)
+      const existing = await prisma.videoSession.findUnique({
+        where: { consultationId },
+        select: { roomId: true },
+      });
+      roomId = existing?.roomId || createRoomId(consultationId);
+
+      await prisma.videoSession.upsert({
+        where: { consultationId },
+        update: { status: "STARTED", startedAt: new Date(), roomId },
+        create: { consultationId, status: "STARTED", startedAt: new Date(), roomId },
+      });
+    } else {
       const consultation = mockDb.getBookingsForDoctor(session.userId).find((booking) => booking.id === consultationId);
 
       if (!consultation || consultation.doctorId !== session.userId || consultation.status !== "CONFIRMED") {
@@ -48,41 +72,9 @@ export async function startVideoSession(consultationId: string): Promise<VideoSe
       }
 
       const existing = mockDb.findVideoSessionByConsultation(consultationId);
-      const roomId = existing?.roomId || createRoomId(consultationId);
-
+      roomId = existing?.roomId || createRoomId(consultationId);
       mockDb.startVideoSession(consultationId, roomId);
-
-      revalidatePath("/doctor/dashboard");
-      revalidatePath("/patient/dashboard");
-
-      return {
-        success: true,
-        roomId,
-        accessToken: signRoomAccess({ consultationId, roomId, role: "doctor", userId: session.userId }),
-      };
     }
-
-    const consultation = await prisma.consultation.findUnique({
-      where: { id: consultationId },
-      select: { id: true, doctorId: true, status: true },
-    });
-
-    if (!consultation || consultation.doctorId !== session.userId || consultation.status !== "CONFIRMED") {
-      return { success: false, error: "Only the assigned doctor can start a confirmed consultation." };
-    }
-
-    // Reuse existing roomId if the session was already created (e.g. doctor reopened tab)
-    const existing = await prisma.videoSession.findUnique({
-      where: { consultationId },
-      select: { roomId: true },
-    });
-    const roomId = existing?.roomId || createRoomId(consultationId);
-
-    await prisma.videoSession.upsert({
-      where: { consultationId },
-      update: { status: "STARTED", startedAt: new Date(), roomId },
-      create: { consultationId, status: "STARTED", startedAt: new Date(), roomId },
-    });
 
     revalidatePath("/doctor/dashboard");
     revalidatePath("/patient/dashboard");
@@ -104,40 +96,27 @@ export async function authorizePatientVideoSession(consultationId: string): Prom
   try {
     const session = await requirePatientSession();
 
-    if (!isPrismaConfigured()) {
-      const consultation = mockDb.getBookingsForPatient(session.userId).find((booking) => booking.id === consultationId);
-      const videoSession = mockDb.findVideoSessionByConsultation(consultationId);
-
-      if (
-        !consultation ||
-        consultation.patientId !== session.userId ||
-        consultation.status !== "CONFIRMED" ||
-        videoSession?.status !== "STARTED"
-      ) {
-        return { success: false, error: "The doctor has not started this consultation yet." };
-      }
-
-      return {
-        success: true,
-        roomId: videoSession.roomId,
-        accessToken: signRoomAccess({
-          consultationId,
-          roomId: videoSession.roomId,
-          role: "patient",
-          userId: session.userId,
-        }),
-      };
-    }
-
-    const consultation = await prisma.consultation.findUnique({
-      where: { id: consultationId },
-      select: {
-        id: true,
-        patientId: true,
-        status: true,
-        videoSession: { select: { roomId: true, status: true } },
-      },
-    });
+    const consultation = isPrismaConfigured()
+      ? await prisma.consultation.findUnique({
+          where: { id: consultationId },
+          select: {
+            id: true,
+            patientId: true,
+            status: true,
+            videoSession: { select: { roomId: true, status: true } },
+          },
+        })
+      : (() => {
+          const booking = mockDb.getBookingsForPatient(session.userId).find((item) => item.id === consultationId);
+          return booking
+            ? {
+                id: booking.id,
+                patientId: booking.patientId,
+                status: booking.status,
+                videoSession: booking.videoSession,
+              }
+            : null;
+        })();
 
     console.log("[authorizePatientVideoSession] Debug Info:", {
       consultationId,
@@ -187,35 +166,30 @@ export async function endVideoSession(consultationId: string): Promise<{ success
       return { success: false, error: "Authenticated session required." };
     }
 
-    if (!isPrismaConfigured()) {
-      const consultation = mockDb.getBookingsForPatient(userId).find((booking) => booking.id === consultationId)
-        || mockDb.getBookingsForDoctor(userId).find((booking) => booking.id === consultationId);
-
-      if (!consultation) {
-        return { success: false, error: "Consultation not found or unauthorized access." };
-      }
-
-      mockDb.endVideoSession(consultationId);
-
-      revalidatePath("/doctor/dashboard");
-      revalidatePath("/patient/dashboard");
-
-      return { success: true };
-    }
-
-    const consultation = await prisma.consultation.findUnique({
-      where: { id: consultationId },
-      select: { doctorId: true, patientId: true },
-    });
+    const consultation = isPrismaConfigured()
+      ? await prisma.consultation.findUnique({
+          where: { id: consultationId },
+          select: { doctorId: true, patientId: true },
+        })
+      : (() => {
+          const doctorBooking = doctorSession ? mockDb.getBookingsForDoctor(doctorSession.userId).find((booking) => booking.id === consultationId) : null;
+          const patientBooking = patientSession ? mockDb.getBookingsForPatient(patientSession.userId).find((booking) => booking.id === consultationId) : null;
+          const booking = doctorBooking || patientBooking;
+          return booking ? { doctorId: booking.doctorId, patientId: booking.patientId } : null;
+        })();
 
     if (!consultation || (consultation.doctorId !== userId && consultation.patientId !== userId)) {
       return { success: false, error: "Consultation not found or unauthorized access." };
     }
 
-    await prisma.videoSession.updateMany({
-      where: { consultationId },
-      data: { status: "ENDED", endedAt },
-    });
+    if (isPrismaConfigured()) {
+      await prisma.videoSession.updateMany({
+        where: { consultationId },
+        data: { status: "ENDED", endedAt },
+      });
+    } else {
+      mockDb.endVideoSession(consultationId);
+    }
 
     revalidatePath("/doctor/dashboard");
     revalidatePath("/patient/dashboard");
