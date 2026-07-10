@@ -3,7 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 
-import { prisma } from "@/lib/prisma";
+import { isPrismaConfigured, prisma } from "@/lib/prisma";
 import { requirePatientSession } from "@/lib/auth/patient-session";
 import { mockDb } from "@/lib/mockDb";
 
@@ -68,6 +68,10 @@ const PATIENT_PROFILE_SELECT = {
 export const getPatientDashboardData = cache(async () => {
   const session = await requirePatientSession();
 
+  if (!isPrismaConfigured()) {
+    return getMockPatientDashboardData(session);
+  }
+
   let patient = null;
 
   try {
@@ -77,7 +81,6 @@ export const getPatientDashboardData = cache(async () => {
     });
   } catch (error) {
     console.error("[getPatientDashboardData] Prisma query failed:", error);
-    throw error;
   }
 
   if (!patient) {

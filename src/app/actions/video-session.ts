@@ -2,9 +2,10 @@
 
 import { createHmac, randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
+import { isPrismaConfigured, prisma } from "@/lib/prisma";
 import { getDoctorSession, requireDoctorSession } from "@/lib/auth/doctor-session";
 import { getPatientSession, requirePatientSession } from "@/lib/auth/patient-session";
+import { mockDb } from "@/lib/mockDb";
 
 type VideoSessionResult = {
   success: boolean;
@@ -39,27 +40,41 @@ export async function startVideoSession(consultationId: string): Promise<VideoSe
   try {
     const session = await requireDoctorSession();
 
-    const consultation = await prisma.consultation.findUnique({
-      where: { id: consultationId },
-      select: { id: true, doctorId: true, status: true },
-    });
+    let roomId = "";
 
-    if (!consultation || consultation.doctorId !== session.userId || consultation.status !== "CONFIRMED") {
-      return { success: false, error: "Only the assigned doctor can start a confirmed consultation." };
+    if (isPrismaConfigured()) {
+      const consultation = await prisma.consultation.findUnique({
+        where: { id: consultationId },
+        select: { id: true, doctorId: true, status: true },
+      });
+
+      if (!consultation || consultation.doctorId !== session.userId || consultation.status !== "CONFIRMED") {
+        return { success: false, error: "Only the assigned doctor can start a confirmed consultation." };
+      }
+
+      // Reuse existing roomId if the session was already created (e.g. doctor reopened tab)
+      const existing = await prisma.videoSession.findUnique({
+        where: { consultationId },
+        select: { roomId: true },
+      });
+      roomId = existing?.roomId || createRoomId(consultationId);
+
+      await prisma.videoSession.upsert({
+        where: { consultationId },
+        update: { status: "STARTED", startedAt: new Date(), roomId },
+        create: { consultationId, status: "STARTED", startedAt: new Date(), roomId },
+      });
+    } else {
+      const consultation = mockDb.getBookingsForDoctor(session.userId).find((booking) => booking.id === consultationId);
+
+      if (!consultation || consultation.doctorId !== session.userId || consultation.status !== "CONFIRMED") {
+        return { success: false, error: "Only the assigned doctor can start a confirmed consultation." };
+      }
+
+      const existing = mockDb.findVideoSessionByConsultation(consultationId);
+      roomId = existing?.roomId || createRoomId(consultationId);
+      mockDb.startVideoSession(consultationId, roomId);
     }
-
-    // Reuse existing roomId if the session was already created (e.g. doctor reopened tab)
-    const existing = await prisma.videoSession.findUnique({
-      where: { consultationId },
-      select: { roomId: true },
-    });
-    const roomId = existing?.roomId || createRoomId(consultationId);
-
-    await prisma.videoSession.upsert({
-      where: { consultationId },
-      update: { status: "STARTED", startedAt: new Date(), roomId },
-      create: { consultationId, status: "STARTED", startedAt: new Date(), roomId },
-    });
 
     revalidatePath("/doctor/dashboard");
     revalidatePath("/patient/dashboard");
@@ -81,15 +96,27 @@ export async function authorizePatientVideoSession(consultationId: string): Prom
   try {
     const session = await requirePatientSession();
 
-    const consultation = await prisma.consultation.findUnique({
-      where: { id: consultationId },
-      select: {
-        id: true,
-        patientId: true,
-        status: true,
-        videoSession: { select: { roomId: true, status: true } },
-      },
-    });
+    const consultation = isPrismaConfigured()
+      ? await prisma.consultation.findUnique({
+          where: { id: consultationId },
+          select: {
+            id: true,
+            patientId: true,
+            status: true,
+            videoSession: { select: { roomId: true, status: true } },
+          },
+        })
+      : (() => {
+          const booking = mockDb.getBookingsForPatient(session.userId).find((item) => item.id === consultationId);
+          return booking
+            ? {
+                id: booking.id,
+                patientId: booking.patientId,
+                status: booking.status,
+                videoSession: booking.videoSession,
+              }
+            : null;
+        })();
 
     console.log("[authorizePatientVideoSession] Debug Info:", {
       consultationId,
@@ -139,19 +166,30 @@ export async function endVideoSession(consultationId: string): Promise<{ success
       return { success: false, error: "Authenticated session required." };
     }
 
-    const consultation = await prisma.consultation.findUnique({
-      where: { id: consultationId },
-      select: { doctorId: true, patientId: true },
-    });
+    const consultation = isPrismaConfigured()
+      ? await prisma.consultation.findUnique({
+          where: { id: consultationId },
+          select: { doctorId: true, patientId: true },
+        })
+      : (() => {
+          const doctorBooking = doctorSession ? mockDb.getBookingsForDoctor(doctorSession.userId).find((booking) => booking.id === consultationId) : null;
+          const patientBooking = patientSession ? mockDb.getBookingsForPatient(patientSession.userId).find((booking) => booking.id === consultationId) : null;
+          const booking = doctorBooking || patientBooking;
+          return booking ? { doctorId: booking.doctorId, patientId: booking.patientId } : null;
+        })();
 
     if (!consultation || (consultation.doctorId !== userId && consultation.patientId !== userId)) {
       return { success: false, error: "Consultation not found or unauthorized access." };
     }
 
-    await prisma.videoSession.updateMany({
-      where: { consultationId },
-      data: { status: "ENDED", endedAt },
-    });
+    if (isPrismaConfigured()) {
+      await prisma.videoSession.updateMany({
+        where: { consultationId },
+        data: { status: "ENDED", endedAt },
+      });
+    } else {
+      mockDb.endVideoSession(consultationId);
+    }
 
     revalidatePath("/doctor/dashboard");
     revalidatePath("/patient/dashboard");

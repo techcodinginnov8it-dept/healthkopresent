@@ -254,7 +254,21 @@
       "updatedAt": "2026-05-20T20:58:55.826Z"
     }
   ],
-  "consultations": [],
+  "consultations": [
+    {
+      "id": "con-livecall-test-001",
+      "patientId": "pat-jnpd6vok9",
+      "doctorId": "doc-sarah-jenkins-123",
+      "scheduledAt": "2026-07-10T15:00:00.000Z",
+      "status": "CONFIRMED",
+      "reason": "Live video consultation walkthrough",
+      "notes": null,
+      "prescription": null,
+      "duration": 30,
+      "createdAt": "2026-07-09T14:00:00.000Z",
+      "updatedAt": "2026-07-09T14:00:00.000Z"
+    }
+  ],
   "emailOtps": [
     {
       "id": "otp-3bmpiimsx",
@@ -527,5 +541,16 @@
       "createdAt": "2026-06-04T13:58:15.001Z"
     }
   ],
-  "videoSessions": []
+  "videoSessions": [
+    {
+      "id": "vid-jfa3b5u4z",
+      "consultationId": "con-livecall-test-001",
+      "status": "STARTED",
+      "roomId": "healthko-con-livecall-test-001-18ee5c2200906315",
+      "startedAt": "2026-07-09T14:46:36.010Z",
+      "endedAt": null,
+      "createdAt": "2026-07-09T14:43:58.679Z",
+      "updatedAt": "2026-07-09T14:46:36.010Z"
+    }
+  ]
 }
