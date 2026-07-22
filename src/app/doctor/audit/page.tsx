@@ -20,34 +20,41 @@ const SPECIALTIES = [
   { value: "OTHER", label: "Other Specialties" },
 ];
 
-const STATES = [
-  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME",
-  "MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA",
-  "RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY",
-];
+const LICENSE_ISSUING_COUNTRY = "Philippines";
+const LICENSE_ISSUER = "PRC";
 
 export default function DoctorAuditPage() {
   const [step, setStep] = useState(1);
 
-  // Step 1: Clinical Identity
   const [npi, setNpi] = useState("");
   const [specialty, setSpecialty] = useState("");
 
-  // Step 2: Licensure & Experience
-  const [licenseNumber, setLicenseNumber] = useState("");
-  const [licenseState, setLicenseState] = useState("");
+  const [licenseState] = useState(LICENSE_ISSUING_COUNTRY);
+  const [firstName, setFirstName] = useState("");
+  const [middleName, setMiddleName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [suffix, setSuffix] = useState("");
   const [yearsExp, setYearsExp] = useState("");
   const [medicalSchool, setMedicalSchool] = useState("");
   const [gradYear, setGradYear] = useState("");
 
-  // Step 3: Document Upload (Supabase Storage)
-  const [fileName, setFileName] = useState("");
-  const [documentUrl, setDocumentUrl] = useState("");     // Public URL after upload
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
+  const [frontFileName, setFrontFileName] = useState("");
+  const [frontDocumentUrl, setFrontDocumentUrl] = useState("");
+  const [frontUploadProgress, setFrontUploadProgress] = useState(0);
+  const [isUploadingFront, setIsUploadingFront] = useState(false);
+
+  const [backFileName, setBackFileName] = useState("");
+  const [backDocumentUrl, setBackDocumentUrl] = useState("");
+  const [backUploadProgress, setBackUploadProgress] = useState(0);
+  const [isUploadingBack, setIsUploadingBack] = useState(false);
+
+  const [selfieFileName, setSelfieFileName] = useState("");
+  const [selfieDocumentUrl, setSelfieDocumentUrl] = useState("");
+  const [selfieUploadProgress, setSelfieUploadProgress] = useState(0);
+  const [isUploadingSelfie, setIsUploadingSelfie] = useState(false);
+
   const [uploadError, setUploadError] = useState("");
 
-  // Step 4: Attestation
   const [signature, setSignature] = useState("");
   const [consent, setConsent] = useState(false);
   const [doctorEmail, setDoctorEmail] = useState("");
@@ -56,70 +63,167 @@ export default function DoctorAuditPage() {
   const [error, setError] = useState("");
   const [successData, setSuccessData] = useState<{ auditId: string; linked: boolean } | null>(null);
 
-  const isNpiInvalid = npi.length > 0 && (npi.length !== 10 || isNaN(Number(npi)));
+  const isLicenseInvalid = npi.trim().length > 0 && npi.trim().length < 5;
+  const isUploading = isUploadingFront || isUploadingBack || isUploadingSelfie;
+  const allRequiredUploadsCompleted = Boolean(frontDocumentUrl && backDocumentUrl && selfieDocumentUrl);
 
-  // ── Real Supabase Storage Upload ────────────────────────────────────────────
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const compressImageForUpload = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      return file;
+    }
+
+    const maxDimension = 1600;
+    const quality = 0.82;
+    const imageUrl = URL.createObjectURL(file);
+
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("Unable to load image for compression."));
+        img.src = imageUrl;
+      });
+
+      const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
+      const width = Math.max(1, Math.round(image.width * scale));
+      const height = Math.max(1, Math.round(image.height * scale));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+
+      const context = canvas.getContext("2d");
+      if (!context) {
+        return file;
+      }
+
+      context.drawImage(image, 0, 0, width, height);
+
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob((result) => resolve(result), "image/jpeg", quality);
+      });
+
+      if (!blob) {
+        return file;
+      }
+
+      const normalizedName = file.name.replace(/\.[^.]+$/, "") + ".jpg";
+      return new File([blob], normalizedName, {
+        type: "image/jpeg",
+        lastModified: file.lastModified,
+      });
+    } finally {
+      URL.revokeObjectURL(imageUrl);
+    }
+  };
+
+  const handleFileUpload = async (side: "front" | "back" | "selfie", e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
-    const allowed = ["application/pdf", "image/png", "image/jpeg", "image/jpg"];
+    const allowed = ["application/pdf", "image/png", "image/jpeg", "image/jpg", "image/webp"];
     if (!allowed.includes(file.type)) {
-      setUploadError("Only PDF, PNG, or JPEG files are accepted.");
+      setUploadError("Only PDF, PNG, JPEG, or WEBP files are accepted for PRC ID uploads.");
       return;
     }
-    // Validate size (10 MB)
+
     if (file.size > 10 * 1024 * 1024) {
       setUploadError("File size must not exceed 10 MB.");
       return;
     }
 
-    setFileName(file.name);
-    setDocumentUrl("");
+    if (side === "front") {
+      setFrontFileName(file.name);
+      setFrontDocumentUrl("");
+      setFrontUploadProgress(5);
+      setIsUploadingFront(true);
+    } else if (side === "back") {
+      setBackFileName(file.name);
+      setBackDocumentUrl("");
+      setBackUploadProgress(5);
+      setIsUploadingBack(true);
+    } else {
+      setSelfieFileName(file.name);
+      setSelfieDocumentUrl("");
+      setSelfieUploadProgress(5);
+      setIsUploadingSelfie(true);
+    }
+
     setUploadError("");
-    setIsUploading(true);
-    setUploadProgress(5); // Show immediate feedback
 
     try {
-      // Simulate steady progress while uploading
+      const uploadFile = await compressImageForUpload(file);
+
       const ticker = setInterval(() => {
-        setUploadProgress((prev) => (prev < 90 ? prev + 5 : prev));
+        if (side === "front") {
+          setFrontUploadProgress((prev) => (prev < 90 ? prev + 5 : prev));
+        } else if (side === "back") {
+          setBackUploadProgress((prev) => (prev < 90 ? prev + 5 : prev));
+        } else {
+          setSelfieUploadProgress((prev) => (prev < 90 ? prev + 5 : prev));
+        }
       }, 150);
 
-      // Create FormData to send to our server action (avoids client-side RLS limits)
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", uploadFile);
       formData.append("folder", "doctor-credentials");
 
       const result = await uploadFileToStorage(formData);
-
       clearInterval(ticker);
 
       if (!result.success || !result.url) {
-        setIsUploading(false);
-        setUploadProgress(0);
-        setFileName("");
+        if (side === "front") {
+          setIsUploadingFront(false);
+          setFrontUploadProgress(0);
+          setFrontFileName("");
+        } else if (side === "back") {
+          setIsUploadingBack(false);
+          setBackUploadProgress(0);
+          setBackFileName("");
+        } else {
+          setIsUploadingSelfie(false);
+          setSelfieUploadProgress(0);
+          setSelfieFileName("");
+        }
         setUploadError(result.error || "Upload failed. Please try again.");
         return;
       }
 
-      setDocumentUrl(result.url);
-      setUploadProgress(100);
-      setIsUploading(false);
-    } catch (error: unknown) {
-      setIsUploading(false);
-      setUploadProgress(0);
-      setFileName("");
-      setUploadError(getErrorMessage(error, "An unexpected error occurred during upload."));
+      if (side === "front") {
+        setFrontDocumentUrl(result.url);
+        setFrontUploadProgress(100);
+        setIsUploadingFront(false);
+      } else if (side === "back") {
+        setBackDocumentUrl(result.url);
+        setBackUploadProgress(100);
+        setIsUploadingBack(false);
+      } else {
+        setSelfieDocumentUrl(result.url);
+        setSelfieUploadProgress(100);
+        setIsUploadingSelfie(false);
+      }
+    } catch (uploadError: unknown) {
+      if (side === "front") {
+        setIsUploadingFront(false);
+        setFrontUploadProgress(0);
+        setFrontFileName("");
+      } else if (side === "back") {
+        setIsUploadingBack(false);
+        setBackUploadProgress(0);
+        setBackFileName("");
+      } else {
+        setIsUploadingSelfie(false);
+        setSelfieUploadProgress(0);
+        setSelfieFileName("");
+      }
+      setUploadError(getErrorMessage(uploadError, "An unexpected error occurred during upload."));
     }
   };
 
-  // ── Step Navigation ──────────────────────────────────────────────────────────
   const handleNextStep = () => {
     if (step === 1) {
-      if (!npi || npi.length !== 10 || isNaN(Number(npi))) {
-        setError("Please enter a valid 10-digit National Provider Identifier (NPI).");
+      if (!npi || npi.trim().length < 5) {
+        setError("Please enter a valid PRC license or registration number.");
         return;
       }
       if (!specialty) {
@@ -127,9 +231,14 @@ export default function DoctorAuditPage() {
         return;
       }
     }
+
     if (step === 2) {
-      if (!licenseNumber || !licenseState) {
+      if (!npi || !licenseState) {
         setError("Medical state licensure details are required.");
+        return;
+      }
+      if (!firstName.trim() || !lastName.trim()) {
+        setError("Please provide your first and last name.");
         return;
       }
       if (!yearsExp || Number(yearsExp) < 0 || Number(yearsExp) > 60) {
@@ -141,34 +250,37 @@ export default function DoctorAuditPage() {
         return;
       }
     }
+
     if (step === 3) {
-      if (!documentUrl) {
-        setError("Please attach and upload a digital copy of your medical license to proceed.");
+      if (!allRequiredUploadsCompleted) {
+        setError("Please upload the front, back, and selfie holding your PRC ID to proceed.");
         return;
       }
       if (isUploading) {
-        setError("Please wait for the secure document upload to complete.");
+        setError("Please wait for the secure ID upload to complete.");
         return;
       }
     }
+
     setError("");
-    setStep((s) => s + 1);
+    setStep((current) => current + 1);
   };
 
   const handlePrevStep = () => {
     setError("");
-    setStep((s) => s - 1);
+    setStep((current) => current - 1);
   };
 
-  // ── Final Submit ─────────────────────────────────────────────────────────────
   const handleSubmitAudit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!signature) {
-      setError("Please sign your legal name to authorize primary source verification.");
+      setError("Please sign your legal name to authorize PRC primary source verification.");
       return;
     }
+
     if (!consent) {
-      setError("You must accept the HIPAA compliance and credentialing authorization.");
+      setError("You must accept the Philippine PRC compliance and credentialing authorization.");
       return;
     }
 
@@ -178,13 +290,22 @@ export default function DoctorAuditPage() {
     try {
       const res = await submitDoctorAudit({
         npi,
-        licenseNumber,
+        licenseNumber: npi,
         licenseState,
         specialty,
+        firstName,
+        middleName,
+        lastName,
+        suffix,
         medicalSchool,
         gradYear: Number(gradYear),
         yearsExp: Number(yearsExp),
-        documentName: documentUrl || fileName,  // Public Supabase URL stored in DB
+        approvalType: "PRC_PRIMARY_SOURCE_VERIFICATION",
+        documentName: JSON.stringify({
+          front: { name: frontFileName, url: frontDocumentUrl },
+          back: { name: backFileName, url: backDocumentUrl },
+          selfie: { name: selfieFileName, url: selfieDocumentUrl },
+        }),
         signature,
         consent,
         doctorEmail: doctorEmail || undefined,
@@ -194,7 +315,7 @@ export default function DoctorAuditPage() {
       if (res.success && res.auditId) {
         setSuccessData({ auditId: res.auditId, linked: res.linked });
       } else {
-        setError(res.error || "Auditing submission failed. Please verify your NPI details.");
+        setError(res.error || "Auditing submission failed. Please verify your PRC details.");
       }
     } catch {
       setLoading(false);
@@ -202,13 +323,11 @@ export default function DoctorAuditPage() {
     }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slate-950 font-sans text-slate-100 flex flex-col justify-between relative overflow-hidden">
       <div className="absolute top-0 right-0 w-96 h-96 rounded-full bg-brand-teal/10 blur-3xl pointer-events-none" />
       <div className="absolute bottom-0 left-0 w-96 h-96 rounded-full bg-brand-red/5 blur-3xl pointer-events-none" />
 
-      {/* Header */}
       <header className="border-b border-slate-900 bg-slate-950/80 backdrop-blur-md px-6 py-4 flex items-center justify-between relative z-10">
         <Link href="/" className="flex items-center space-x-1 select-none">
           <span className="font-display text-2xl tracking-tight">
@@ -226,36 +345,33 @@ export default function DoctorAuditPage() {
         </Link>
       </header>
 
-      {/* Main */}
       <main className="flex-grow flex items-center justify-center px-4 py-12 relative z-10">
         <div className="max-w-2xl w-full bg-slate-900 border border-slate-850 rounded-2xl p-6 sm:p-10 shadow-2xl">
           {!successData ? (
             <>
-              {/* Title */}
               <div className="space-y-2 mb-8">
                 <span className="text-[9px] font-black text-brand-teal uppercase bg-brand-teal/10 border border-brand-teal/15 px-2.5 py-1 rounded-full tracking-widest">
-                  Primary Source Verification
+                  Primary Source Verification - Philippines
                 </span>
                 <h1 className="font-display text-2xl sm:text-3xl font-black text-white tracking-tight">
                   Physician Credentials Audit
                 </h1>
                 <p className="text-slate-400 text-xs sm:text-sm font-medium leading-relaxed">
-                  Submit NPI records and state-licensure certificates to verify your clinical standing for digital consultations.
+                  Submit your Philippine PRC credentials and supporting documents to verify your clinical standing for digital consultations.
                 </p>
               </div>
 
-              {/* Step progress */}
               <div className="mb-8">
                 <div className="flex items-center justify-between text-xs font-bold text-slate-450 mb-2">
                   <span>
                     Step {step} of 4:{" "}
                     {step === 1
-                      ? "Clinical Identity"
+                      ? "Philippine Identity"
                       : step === 2
-                      ? "Licensure & Experience"
-                      : step === 3
-                      ? "Supporting Documentation"
-                      : "Compliance & Consent"}
+                        ? "PRC Licensure and Experience"
+                        : step === 3
+                          ? "Supporting Documents"
+                          : "Consent and Linking"}
                   </span>
                   <span>{step * 25}% Complete</span>
                 </div>
@@ -274,30 +390,29 @@ export default function DoctorAuditPage() {
               )}
 
               <form onSubmit={handleSubmitAudit} className="space-y-6">
-                {/* ── STEP 1: Clinical Identity ── */}
                 {step === 1 && (
                   <div className="space-y-5 animate-fade-in">
                     <div>
                       <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-wider">
-                        10-Digit National Provider Identifier (NPI)
+                        PRC License / Registration Number
                       </label>
                       <input
                         type="text"
                         required
                         value={npi}
-                        onChange={(e) => setNpi(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                        placeholder="e.g. 1982736450"
+                        onChange={(e) => setNpi(e.target.value.slice(0, 20))}
+                        placeholder="e.g. PRC-12345 or 0123456"
                         className={`w-full px-4 py-3 rounded-xl bg-slate-950 border text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-brand-teal focus:ring-1 focus:ring-brand-teal/20 transition-all ${
-                          isNpiInvalid ? "border-brand-red" : "border-slate-800"
+                          isLicenseInvalid ? "border-brand-red" : "border-slate-800"
                         }`}
                       />
-                      {isNpiInvalid && (
+                      {isLicenseInvalid && (
                         <p className="text-[10px] text-brand-red font-bold mt-1.5">
-                          NPI must be exactly 10 numeric digits.
+                          Please enter a valid PRC license or registration number.
                         </p>
                       )}
                       <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
-                        Your NPI will be authenticated against the NPPES registry to confirm primary licensing credentials.
+                        Your PRC license details will be checked against Philippine credentialing records.
                       </p>
                     </div>
 
@@ -322,40 +437,108 @@ export default function DoctorAuditPage() {
                   </div>
                 )}
 
-                {/* ── STEP 2: Licensure & Credentials ── */}
                 {step === 2 && (
                   <div className="space-y-5 animate-fade-in">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="sm:col-span-2">
+                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-wider">
+                          PRC License Number from Step 1
+                        </label>
+                        <input
+                          type="text"
+                          readOnly
+                          value={npi}
+                          className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-sm text-slate-100 focus:outline-none"
+                        />
+                        <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
+                          This is carried forward from step 1 so you do not need to enter it again.
+                        </p>
+                      </div>
+
                       <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-wider">
-                          State Medical License Number
+                          First Name
                         </label>
                         <input
                           type="text"
                           required
-                          value={licenseNumber}
-                          onChange={(e) => setLicenseNumber(e.target.value)}
-                          placeholder="e.g. C145892"
+                          value={firstName}
+                          onChange={(e) => setFirstName(e.target.value)}
+                          placeholder="Juan"
                           className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 placeholder-slate-650 focus:outline-none focus:border-brand-teal focus:ring-1 focus:ring-brand-teal/20 transition-all"
                         />
                       </div>
+
                       <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-wider">
-                          Issuing Medical Board State
+                          Last Name
                         </label>
-                        <select
+                        <input
+                          type="text"
                           required
+                          value={lastName}
+                          onChange={(e) => setLastName(e.target.value)}
+                          placeholder="Dela Cruz"
+                          className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 placeholder-slate-650 focus:outline-none focus:border-brand-teal focus:ring-1 focus:ring-brand-teal/20 transition-all"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-wider">
+                          Middle Name
+                        </label>
+                        <input
+                          type="text"
+                          value={middleName}
+                          onChange={(e) => setMiddleName(e.target.value)}
+                          placeholder="Santos"
+                          className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 placeholder-slate-650 focus:outline-none focus:border-brand-teal focus:ring-1 focus:ring-brand-teal/20 transition-all"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-wider">
+                          Suffix
+                        </label>
+                        <input
+                          type="text"
+                          value={suffix}
+                          onChange={(e) => setSuffix(e.target.value)}
+                          placeholder="Jr., III, IV"
+                          className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 placeholder-slate-650 focus:outline-none focus:border-brand-teal focus:ring-1 focus:ring-brand-teal/20 transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-wider">
+                          Issuing Medical Board Country
+                        </label>
+                        <input
+                          type="text"
+                          readOnly
                           value={licenseState}
-                          onChange={(e) => setLicenseState(e.target.value)}
-                          className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-300 focus:outline-none focus:border-brand-teal focus:ring-1 focus:ring-brand-teal/20 transition-all"
-                        >
-                          <option value="">State...</option>
-                          {STATES.map((st) => (
-                            <option key={st} value={st} className="bg-slate-950 text-slate-300">
-                              {st}
-                            </option>
-                          ))}
-                        </select>
+                          className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-sm font-semibold text-slate-100 focus:outline-none"
+                        />
+                        <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
+                          Licenses are issued in the Philippines by the {LICENSE_ISSUER} only.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-wider">
+                          Primary Clinical Specialty
+                        </label>
+                        <input
+                          type="text"
+                          readOnly
+                          value={specialty}
+                          className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-sm text-slate-100 focus:outline-none"
+                        />
+                        <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
+                          This carries over from step 1.
+                        </p>
                       </div>
                     </div>
 
@@ -375,6 +558,7 @@ export default function DoctorAuditPage() {
                           className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 placeholder-slate-650 focus:outline-none focus:border-brand-teal focus:ring-1 focus:ring-brand-teal/20 transition-all"
                         />
                       </div>
+
                       <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-wider">
                           Medical School Graduation Year
@@ -401,86 +585,211 @@ export default function DoctorAuditPage() {
                         required
                         value={medicalSchool}
                         onChange={(e) => setMedicalSchool(e.target.value)}
-                        placeholder="e.g. Johns Hopkins School of Medicine"
+                        placeholder="e.g. University of the Philippines College of Medicine"
                         className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 placeholder-slate-650 focus:outline-none focus:border-brand-teal focus:ring-1 focus:ring-brand-teal/20 transition-all"
                       />
                     </div>
                   </div>
                 )}
 
-                {/* ── STEP 3: Supabase Storage Upload ── */}
                 {step === 3 && (
                   <div className="space-y-5 animate-fade-in">
-                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 tracking-wider">
-                      Attach License / Certifications (PDF, PNG, JPG · max 10 MB)
-                    </label>
+                    <div className="space-y-2">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                        PRC License ID Front
+                      </label>
+                      <p className="text-[10px] text-slate-500 leading-relaxed">
+                        Upload a clear photo or PDF of the front of your PRC ID. On mobile, you can use the camera to take the photo directly.
+                      </p>
 
-                    {/* Drop zone */}
-                    <div className={`border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center bg-slate-950 transition-all duration-300 relative group cursor-pointer ${
-                      documentUrl
-                        ? "border-brand-teal/60 bg-brand-teal/5"
-                        : "border-slate-800 hover:bg-slate-900 hover:border-brand-teal/50"
-                    }`}>
-                      <input
-                        type="file"
-                        accept=".pdf,.png,.jpg,.jpeg"
-                        onChange={handleFileUpload}
-                        disabled={isUploading}
-                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full disabled:cursor-not-allowed"
-                      />
+                      <div
+                        className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 flex flex-col items-center justify-center bg-slate-950 transition-all duration-300 relative group ${
+                          frontDocumentUrl ? "border-brand-teal/60 bg-brand-teal/5" : "border-slate-800 hover:bg-slate-900 hover:border-brand-teal/50"
+                        }`}
+                      >
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          capture="environment"
+                          onChange={(event) => handleFileUpload("front", event)}
+                          disabled={isUploadingFront}
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full disabled:cursor-not-allowed"
+                        />
 
-                      {documentUrl ? (
-                        <svg className="w-10 h-10 text-brand-teal mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      ) : (
                         <svg className="w-10 h-10 text-slate-500 group-hover:text-brand-teal transition-colors mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                         </svg>
-                      )}
 
-                      <span className="text-xs font-bold text-slate-200">
-                        {documentUrl
-                          ? "Document uploaded — click to replace"
-                          : fileName
-                          ? fileName
-                          : "Drag & drop or click to select file"}
-                      </span>
-                      <span className="text-[10px] text-slate-500 mt-1">
-                        {documentUrl ? "Secured in HealthKo HIPAA Vault" : "PDF, PNG, JPEG · max 10 MB"}
-                      </span>
+                        <span className="text-xs font-bold text-slate-200 text-center">
+                          {frontDocumentUrl ? "Front side uploaded - tap to replace" : frontFileName || "Tap to upload front side"}
+                        </span>
+                        <span className="text-[10px] text-slate-500 mt-1 text-center">
+                          JPG, PNG, WEBP, or PDF - max 10 MB
+                        </span>
+                      </div>
+
+                      {frontFileName && (
+                        <div className="p-4 bg-slate-950 border border-slate-850 rounded-xl space-y-2">
+                          <div className="flex items-center justify-between text-xs font-bold gap-3">
+                            <span className="text-slate-300 truncate">{frontFileName}</span>
+                            <span className={`${frontUploadProgress === 100 ? "text-brand-teal" : "text-amber-400"} shrink-0`}>
+                              {isUploadingFront
+                                ? `${frontUploadProgress}% Uploading...`
+                                : frontUploadProgress === 100
+                                  ? "Verified"
+                                  : `${frontUploadProgress}%`}
+                            </span>
+                          </div>
+                          <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full transition-all duration-300 rounded-full ${
+                                frontUploadProgress === 100 ? "bg-brand-teal" : "bg-amber-400"
+                              }`}
+                              style={{ width: `${frontUploadProgress}%` }}
+                            />
+                          </div>
+                          {frontDocumentUrl && (
+                            <p className="text-[10px] text-slate-500 break-all">
+                              Storage URL: <span className="text-brand-teal/70">{frontDocumentUrl}</span>
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Upload progress */}
-                    {fileName && (
-                      <div className="p-4 bg-slate-950 border border-slate-850 rounded-xl space-y-2 animate-fade-in">
-                        <div className="flex items-center justify-between text-xs font-bold">
-                          <span className="text-slate-300 truncate max-w-xs">{fileName}</span>
-                          <span className={`${uploadProgress === 100 ? "text-brand-teal" : "text-amber-400"} shrink-0 ml-2`}>
-                            {isUploading
-                              ? `${uploadProgress}% Uploading…`
-                              : uploadProgress === 100
-                              ? "✓ Secured in Bucket"
-                              : `${uploadProgress}%`}
-                          </span>
-                        </div>
-                        <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full transition-all duration-300 rounded-full ${
-                              uploadProgress === 100 ? "bg-brand-teal" : "bg-amber-400"
-                            }`}
-                            style={{ width: `${uploadProgress}%` }}
-                          />
-                        </div>
-                        {documentUrl && (
-                          <p className="text-[10px] text-slate-500 break-all">
-                            Storage URL: <span className="text-brand-teal/70">{documentUrl}</span>
-                          </p>
-                        )}
-                      </div>
-                    )}
+                    <div className="space-y-2">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                        PRC License ID Back
+                      </label>
+                      <p className="text-[10px] text-slate-500 leading-relaxed">
+                        Upload the back of your PRC ID so we can complete the two-sided verification.
+                      </p>
 
-                    {/* Upload error */}
+                      <div
+                        className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 flex flex-col items-center justify-center bg-slate-950 transition-all duration-300 relative group ${
+                          backDocumentUrl ? "border-brand-teal/60 bg-brand-teal/5" : "border-slate-800 hover:bg-slate-900 hover:border-brand-teal/50"
+                        }`}
+                      >
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          capture="environment"
+                          onChange={(event) => handleFileUpload("back", event)}
+                          disabled={isUploadingBack}
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full disabled:cursor-not-allowed"
+                        />
+
+                        <svg className="w-10 h-10 text-slate-500 group-hover:text-brand-teal transition-colors mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+
+                        <span className="text-xs font-bold text-slate-200 text-center">
+                          {backDocumentUrl ? "Back side uploaded - tap to replace" : backFileName || "Tap to upload back side"}
+                        </span>
+                        <span className="text-[10px] text-slate-500 mt-1 text-center">
+                          JPG, PNG, WEBP, or PDF - max 10 MB
+                        </span>
+                      </div>
+
+                      {backFileName && (
+                        <div className="p-4 bg-slate-950 border border-slate-850 rounded-xl space-y-2">
+                          <div className="flex items-center justify-between text-xs font-bold gap-3">
+                            <span className="text-slate-300 truncate">{backFileName}</span>
+                            <span className={`${backUploadProgress === 100 ? "text-brand-teal" : "text-amber-400"} shrink-0`}>
+                              {isUploadingBack
+                                ? `${backUploadProgress}% Uploading...`
+                                : backUploadProgress === 100
+                                  ? "Verified"
+                                  : `${backUploadProgress}%`}
+                            </span>
+                          </div>
+                          <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full transition-all duration-300 rounded-full ${
+                                backUploadProgress === 100 ? "bg-brand-teal" : "bg-amber-400"
+                              }`}
+                              style={{ width: `${backUploadProgress}%` }}
+                            />
+                          </div>
+                          {backDocumentUrl && (
+                            <p className="text-[10px] text-slate-500 break-all">
+                              Storage URL: <span className="text-brand-teal/70">{backDocumentUrl}</span>
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                        Selfie Holding PRC ID
+                      </label>
+                      <p className="text-[10px] text-slate-500 leading-relaxed">
+                        Capture a clear image of yourself holding your PRC ID so the face and card details are both visible.
+                      </p>
+
+                      <div
+                        className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 flex flex-col items-center justify-center bg-slate-950 transition-all duration-300 relative group ${
+                          selfieDocumentUrl ? "border-brand-teal/60 bg-brand-teal/5" : "border-slate-800 hover:bg-slate-900 hover:border-brand-teal/50"
+                        }`}
+                      >
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="user"
+                          onChange={(event) => handleFileUpload("selfie", event)}
+                          disabled={isUploadingSelfie}
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full disabled:cursor-not-allowed"
+                        />
+
+                        <svg className="w-10 h-10 text-slate-500 group-hover:text-brand-teal transition-colors mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 11c1.657 0 3-1.567 3-3.5S13.657 4 12 4 9 5.567 9 7.5 10.343 11 12 11zm0 2c-3.314 0-6 2.015-6 4.5V19h12v-1.5c0-2.485-2.686-4.5-6-4.5z" />
+                        </svg>
+
+                        <span className="text-xs font-bold text-slate-200 text-center">
+                          {selfieDocumentUrl ? "Selfie uploaded - tap to replace" : selfieFileName || "Tap to upload selfie with PRC ID"}
+                        </span>
+                        <span className="text-[10px] text-slate-500 mt-1 text-center">
+                          JPG, PNG, WEBP - camera capture recommended
+                        </span>
+                      </div>
+
+                      {selfieFileName && (
+                        <div className="p-4 bg-slate-950 border border-slate-850 rounded-xl space-y-2">
+                          <div className="flex items-center justify-between text-xs font-bold gap-3">
+                            <span className="text-slate-300 truncate">{selfieFileName}</span>
+                            <span className={`${selfieUploadProgress === 100 ? "text-brand-teal" : "text-amber-400"} shrink-0`}>
+                              {isUploadingSelfie
+                                ? `${selfieUploadProgress}% Uploading...`
+                                : selfieUploadProgress === 100
+                                  ? "Verified"
+                                  : `${selfieUploadProgress}%`}
+                            </span>
+                          </div>
+                          <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full transition-all duration-300 rounded-full ${
+                                selfieUploadProgress === 100 ? "bg-brand-teal" : "bg-amber-400"
+                              }`}
+                              style={{ width: `${selfieUploadProgress}%` }}
+                            />
+                          </div>
+                          {selfieDocumentUrl && (
+                            <p className="text-[10px] text-slate-500 break-all">
+                              Storage URL: <span className="text-brand-teal/70">{selfieDocumentUrl}</span>
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="p-4 bg-brand-teal/10 border border-brand-teal/20 rounded-2xl text-[11px] leading-relaxed text-slate-300">
+                      <p className="font-extrabold text-white mb-1">Privacy and document handling notice</p>
+                      <p>
+                        Your PRC ID images are used only for credential verification, stored securely, and reviewed only by authorized HealthKo personnel and validation partners.
+                      </p>
+                    </div>
+
                     {uploadError && (
                       <div className="p-3 bg-brand-red/10 border border-brand-red/15 text-brand-red font-bold text-xs rounded-xl animate-fade-in">
                         {uploadError}
@@ -489,7 +798,6 @@ export default function DoctorAuditPage() {
                   </div>
                 )}
 
-                {/* ── STEP 4: Attestation & Compliance ── */}
                 {step === 4 && (
                   <div className="space-y-5 animate-fade-in">
                     <div>
@@ -504,17 +812,17 @@ export default function DoctorAuditPage() {
                         className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 placeholder-slate-650 focus:outline-none focus:border-brand-teal focus:ring-1 focus:ring-brand-teal/20 transition-all"
                       />
                       <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
-                        Provide the email linked to your practitioner portal account to automatically attach these credentials to your profile once approved.
+                        Provide the email linked to your practitioner portal account to automatically attach these PRC credentials to your profile once approved.
                       </p>
                     </div>
 
                     <div className="p-4 bg-slate-950 border border-slate-850 rounded-2xl text-[11px] leading-relaxed text-slate-400 space-y-3 max-h-40 overflow-y-auto">
-                      <p className="font-extrabold text-slate-200">HIPAA & BACKGROUND CHECK DISCLOSURE & CONSENT</p>
+                      <p className="font-extrabold text-slate-200">PHILIPPINE PRC DISCLOSURE AND CONSENT</p>
                       <p>
-                        By checking the box below and entering your digital signature, you hereby authorize HealthKo Technologies, Inc. and its designated validation agents to conduct primary source verification (PSV) of your state medical credentials, National Provider Identifier (NPI) standing, board certifications, and educational graduation records.
+                        By checking the box below and entering your digital signature, you authorize HealthKo Technologies, Inc. and its designated validation agents to conduct primary source verification of your Philippine PRC medical credentials, board certifications, and educational records.
                       </p>
                       <p>
-                        This audit will be conducted in accordance with the Fair Credit Reporting Act (FCRA) and medical compliance standards required under NCQA credentialing regulations. You attest that all information submitted is true, correct, and current to the best of your medical legal knowledge.
+                        This audit will be conducted in accordance with applicable Philippine credentialing and platform compliance standards. You attest that all information submitted is true, correct, and current to the best of your knowledge.
                       </p>
                     </div>
 
@@ -528,7 +836,7 @@ export default function DoctorAuditPage() {
                         className="h-4 w-4 rounded border-slate-800 text-brand-teal bg-slate-950 mt-0.5 focus:ring-brand-teal/20"
                       />
                       <label htmlFor="attestation-consent" className="ml-3 block text-xs font-bold text-slate-400 select-none leading-relaxed">
-                        I hereby attest that the information provided is fully accurate, and I consent to a compliance background credentials audit.
+                        I attest that the information provided is accurate, and I consent to a Philippine PRC credentials audit.
                       </label>
                     </div>
 
@@ -548,7 +856,6 @@ export default function DoctorAuditPage() {
                   </div>
                 )}
 
-                {/* Nav Buttons */}
                 <div className="flex justify-between items-center pt-6 border-t border-slate-850">
                   {step > 1 ? (
                     <button
@@ -584,12 +891,16 @@ export default function DoctorAuditPage() {
                         <>
                           <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            />
                           </svg>
-                          <span>Submitting Audit…</span>
+                          <span>Submitting Audit...</span>
                         </>
                       ) : (
-                        <span>Authorize & Submit Audit</span>
+                        <span>Authorize and Submit Audit</span>
                       )}
                     </button>
                   )}
@@ -597,7 +908,6 @@ export default function DoctorAuditPage() {
               </form>
             </>
           ) : (
-            /* ── Success State ── */
             <div className="py-8 text-center space-y-6 animate-fade-in">
               <div className="h-16 w-16 rounded-full bg-brand-teal/10 border-2 border-brand-teal/30 flex items-center justify-center text-brand-teal mx-auto">
                 <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -610,7 +920,7 @@ export default function DoctorAuditPage() {
                   Verification Audit Initiated
                 </h2>
                 <p className="text-slate-400 text-xs sm:text-sm font-medium max-w-md mx-auto leading-relaxed">
-                  Your credentials and supporting documents have been securely stored in the HealthKo HIPAA Vault and queued for primary source validation.
+                  Your credentials and supporting documents have been securely stored in the HealthKo HIPAA Vault and queued for PRC verification.
                 </p>
               </div>
 
@@ -621,11 +931,11 @@ export default function DoctorAuditPage() {
                 </div>
                 <div className="flex justify-between border-b border-slate-900 pb-2">
                   <span>DOCUMENT VAULT</span>
-                  <span className="text-brand-teal">SECURED ✓</span>
+                  <span className="text-brand-teal">SECURED</span>
                 </div>
                 <div className="flex justify-between border-b border-slate-900 pb-2">
                   <span>REGISTRY LOOKUP</span>
-                  <span className="text-brand-teal">PENDING NPPES AUDIT</span>
+                  <span className="text-brand-teal">PENDING PRC VERIFICATION</span>
                 </div>
                 <div className="flex justify-between">
                   <span>PORTAL STATUS</span>
@@ -641,7 +951,7 @@ export default function DoctorAuditPage() {
                   Return to Portal Sign In
                 </Link>
                 <p className="text-[10px] text-slate-500 max-w-xs mx-auto leading-relaxed">
-                  Credential auditing typically completes within 24–48 business hours. You will receive an encrypted verification email once completed.
+                  Credential auditing typically completes within 24-48 business hours. You will receive an encrypted verification email once completed.
                 </p>
               </div>
             </div>
@@ -650,7 +960,7 @@ export default function DoctorAuditPage() {
       </main>
 
       <footer className="border-t border-slate-900 py-6 px-6 text-center select-none text-[10px] text-slate-550 font-bold uppercase tracking-wider relative z-10">
-        © {new Date().getFullYear()} HealthKo Technologies, Inc. • HIPAA Compliance Security Vault
+        {new Date().getFullYear()} HealthKo Technologies, Inc. - HIPAA Compliance Security Vault
       </footer>
     </div>
   );

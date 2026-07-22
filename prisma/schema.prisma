@@ -107,6 +107,10 @@ model Doctor {
 
   // Identity
   name           String
+  firstName      String?         @map("first_name")
+  middleName     String?         @map("middle_name")
+  lastName       String?         @map("last_name")
+  suffix         String?         @map("suffix")
   npi            String          @unique
   email          String          @unique
   password       String
@@ -218,6 +222,10 @@ model DoctorAudit {
   id             String      @id @default(uuid())
   doctorId       String?     @map("doctor_id")
   npi            String
+  firstName      String?     @map("first_name")
+  middleName     String?     @map("middle_name")
+  lastName       String?     @map("last_name")
+  suffix         String?     @map("suffix")
   licenseNumber  String      @map("license_number")
   licenseState   String      @map("license_state")
   specialty      String
@@ -225,6 +233,7 @@ model DoctorAudit {
   gradYear       Int         @map("grad_year")
   yearsExp       Int         @map("years_exp")
   documentName   String?     @map("document_name")
+  approvalType   String      @default("PRC_PRIMARY_SOURCE_VERIFICATION") @map("approval_type")
   status         AuditStatus @default(PENDING)
   signature      String
   consent        Boolean     @default(false)

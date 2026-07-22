@@ -41,6 +41,10 @@ export type MockPatient = {
 export type MockDoctor = {
   id: string;
   name: string;
+  firstName?: string | null;
+  middleName?: string | null;
+  lastName?: string | null;
+  suffix?: string | null;
   npi: string;
   email: string;
   password: string;
@@ -100,12 +104,36 @@ export type MockVideoSession = {
   updatedAt: string;
 };
 
+export type MockDoctorAudit = {
+  id: string;
+  doctorId: string | null;
+  npi: string;
+  firstName?: string | null;
+  middleName?: string | null;
+  lastName?: string | null;
+  suffix?: string | null;
+  licenseNumber: string;
+  licenseState: string;
+  specialty: string;
+  medicalSchool: string;
+  gradYear: number;
+  yearsExp: number;
+  documentName: string | null;
+  approvalType: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  signature: string;
+  consent: boolean;
+  submittedAt: string;
+  updatedAt: string;
+};
+
 type MockDbSchema = {
   patients: MockPatient[];
   doctors: MockDoctor[];
   consultations: MockConsultation[];
   emailOtps: MockEmailOtp[];
   videoSessions?: MockVideoSession[];
+  audits?: MockDoctorAudit[];
 };
 
 function getDb(): MockDbSchema {
@@ -119,6 +147,10 @@ function getDb(): MockDbSchema {
           email: "s.jenkins@healthko.com",
           password: bcrypt.hashSync("123456", 10),
           name: "Dr. Sarah Jenkins",
+          firstName: "Sarah",
+          middleName: null,
+          lastName: "Jenkins",
+          suffix: null,
           specialty: "Board-Certified Cardiologist",
           rating: 4.9,
           reviewCount: 142,
@@ -139,6 +171,10 @@ function getDb(): MockDbSchema {
           email: "m.vance@healthko.com",
           password: bcrypt.hashSync("123456", 10),
           name: "Dr. Marcus Vance",
+          firstName: "Marcus",
+          middleName: null,
+          lastName: "Vance",
+          suffix: null,
           specialty: "Pediatric Medicine Specialist",
           rating: 4.8,
           reviewCount: 98,
@@ -159,6 +195,10 @@ function getDb(): MockDbSchema {
           email: "a.patel@healthko.com",
           password: bcrypt.hashSync("123456", 10),
           name: "Dr. Aaliyah Patel",
+          firstName: "Aaliyah",
+          middleName: null,
+          lastName: "Patel",
+          suffix: null,
           specialty: "Family Practitioner & Telehealth Lead",
           rating: 4.9,
           reviewCount: 210,
@@ -181,6 +221,7 @@ function getDb(): MockDbSchema {
         consultations: [],
         emailOtps: [],
         videoSessions: [],
+        audits: [],
       };
 
       fs.writeFileSync(DB_PATH, JSON.stringify(initialDb, null, 2), "utf8");
@@ -190,10 +231,11 @@ function getDb(): MockDbSchema {
     const raw = fs.readFileSync(DB_PATH, "utf8");
     const parsed = JSON.parse(raw) as MockDbSchema;
     parsed.videoSessions ||= [];
+    parsed.audits ||= [];
     return parsed;
   } catch (error) {
     console.error("Error reading mock database, using empty state:", error);
-    return { patients: [], doctors: [], consultations: [], emailOtps: [], videoSessions: [] };
+    return { patients: [], doctors: [], consultations: [], emailOtps: [], videoSessions: [], audits: [] };
   }
 }
 
@@ -300,6 +342,107 @@ export const mockDb = {
     return db.doctors[doctorIndex];
   },
 
+  createDoctorAudit(data: Omit<MockDoctorAudit, "id" | "submittedAt" | "updatedAt">): MockDoctorAudit {
+    const db = getDb();
+    db.audits ||= [];
+
+    const now = new Date().toISOString();
+    const audit: MockDoctorAudit = {
+      ...data,
+      id: "audit-" + Math.random().toString(36).substr(2, 9),
+      submittedAt: now,
+      updatedAt: now,
+    };
+
+    db.audits.push(audit);
+
+    if (audit.doctorId) {
+      const doctorIndex = db.doctors.findIndex((doctor) => doctor.id === audit.doctorId);
+      if (doctorIndex !== -1) {
+        const fullName = [
+          audit.firstName,
+          audit.middleName,
+          audit.lastName,
+          audit.suffix,
+        ]
+          .filter((part) => part && part.trim().length > 0)
+          .join(" ")
+          .trim();
+        db.doctors[doctorIndex] = {
+          ...db.doctors[doctorIndex],
+          firstName: audit.firstName ?? db.doctors[doctorIndex].firstName ?? null,
+          middleName: audit.middleName ?? db.doctors[doctorIndex].middleName ?? null,
+          lastName: audit.lastName ?? db.doctors[doctorIndex].lastName ?? null,
+          suffix: audit.suffix ?? db.doctors[doctorIndex].suffix ?? null,
+          name: fullName || db.doctors[doctorIndex].name,
+          licenseNumber: audit.licenseNumber,
+          licenseState: audit.licenseState,
+          yearsExp: audit.yearsExp,
+          specialty: audit.specialty,
+          isVerified: false,
+          updatedAt: now,
+        };
+      }
+    }
+
+    saveDb(db);
+    return audit;
+  },
+
+  findDoctorAuditById(id: string): MockDoctorAudit | null {
+    const db = getDb();
+    return db.audits?.find((audit) => audit.id === id) || null;
+  },
+
+  updateDoctorAudit(id: string, data: Partial<Omit<MockDoctorAudit, "id" | "submittedAt">>): MockDoctorAudit | null {
+    const db = getDb();
+    db.audits ||= [];
+    const auditIndex = db.audits.findIndex((audit) => audit.id === id);
+    if (auditIndex === -1) return null;
+
+    db.audits[auditIndex] = {
+      ...db.audits[auditIndex],
+      ...data,
+      updatedAt: new Date().toISOString(),
+    };
+
+    saveDb(db);
+    return db.audits[auditIndex];
+  },
+
+  getPendingDoctorAudits() {
+    const db = getDb();
+    db.audits ||= [];
+
+    return db.audits
+      .filter((audit) => audit.status === "PENDING")
+      .map((audit) => ({
+        ...audit,
+        doctor: audit.doctorId
+          ? (() => {
+              const doctor = this.findDoctorById(audit.doctorId as string);
+              return doctor
+                ? {
+                    id: doctor.id,
+                    name: doctor.name,
+                    email: doctor.email,
+                    specialty: doctor.specialty,
+                  }
+                : null;
+            })()
+          : null,
+      }))
+      .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+  },
+
+  getDoctorAuditsForDoctor(doctorId: string) {
+    const db = getDb();
+    db.audits ||= [];
+    return db.audits
+      .filter((audit) => audit.doctorId === doctorId)
+      .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+  },
+
   getDoctorsList(): Omit<MockDoctor, "password">[] {
     const db = getDb();
     return db.doctors
@@ -309,6 +452,62 @@ export const mockDb = {
         delete rest.password;
         return rest as Omit<MockDoctor, "password">;
       });
+  },
+
+  getAdminMetrics() {
+    const db = getDb();
+    const totalPatients = db.patients.length;
+    const totalDoctors = db.doctors.length;
+    const activePatients = db.patients.filter((patient) => patient.isActive).length;
+    const activeDoctors = db.doctors.filter((doctor) => doctor.isActive).length;
+    const onlineDoctors = db.doctors.filter(
+      (doctor) => doctor.isActive && doctor.status?.toUpperCase() === "ONLINE"
+    ).length;
+    const offlineDoctors = db.doctors.filter(
+      (doctor) => doctor.isActive && doctor.status?.toUpperCase() !== "ONLINE"
+    ).length;
+    const totalConsultations = db.consultations.length;
+
+    const now = new Date();
+    const dayStart = new Date(now);
+    dayStart.setHours(0, 0, 0, 0);
+    const weekStart = new Date(dayStart);
+    weekStart.setDate(weekStart.getDate() - 6);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const countByRange = (records: { createdAt: string }[], from: Date) =>
+      records.filter((record) => new Date(record.createdAt) >= from).length;
+
+    const dailyNewPatients = countByRange(db.patients, dayStart);
+    const weeklyNewPatients = countByRange(db.patients, weekStart);
+    const monthlyNewPatients = countByRange(db.patients, monthStart);
+
+    const dailyNewDoctors = countByRange(db.doctors, dayStart);
+    const weeklyNewDoctors = countByRange(db.doctors, weekStart);
+    const monthlyNewDoctors = countByRange(db.doctors, monthStart);
+
+    const dailyConsultations = countByRange(db.consultations, dayStart);
+    const weeklyConsultations = countByRange(db.consultations, weekStart);
+    const monthlyConsultations = countByRange(db.consultations, monthStart);
+
+    return {
+      totalPatients,
+      totalDoctors,
+      activePatients,
+      activeDoctors,
+      onlineDoctors,
+      offlineDoctors,
+      totalConsultations,
+      dailyNewPatients,
+      weeklyNewPatients,
+      monthlyNewPatients,
+      dailyNewDoctors,
+      weeklyNewDoctors,
+      monthlyNewDoctors,
+      dailyConsultations,
+      weeklyConsultations,
+      monthlyConsultations,
+    };
   },
 
   // --- OTPs ---
