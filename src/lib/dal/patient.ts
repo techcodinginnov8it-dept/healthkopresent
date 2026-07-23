@@ -72,7 +72,29 @@ export const getPatientDashboardData = cache(async () => {
   try {
     patient = await prisma.patient.findUnique({
       where: { id: session.userId },
-      select: PATIENT_PROFILE_SELECT,
+      select: {
+        ...PATIENT_PROFILE_SELECT,
+        userId: true,
+        createdById: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            isActive: true,
+            emailVerified: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
     });
   } catch (error) {
     console.error("[getPatientDashboardData] Prisma query failed:", error);

@@ -12,6 +12,12 @@ datasource db {
 // Enums
 // ─────────────────────────────────────────────
 
+enum UserRole {
+  PATIENT
+  DOCTOR
+  ADMIN
+}
+
 enum ConsultationStatus {
   PENDING
   CONFIRMED
@@ -40,11 +46,65 @@ enum DoctorSpecialty {
 }
 
 // ─────────────────────────────────────────────
+// Central Account User Table
+// ─────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  role          UserRole  @default(PATIENT)
+  isActive      Boolean   @default(true)
+  emailVerified Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  patient       Patient?
+  doctor        Doctor?
+  admin         Admin?
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────
+// Admin Portal User
+// ─────────────────────────────────────────────
+
+model Admin {
+  id              String    @id @default(uuid())
+  userId          String    @unique @map("user_id")
+  name            String    @default("System Administrator")
+  email           String    @unique
+  role            String    @default("SUPER_ADMIN")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Direct administrative relations for oversight
+  managedPatients Patient[] @relation("AdminPatients")
+  managedDoctors  Doctor[]  @relation("AdminDoctors")
+
+  @@index([email])
+  @@map("admins")
+}
+
+// ─────────────────────────────────────────────
 // Patient — registered portal users
 // ─────────────────────────────────────────────
 
 model Patient {
   id            String         @id @default(uuid())
+
+  // Central User Account Link
+  userId        String         @unique @map("user_id")
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Admin Oversight Link
+  createdById   String?        @map("created_by_id")
+  createdBy     Admin?         @relation("AdminPatients", fields: [createdById], references: [id], onDelete: SetNull)
 
   // Name segments (split for HIPAA-compliant storage)
   firstName     String
@@ -104,6 +164,14 @@ model Patient {
 
 model Doctor {
   id             String          @id @default(uuid())
+
+  // Central User Account Link
+  userId         String          @unique @map("user_id")
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Admin Oversight Link
+  createdById    String?         @map("created_by_id")
+  createdBy      Admin?          @relation("AdminDoctors", fields: [createdById], references: [id], onDelete: SetNull)
 
   // Identity
   name           String

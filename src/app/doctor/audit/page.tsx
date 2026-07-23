@@ -312,10 +312,10 @@ export default function DoctorAuditPage() {
       });
 
       setLoading(false);
-      if (res.success && res.auditId) {
+      if (res.success && "auditId" in res && res.auditId) {
         setSuccessData({ auditId: res.auditId, linked: res.linked });
       } else {
-        setError(res.error || "Auditing submission failed. Please verify your PRC details.");
+        setError("error" in res && res.error ? res.error : "Auditing submission failed. Please verify your PRC details.");
       }
     } catch {
       setLoading(false);
