@@ -305,6 +305,7 @@ model DoctorAudit {
   status         AuditStatus @default(PENDING)
   signature      String
   consent        Boolean     @default(false)
+  doctorEmail    String?     @map("doctor_email")
   submittedAt    DateTime    @default(now()) @map("submitted_at")
   updatedAt      DateTime    @updatedAt @map("updated_at")
 

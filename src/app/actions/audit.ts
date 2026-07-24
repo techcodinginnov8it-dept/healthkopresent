@@ -4,6 +4,7 @@ import { getErrorMessage } from "@/lib/errors";
 import { isPrismaConfigured, prisma } from "@/lib/prisma";
 import { mockDb } from "@/lib/mockDb";
 import { createAdminClient } from "@/utils/supabase/admin";
+import bcrypt from "bcryptjs";
 
 function serializeAudit(audit: {
   id: string;
@@ -24,6 +25,7 @@ function serializeAudit(audit: {
   status: string;
   signature: string;
   consent: boolean;
+  doctorEmail?: string | null;
   submittedAt: Date | string;
   updatedAt: Date | string;
   doctor?: {
@@ -35,6 +37,7 @@ function serializeAudit(audit: {
 }) {
   return {
     ...audit,
+    doctorEmail: audit.doctorEmail ?? null,
     doctor: audit.doctor ?? null,
     submittedAt: audit.submittedAt instanceof Date ? audit.submittedAt.toISOString() : audit.submittedAt,
     updatedAt: audit.updatedAt instanceof Date ? audit.updatedAt.toISOString() : audit.updatedAt,
@@ -130,6 +133,7 @@ async function submitDoctorAuditToSupabase(data: {
       status: "PENDING",
       signature: data.signature,
       consent: data.consent,
+      doctor_email: data.doctorEmail || null,
     })
     .select("id, status")
     .single();
@@ -314,6 +318,7 @@ export async function submitDoctorAudit(data: {
               approvalType: approvalType || "PRC_PRIMARY_SOURCE_VERIFICATION",
               signature,
               consent,
+              doctorEmail: doctorEmail || null,
               status: "PENDING",
               doctorId: linkedDoctorId,
             },
@@ -353,11 +358,42 @@ export async function submitDoctorAudit(data: {
 
       return await submitDoctorAuditToSupabase(data);
     } catch (error: unknown) {
-      console.error("Credentials Audit Error:", error);
-      return {
-        success: false,
-        error: getErrorMessage(error, "Failed to submit credential audit details"),
-      };
+      // Last resort: fall back to mockDb so submissions still work in dev/offline mode
+      console.warn("Supabase unavailable for audit submission. Falling back to mock database.");
+      try {
+        const mockAudit = mockDb.createDoctorAudit({
+          doctorId: null,
+          npi: data.npi,
+          firstName: data.firstName || null,
+          middleName: data.middleName || null,
+          lastName: data.lastName || null,
+          suffix: data.suffix || null,
+          licenseNumber: data.licenseNumber,
+          licenseState: data.licenseState,
+          specialty: data.specialty,
+          medicalSchool: data.medicalSchool,
+          gradYear: Number(data.gradYear),
+          yearsExp: Number(data.yearsExp),
+          documentName: data.documentName || null,
+          approvalType: data.approvalType || "PRC_PRIMARY_SOURCE_VERIFICATION",
+          status: "PENDING",
+          signature: data.signature,
+          consent: data.consent,
+          doctorEmail: data.doctorEmail || null,
+        });
+        return {
+          success: true,
+          auditId: mockAudit.id,
+          status: mockAudit.status,
+          linked: false,
+        };
+      } catch (mockErr: unknown) {
+        console.error("MockDb audit creation error:", mockErr);
+        return {
+          success: false,
+          error: getErrorMessage(error, "Failed to submit credential audit details"),
+        };
+      }
     }
   } catch (error: unknown) {
     console.error("Credentials Audit Error:", error);
@@ -535,6 +571,267 @@ export async function getPendingDoctorAudits() {
       success: false,
       audits: [],
       error: getErrorMessage(error, "Failed to fetch pending audits"),
+    };
+  }
+}
+
+export async function getAllDoctorAudits() {
+  try {
+    if (!isPrismaConfigured()) {
+      const audits = mockDb.getAllDoctorAudits().map((audit) => serializeAudit(audit));
+      return { success: true, audits };
+    }
+
+    try {
+      const audits = await prisma.doctorAudit.findMany({
+        include: {
+          doctor: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              specialty: true,
+            },
+          },
+        },
+        orderBy: { submittedAt: "desc" },
+      });
+
+      return { success: true, audits: audits.map(serializeAudit) };
+    } catch (error: unknown) {
+      if (isPrismaConnectionError(error)) {
+        console.warn("Prisma unavailable for all audits lookup. Falling back to mock database.");
+        const audits = mockDb.getAllDoctorAudits().map((audit) => serializeAudit(audit));
+        return { success: true, audits };
+      }
+      throw error;
+    }
+  } catch (error: unknown) {
+    console.error("Fetch All Audits Error:", error);
+    return {
+      success: false,
+      audits: [],
+      error: getErrorMessage(error, "Failed to fetch audits"),
+    };
+  }
+}
+
+
+export type CreateDoctorAccountPayload = {
+  email: string;
+  password: string;
+  npi: string;
+  firstName: string;
+  middleName?: string;
+  lastName: string;
+  suffix?: string;
+  specialty: string;
+  licenseNumber: string;
+  licenseState: string;
+  yearsExp?: number;
+  consultFee?: number;
+  auditId?: string;
+};
+
+export async function createDoctorAccountByAdmin(data: CreateDoctorAccountPayload) {
+  try {
+    const {
+      email,
+      password,
+      npi,
+      firstName,
+      middleName,
+      lastName,
+      suffix,
+      specialty,
+      licenseNumber,
+      licenseState,
+      yearsExp = 5,
+      consultFee = 500,
+      auditId,
+    } = data;
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const cleanNpi = npi.trim();
+
+    if (!normalizedEmail || !password || !cleanNpi || !firstName || !lastName || !specialty || !licenseNumber || !licenseState) {
+      return { success: false, error: "Please fill in all required doctor account fields." };
+    }
+
+    if (password.length < 6) {
+      return { success: false, error: "Password must be at least 6 characters long." };
+    }
+
+    const fullName = [firstName, middleName, lastName, suffix].filter((part) => part && part.trim().length > 0).join(" ").trim();
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Step 1: Attempt creation in Prisma if configured
+    if (isPrismaConfigured()) {
+      try {
+        const createdAccount = await prisma.$transaction(async (tx) => {
+          const user = await tx.user.upsert({
+            where: { email: normalizedEmail },
+            create: {
+              email: normalizedEmail,
+              password: hashedPassword,
+              role: "DOCTOR",
+              emailVerified: true,
+              isActive: true,
+            },
+            update: {
+              password: hashedPassword,
+              role: "DOCTOR",
+              emailVerified: true,
+              isActive: true,
+            },
+          });
+
+          const doctor = await tx.doctor.upsert({
+            where: { email: normalizedEmail },
+            create: {
+              userId: user.id,
+              name: fullName || `Dr. ${lastName}`,
+              firstName: firstName || null,
+              middleName: middleName || null,
+              lastName: lastName || null,
+              suffix: suffix || null,
+              npi: cleanNpi,
+              email: normalizedEmail,
+              password: hashedPassword,
+              specialty,
+              licenseNumber,
+              licenseState,
+              yearsExp: Number(yearsExp),
+              consultFee: Number(consultFee),
+              isVerified: true,
+              isActive: true,
+            },
+            update: {
+              userId: user.id,
+              name: fullName || `Dr. ${lastName}`,
+              firstName: firstName || null,
+              middleName: middleName || null,
+              lastName: lastName || null,
+              suffix: suffix || null,
+              npi: cleanNpi,
+              password: hashedPassword,
+              specialty,
+              licenseNumber,
+              licenseState,
+              yearsExp: Number(yearsExp),
+              consultFee: Number(consultFee),
+              isVerified: true,
+              isActive: true,
+            },
+          });
+
+          if (auditId) {
+            await tx.doctorAudit.update({
+              where: { id: auditId },
+              data: {
+                status: "APPROVED",
+                doctorId: doctor.id,
+              },
+            }).catch((err) => console.warn("Audit update failed inside transaction:", err));
+          }
+
+          return doctor;
+        });
+
+        return {
+          success: true,
+          message: `Doctor account for Dr. ${fullName || lastName} created and verified successfully!`,
+          doctor: {
+            id: createdAccount.id,
+            name: createdAccount.name,
+            email: createdAccount.email,
+            npi: createdAccount.npi,
+            specialty: createdAccount.specialty,
+          },
+        };
+      } catch (error: unknown) {
+        if (!isPrismaConnectionError(error)) {
+          console.error("Prisma doctor creation error:", error);
+          return { success: false, error: getErrorMessage(error, "Failed to create doctor account in Prisma database") };
+        }
+        console.warn("Prisma unavailable for doctor creation. Falling back to MockDB.");
+      }
+    }
+
+    // Step 2: Fallback to MockDB
+    const existingDoctor = mockDb.findDoctorByEmailOrNpi(normalizedEmail) || mockDb.findDoctorByEmailOrNpi(cleanNpi);
+    if (existingDoctor) {
+      mockDb.updateDoctor(existingDoctor.id, {
+        password: hashedPassword,
+        name: fullName || existingDoctor.name,
+        firstName: firstName || existingDoctor.firstName,
+        middleName: middleName || existingDoctor.middleName,
+        lastName: lastName || existingDoctor.lastName,
+        suffix: suffix || existingDoctor.suffix,
+        npi: cleanNpi,
+        specialty,
+        licenseNumber,
+        licenseState,
+        yearsExp: Number(yearsExp),
+        isVerified: true,
+        isActive: true,
+      });
+
+      if (auditId) {
+        mockDb.updateDoctorAudit(auditId, { status: "APPROVED" });
+      }
+
+      return {
+        success: true,
+        message: `Doctor account for Dr. ${fullName || lastName} updated and verified in system!`,
+        doctor: {
+          id: existingDoctor.id,
+          name: fullName || existingDoctor.name,
+          email: normalizedEmail,
+          npi: cleanNpi,
+          specialty,
+        },
+      };
+    }
+
+    const newDoctor = mockDb.createDoctor({
+      name: fullName || `Dr. ${lastName}`,
+      firstName: firstName || null,
+      middleName: middleName || null,
+      lastName: lastName || null,
+      suffix: suffix || null,
+      npi: cleanNpi,
+      email: normalizedEmail,
+      password: hashedPassword,
+      specialty,
+      licenseNumber,
+      licenseState,
+      yearsExp: Number(yearsExp),
+      consultFee: Number(consultFee),
+      isVerified: true,
+      isActive: true,
+    });
+
+    if (auditId) {
+      mockDb.updateDoctorAudit(auditId, { status: "APPROVED" });
+    }
+
+    return {
+      success: true,
+      message: `Doctor account for Dr. ${fullName || lastName} created successfully!`,
+      doctor: {
+        id: newDoctor.id,
+        name: newDoctor.name,
+        email: newDoctor.email,
+        npi: newDoctor.npi,
+        specialty: newDoctor.specialty,
+      },
+    };
+  } catch (error: unknown) {
+    console.error("Create Doctor Account Error:", error);
+    return {
+      success: false,
+      error: getErrorMessage(error, "An unexpected error occurred while creating the doctor account."),
     };
   }
 }

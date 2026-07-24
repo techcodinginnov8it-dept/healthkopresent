@@ -33,7 +33,6 @@ export default function SignInPage() {
 
       setInfo(res.message || "");
       router.push("/patient/dashboard");
-      router.refresh();
     } catch {
       setLoading(false);
       setError("A network error occurred. Please verify your connection.");

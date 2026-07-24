@@ -123,6 +123,7 @@ export type MockDoctorAudit = {
   status: "PENDING" | "APPROVED" | "REJECTED";
   signature: string;
   consent: boolean;
+  doctorEmail?: string | null;
   submittedAt: string;
   updatedAt: string;
 };
@@ -253,6 +254,32 @@ export const mockDb = {
     return db.doctors.find((d) => d.id === id) || null;
   },
 
+  createDoctor(data: Omit<MockDoctor, "id" | "createdAt" | "updatedAt" | "rating" | "reviewCount" | "availability"> & Partial<MockDoctor>): MockDoctor {
+    const db = getDb();
+    const newDoctor: MockDoctor = {
+      id: "doc-" + Math.random().toString(36).substr(2, 9),
+      bio: null,
+      image: null,
+      languages: ["English"],
+      rating: 5.0,
+      reviewCount: 1,
+      availability: "Available Today",
+      status: "ONLINE",
+      consultFee: 500,
+      consultationDuration: 30,
+      consultationDurationUnit: "minutes",
+      isActive: true,
+      isFeatured: false,
+      isVerified: true,
+      ...data,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    db.doctors.push(newDoctor);
+    saveDb(db);
+    return newDoctor;
+  },
+
   updateDoctor(id: string, data: Partial<MockDoctor>): MockDoctor | null {
     const db = getDb();
     const doctorIndex = db.doctors.findIndex((d) => d.id === id);
@@ -360,8 +387,33 @@ export const mockDb = {
       .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
   },
 
+  getAllDoctorAudits() {
+    const db = getDb();
+    db.audits ||= [];
+
+    return db.audits
+      .map((audit) => ({
+        ...audit,
+        doctor: audit.doctorId
+          ? (() => {
+              const doctor = this.findDoctorById(audit.doctorId as string);
+              return doctor
+                ? {
+                    id: doctor.id,
+                    name: doctor.name,
+                    email: doctor.email,
+                    specialty: doctor.specialty,
+                  }
+                : null;
+            })()
+          : null,
+      }))
+      .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+  },
+
   getDoctorAuditsForDoctor(doctorId: string) {
     const db = getDb();
+
     db.audits ||= [];
     return db.audits
       .filter((audit) => audit.doctorId === doctorId)

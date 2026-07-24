@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { getPendingDoctorAudits } from "@/app/actions/audit";
+import { getAllDoctorAudits } from "@/app/actions/audit";
 import { logoutAdmin } from "@/app/actions/auth";
 import { requireAdminSession } from "@/lib/auth/admin-session";
 import { mockDb } from "@/lib/mockDb";
@@ -10,7 +10,7 @@ import AdminAuditReviewClient from "./AdminAuditReviewClient";
 export default async function AdminDashboardPage() {
   const session = await requireAdminSession();
   const metrics = mockDb.getAdminMetrics();
-  const auditsResult = await getPendingDoctorAudits();
+  const auditsResult = await getAllDoctorAudits();
   const audits = auditsResult.success ? auditsResult.audits : [];
 
   const totalUsers = metrics.totalPatients + metrics.totalDoctors;
