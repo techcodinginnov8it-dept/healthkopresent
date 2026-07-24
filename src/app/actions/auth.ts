@@ -54,7 +54,7 @@ type DoctorLoginPayload = {
 };
 
 async function validateMockPatientLogin({ email, password }: PatientLoginPayload) {
-  const patient = mockDb.findPatientByEmail(email);
+  const patient = mockDb.findPatientByEmail(email.toLowerCase());
 
   if (!patient) {
     return null;
@@ -986,7 +986,7 @@ async function syncMockPatientToPrisma(email: string): Promise<string | null> {
 }
 
 export async function loginPatient(data: PatientLoginPayload) {
-  const email = data.email.trim().toLowerCase();
+  const email = data.email?.trim().toLowerCase();
   const { password } = data;
 
   if (!email || !password) {
