@@ -68,6 +68,9 @@ export const getDoctorDashboardData = cache(async () => {
             reason: true,
             notes: true,
             prescription: true,
+            bloodPressure: true,
+            heartRate: true,
+            bodyTemperature: true,
             duration: true,
             createdAt: true,
             patient: {
@@ -114,13 +117,16 @@ export const getDoctorDashboardData = cache(async () => {
         },
       },
     });
-
   } catch (error) {
     console.error("Prisma getDoctorDashboardData failed:", error);
     throw error;
   }
 
   if (!doctor) {
+    const mockDoctor = mockDb.findDoctorById(session.userId);
+    if (mockDoctor) {
+      return getMockDoctorDashboardData(session);
+    }
     redirect("/doctor/signin");
   }
 

@@ -243,6 +243,9 @@ model Consultation {
   notes        String?
   prescription String?
   duration     Int?                // minutes
+  bloodPressure String?
+  heartRate     String?
+  bodyTemperature String?
 
   // Timestamps
   createdAt    DateTime            @default(now())

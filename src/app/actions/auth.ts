@@ -389,7 +389,7 @@ async function syncPrismaPatientAccount(email: string) {
   }
 
   if (!patient.user || patient.user.email !== patient.email || patient.user.password !== patient.password || patient.user.role !== "PATIENT") {
-    const synced = await prisma.$transaction(async (tx) => ensurePrismaPatientAccount(tx, {
+    const synced = await prisma.$transaction(async (tx: Prisma.TransactionClient) => ensurePrismaPatientAccount(tx, {
       id: patient.id,
       email: patient.email,
       password: patient.password,
@@ -425,7 +425,7 @@ async function syncPrismaDoctorAccount(emailOrNpi: string) {
   }
 
   if (!doctor.user || doctor.user.email !== doctor.email || doctor.user.password !== doctor.password || doctor.user.role !== "DOCTOR") {
-    const synced = await prisma.$transaction(async (tx) => ensurePrismaDoctorAccount(tx, {
+    const synced = await prisma.$transaction(async (tx: Prisma.TransactionClient) => ensurePrismaDoctorAccount(tx, {
       id: doctor.id,
       email: doctor.email,
       password: doctor.password,
@@ -474,7 +474,7 @@ export async function requestPatientSignupOtp(data: PatientSignupPayload): Promi
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const patientAccount = await prisma.$transaction(async (tx) => {
+    const patientAccount = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const account = await ensurePrismaPatientAccount(tx, {
         email: normalizedEmail,
         password: hashedPassword,
@@ -531,7 +531,7 @@ export async function requestPatientSignupOtp(data: PatientSignupPayload): Promi
       if (isMockDb) {
         mockDb.updatePatient(createdPatient.email, { emailVerified: true });
       } else {
-        await prisma.$transaction(async (tx) => {
+        await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
           await tx.patient.update({
             where: { email: createdPatient.email },
             data: { emailVerified: true },
@@ -580,14 +580,14 @@ export async function requestPatientSignupOtp(data: PatientSignupPayload): Promi
     if (isMockDb) {
       mockDb.deletePatient(createdPatient.email);
     } else {
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         await tx.patient.delete({
           where: { email: createdPatient.email },
         });
         await tx.user.delete({
           where: { email: createdPatient.email },
         });
-      }).catch((dbDeleteErr) => {
+      }).catch((dbDeleteErr: unknown) => {
         console.error("Failed to delete patient/user during signup rollback:", dbDeleteErr);
       });
     }
@@ -658,7 +658,7 @@ export async function verifyPatientSignupOtp(data: {
 
     await verifyPatientOtpCode(normalizedEmail, otp, "signup_verify");
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.patient.update({
         where: { email: normalizedEmail },
         data: { emailVerified: true },
@@ -923,7 +923,7 @@ async function syncMockPatientToPrisma(email: string): Promise<string | null> {
     if (!demoPatient) {
       return null;
     }
-    const pgPatient = await prisma.$transaction(async (tx) => {
+    const pgPatient = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const user = await tx.user.upsert({
         where: { email: demoPatient.email.toLowerCase() },
         create: {
@@ -1132,7 +1132,7 @@ export async function loginAdmin(data: { email: string; password: string }) {
 
   if (isPrismaConfigured()) {
     try {
-      const adminAccount = await prisma.$transaction(async (tx) => {
+      const adminAccount = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         const user = await tx.user.upsert({
           where: { email: normalizedEmail },
           create: {

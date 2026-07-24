@@ -5,6 +5,7 @@ import { getErrorMessage } from "@/lib/errors";
 import { isPrismaConfigured, prisma } from "@/lib/prisma";
 import { requirePatientSession } from "@/lib/auth/patient-session";
 import { mockDb } from "@/lib/mockDb";
+import { Prisma } from "@prisma/client";
 import {
   DEFAULT_DURATION_MINUTES,
   getFullyBookedMessage,
@@ -120,7 +121,7 @@ export async function bookAppointment(data: BookAppointmentPayload) {
       }
 
       try {
-        await prisma.$transaction(async (tx) => {
+        await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
           const user = await tx.user.upsert({
             where: { email: mockPatient.email.toLowerCase() },
             create: {
@@ -165,7 +166,7 @@ export async function bookAppointment(data: BookAppointmentPayload) {
       }
     } else if (!patientRecord.userId || !patientRecord.user || patientRecord.user.email !== patientRecord.email || patientRecord.user.password !== patientRecord.password || patientRecord.user.role !== "PATIENT") {
       try {
-        await prisma.$transaction(async (tx) => {
+        await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
           const user = await tx.user.upsert({
             where: { email: patientRecord.email.toLowerCase() },
             create: {

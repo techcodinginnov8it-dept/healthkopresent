@@ -4,6 +4,7 @@ import { getErrorMessage } from "@/lib/errors";
 import { isPrismaConfigured, prisma } from "@/lib/prisma";
 import { mockDb } from "@/lib/mockDb";
 import { createAdminClient } from "@/utils/supabase/admin";
+import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 function serializeAudit(audit: {
@@ -668,7 +669,7 @@ export async function createDoctorAccountByAdmin(data: CreateDoctorAccountPayloa
     // Step 1: Attempt creation in Prisma if configured
     if (isPrismaConfigured()) {
       try {
-        const createdAccount = await prisma.$transaction(async (tx) => {
+        const createdAccount = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
           const user = await tx.user.upsert({
             where: { email: normalizedEmail },
             create: {
@@ -732,7 +733,7 @@ export async function createDoctorAccountByAdmin(data: CreateDoctorAccountPayloa
                 status: "APPROVED",
                 doctorId: doctor.id,
               },
-            }).catch((err) => console.warn("Audit update failed inside transaction:", err));
+            }).catch((err: unknown) => console.warn("Audit update failed inside transaction:", err));
           }
 
           return doctor;
