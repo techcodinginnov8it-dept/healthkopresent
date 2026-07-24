@@ -41,6 +41,10 @@ export type MockPatient = {
 export type MockDoctor = {
   id: string;
   name: string;
+  firstName?: string | null;
+  middleName?: string | null;
+  lastName?: string | null;
+  suffix?: string | null;
   npi: string;
   email: string;
   password: string;
@@ -104,6 +108,10 @@ export type MockDoctorAudit = {
   id: string;
   doctorId: string | null;
   npi: string;
+  firstName?: string | null;
+  middleName?: string | null;
+  lastName?: string | null;
+  suffix?: string | null;
   licenseNumber: string;
   licenseState: string;
   specialty: string;
@@ -111,6 +119,7 @@ export type MockDoctorAudit = {
   gradYear: number;
   yearsExp: number;
   documentName: string | null;
+  approvalType: string;
   status: "PENDING" | "APPROVED" | "REJECTED";
   signature: string;
   consent: boolean;
@@ -131,72 +140,9 @@ function getDb(): MockDbSchema {
   try {
     if (!fs.existsSync(DB_PATH)) {
       // Seed data if database file does not exist
-      const defaultDoctors: MockDoctor[] = [
-        {
-          id: "doc-sarah-jenkins-123",
-          npi: "1982736450",
-          email: "s.jenkins@healthko.com",
-          password: bcrypt.hashSync("123456", 10),
-          name: "Dr. Sarah Jenkins",
-          specialty: "Board-Certified Cardiologist",
-          rating: 4.9,
-          reviewCount: 142,
-          availability: "Mon - Fri, 9AM - 5PM",
-          consultFee: 150,
-          bio: "Dr. Sarah Jenkins is an Ivy League-educated cardiologist with over 15 years of clinical experience specializing in non-invasive cardiology and preventive health.",
-          image: null,
-          languages: ["English", "Spanish"],
-          isActive: true,
-          isFeatured: true,
-          isVerified: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        {
-          id: "doc-marcus-vance-456",
-          npi: "1098273645",
-          email: "m.vance@healthko.com",
-          password: bcrypt.hashSync("123456", 10),
-          name: "Dr. Marcus Vance",
-          specialty: "Pediatric Medicine Specialist",
-          rating: 4.8,
-          reviewCount: 98,
-          availability: "Mon - Thu, 8AM - 4PM",
-          consultFee: 120,
-          bio: "Dr. Marcus Vance is a board-certified pediatrician dedicated to providing comprehensive healthcare for children from infancy through adolescence.",
-          image: null,
-          languages: ["English"],
-          isActive: true,
-          isFeatured: true,
-          isVerified: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        {
-          id: "doc-aaliyah-patel-789",
-          npi: "1234567890",
-          email: "a.patel@healthko.com",
-          password: bcrypt.hashSync("123456", 10),
-          name: "Dr. Aaliyah Patel",
-          specialty: "Family Practitioner & Telehealth Lead",
-          rating: 4.9,
-          reviewCount: 210,
-          availability: "Tue - Sat, 10AM - 6PM",
-          consultFee: 100,
-          bio: "Dr. Aaliyah Patel is a passionate family physician specializing in chronic disease management and virtual healthcare delivery paradigms.",
-          image: null,
-          languages: ["English", "Hindi"],
-          isActive: true,
-          isFeatured: true,
-          isVerified: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }
-      ];
-
       const initialDb: MockDbSchema = {
         patients: [],
-        doctors: defaultDoctors,
+        doctors: [],
         consultations: [],
         emailOtps: [],
         videoSessions: [],
@@ -214,7 +160,7 @@ function getDb(): MockDbSchema {
     return parsed;
   } catch (error) {
     console.error("Error reading mock database, using empty state:", error);
-    return { patients: [], doctors: [], consultations: [], emailOtps: [], videoSessions: [] };
+    return { patients: [], doctors: [], consultations: [], emailOtps: [], videoSessions: [], audits: [] };
   }
 }
 
@@ -319,6 +265,107 @@ export const mockDb = {
     };
     saveDb(db);
     return db.doctors[doctorIndex];
+  },
+
+  createDoctorAudit(data: Omit<MockDoctorAudit, "id" | "submittedAt" | "updatedAt">): MockDoctorAudit {
+    const db = getDb();
+    db.audits ||= [];
+
+    const now = new Date().toISOString();
+    const audit: MockDoctorAudit = {
+      ...data,
+      id: "audit-" + Math.random().toString(36).substr(2, 9),
+      submittedAt: now,
+      updatedAt: now,
+    };
+
+    db.audits.push(audit);
+
+    if (audit.doctorId) {
+      const doctorIndex = db.doctors.findIndex((doctor) => doctor.id === audit.doctorId);
+      if (doctorIndex !== -1) {
+        const fullName = [
+          audit.firstName,
+          audit.middleName,
+          audit.lastName,
+          audit.suffix,
+        ]
+          .filter((part) => part && part.trim().length > 0)
+          .join(" ")
+          .trim();
+        db.doctors[doctorIndex] = {
+          ...db.doctors[doctorIndex],
+          firstName: audit.firstName ?? db.doctors[doctorIndex].firstName ?? null,
+          middleName: audit.middleName ?? db.doctors[doctorIndex].middleName ?? null,
+          lastName: audit.lastName ?? db.doctors[doctorIndex].lastName ?? null,
+          suffix: audit.suffix ?? db.doctors[doctorIndex].suffix ?? null,
+          name: fullName || db.doctors[doctorIndex].name,
+          licenseNumber: audit.licenseNumber,
+          licenseState: audit.licenseState,
+          yearsExp: audit.yearsExp,
+          specialty: audit.specialty,
+          isVerified: false,
+          updatedAt: now,
+        };
+      }
+    }
+
+    saveDb(db);
+    return audit;
+  },
+
+  findDoctorAuditById(id: string): MockDoctorAudit | null {
+    const db = getDb();
+    return db.audits?.find((audit) => audit.id === id) || null;
+  },
+
+  updateDoctorAudit(id: string, data: Partial<Omit<MockDoctorAudit, "id" | "submittedAt">>): MockDoctorAudit | null {
+    const db = getDb();
+    db.audits ||= [];
+    const auditIndex = db.audits.findIndex((audit) => audit.id === id);
+    if (auditIndex === -1) return null;
+
+    db.audits[auditIndex] = {
+      ...db.audits[auditIndex],
+      ...data,
+      updatedAt: new Date().toISOString(),
+    };
+
+    saveDb(db);
+    return db.audits[auditIndex];
+  },
+
+  getPendingDoctorAudits() {
+    const db = getDb();
+    db.audits ||= [];
+
+    return db.audits
+      .filter((audit) => audit.status === "PENDING")
+      .map((audit) => ({
+        ...audit,
+        doctor: audit.doctorId
+          ? (() => {
+              const doctor = this.findDoctorById(audit.doctorId as string);
+              return doctor
+                ? {
+                    id: doctor.id,
+                    name: doctor.name,
+                    email: doctor.email,
+                    specialty: doctor.specialty,
+                  }
+                : null;
+            })()
+          : null,
+      }))
+      .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+  },
+
+  getDoctorAuditsForDoctor(doctorId: string) {
+    const db = getDb();
+    db.audits ||= [];
+    return db.audits
+      .filter((audit) => audit.doctorId === doctorId)
+      .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
   },
 
   getDoctorsList(): Omit<MockDoctor, "password">[] {

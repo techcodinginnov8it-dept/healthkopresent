@@ -4,8 +4,48 @@ import { getErrorMessage } from "@/lib/errors";
 import { isPrismaConfigured, prisma } from "@/lib/prisma";
 import { mockDb } from "@/lib/mockDb";
 
+function serializeAudit(audit: {
+  id: string;
+  doctorId: string | null;
+  npi: string;
+  firstName?: string | null;
+  middleName?: string | null;
+  lastName?: string | null;
+  suffix?: string | null;
+  licenseNumber: string;
+  licenseState: string;
+  specialty: string;
+  medicalSchool: string;
+  gradYear: number;
+  yearsExp: number;
+  documentName: string | null;
+  approvalType?: string;
+  status: string;
+  signature: string;
+  consent: boolean;
+  submittedAt: Date | string;
+  updatedAt: Date | string;
+  doctor?: {
+    id: string;
+    name: string;
+    email: string;
+    specialty: string;
+  } | null;
+}) {
+  return {
+    ...audit,
+    doctor: audit.doctor ?? null,
+    submittedAt: audit.submittedAt instanceof Date ? audit.submittedAt.toISOString() : audit.submittedAt,
+    updatedAt: audit.updatedAt instanceof Date ? audit.updatedAt.toISOString() : audit.updatedAt,
+  };
+}
+
 export async function submitDoctorAudit(data: {
   npi: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  suffix?: string;
   licenseNumber: string;
   licenseState: string;
   specialty: string;
@@ -13,6 +53,7 @@ export async function submitDoctorAudit(data: {
   gradYear: number;
   yearsExp: number;
   documentName?: string;
+  approvalType?: string;
   signature: string;
   consent: boolean;
   doctorEmail?: string;
@@ -20,6 +61,10 @@ export async function submitDoctorAudit(data: {
   try {
     const {
       npi,
+      firstName,
+      middleName,
+      lastName,
+      suffix,
       licenseNumber,
       licenseState,
       specialty,
@@ -27,6 +72,7 @@ export async function submitDoctorAudit(data: {
       gradYear,
       yearsExp,
       documentName,
+      approvalType,
       signature,
       consent,
       doctorEmail,
@@ -50,35 +96,34 @@ export async function submitDoctorAudit(data: {
     }
 
     // In development without Prisma, create a mock audit submission
-    if (!isPrismaConfigured()) {
-      const mockAuditId = `audit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      console.warn(
-        "[Audit] Prisma not configured - creating mock audit submission",
-        { mockAuditId, npi, specialty }
-      );
-      return {
-        success: true,
-        auditId: mockAuditId,
-        status: "PENDING",
-        linked: false,
-      };
-    }
-
     // Try to find the doctor using either the provided email or NPI
     let linkedDoctorId: string | null = null;
-    if (doctorEmail) {
-      const doc = await prisma.doctor.findUnique({ where: { email: doctorEmail } });
+    if (isPrismaConfigured()) {
+      if (doctorEmail) {
+        const doc = await prisma.doctor.findUnique({ where: { email: doctorEmail } });
+        if (doc) linkedDoctorId = doc.id;
+      }
+      if (!linkedDoctorId) {
+        const doc = await prisma.doctor.findUnique({ where: { npi } });
+        if (doc) linkedDoctorId = doc.id;
+      }
+    } else if (doctorEmail) {
+      const doc = mockDb.findDoctorByEmailOrNpi(doctorEmail);
       if (doc) linkedDoctorId = doc.id;
     }
     if (!linkedDoctorId) {
-      const doc = await prisma.doctor.findUnique({ where: { npi } });
+      const doc = isPrismaConfigured() ? await prisma.doctor.findUnique({ where: { npi } }) : mockDb.findDoctorByEmailOrNpi(npi);
       if (doc) linkedDoctorId = doc.id;
     }
 
-    // Create the credentials audit record in the database
-    const audit = await prisma.doctorAudit.create({
-      data: {
+    if (!isPrismaConfigured()) {
+      const audit = mockDb.createDoctorAudit({
+        doctorId: linkedDoctorId,
         npi,
+        firstName: firstName || null,
+        middleName: middleName || null,
+        lastName: lastName || null,
+        suffix: suffix || null,
         licenseNumber,
         licenseState,
         specialty,
@@ -86,6 +131,36 @@ export async function submitDoctorAudit(data: {
         gradYear: Number(gradYear),
         yearsExp: Number(yearsExp),
         documentName: documentName || null,
+        approvalType: approvalType || "PRC_PRIMARY_SOURCE_VERIFICATION",
+        status: "PENDING",
+        signature,
+        consent,
+      });
+
+      return {
+        success: true,
+        auditId: audit.id,
+        status: audit.status,
+        linked: !!linkedDoctorId,
+      };
+    }
+
+    // Create the credentials audit record in the database
+    const audit = await prisma.doctorAudit.create({
+      data: {
+        npi,
+        firstName: firstName || null,
+        middleName: middleName || null,
+        lastName: lastName || null,
+        suffix: suffix || null,
+        licenseNumber,
+        licenseState,
+        specialty,
+        medicalSchool,
+        gradYear: Number(gradYear),
+        yearsExp: Number(yearsExp),
+        documentName: documentName || null,
+        approvalType: approvalType || "PRC_PRIMARY_SOURCE_VERIFICATION",
         signature,
         consent,
         status: "PENDING",
@@ -98,6 +173,11 @@ export async function submitDoctorAudit(data: {
       await prisma.doctor.update({
         where: { id: linkedDoctorId },
         data: {
+          name: [firstName, middleName, lastName, suffix].filter(Boolean).join(" "),
+          firstName: firstName || null,
+          middleName: middleName || null,
+          lastName: lastName || null,
+          suffix: suffix || null,
           licenseNumber,
           licenseState,
           yearsExp: Number(yearsExp),
@@ -129,7 +209,35 @@ export async function approveDoctorAudit(auditId: string) {
     }
 
     if (!isPrismaConfigured()) {
-      return { success: false, error: "Database configuration is not available. Please contact support." };
+      const audit = mockDb.findDoctorAuditById(auditId);
+
+      if (!audit) {
+        return { success: false, error: "Audit record not found" };
+      }
+
+      if (audit.status === "APPROVED") {
+        return { success: false, error: "This audit is already approved" };
+      }
+
+      const updatedAudit = mockDb.updateDoctorAudit(auditId, { status: "APPROVED" });
+
+      if (!updatedAudit) {
+        return { success: false, error: "Audit record not found" };
+      }
+
+      if (audit.doctorId) {
+        mockDb.updateDoctor(audit.doctorId, {
+          isVerified: true,
+          isActive: true,
+        });
+      }
+
+      return {
+        success: true,
+        message: "Doctor credentials approved successfully",
+        auditId: updatedAudit.id,
+        status: updatedAudit.status,
+      };
     }
 
     const audit = await prisma.doctorAudit.findUnique({
@@ -182,7 +290,32 @@ export async function rejectDoctorAudit(auditId: string, reason?: string) {
     }
 
     if (!isPrismaConfigured()) {
-      return { success: false, error: "Database configuration is not available. Please contact support." };
+      const audit = mockDb.findDoctorAuditById(auditId);
+
+      if (!audit) {
+        return { success: false, error: "Audit record not found" };
+      }
+
+      if (audit.status === "REJECTED") {
+        return { success: false, error: "This audit is already rejected" };
+      }
+
+      const updatedAudit = mockDb.updateDoctorAudit(auditId, { status: "REJECTED" });
+
+      if (!updatedAudit) {
+        return { success: false, error: "Audit record not found" };
+      }
+
+      if (audit.doctorId) {
+        mockDb.updateDoctor(audit.doctorId, { isVerified: false });
+      }
+
+      return {
+        success: true,
+        message: reason ? `Rejected: ${reason}` : "Doctor credentials rejected",
+        auditId: updatedAudit.id,
+        status: updatedAudit.status,
+      };
     }
 
     const audit = await prisma.doctorAudit.findUnique({
@@ -228,10 +361,10 @@ export async function rejectDoctorAudit(auditId: string, reason?: string) {
 export async function getPendingDoctorAudits() {
   try {
     if (!isPrismaConfigured()) {
-      // Return empty array for mock DB (not implemented yet)
+      const audits = mockDb.getPendingDoctorAudits().map((audit) => serializeAudit(audit));
       return {
         success: true,
-        audits: [],
+        audits,
       };
     }
 
@@ -252,7 +385,7 @@ export async function getPendingDoctorAudits() {
 
     return {
       success: true,
-      audits,
+      audits: audits.map(serializeAudit),
     };
   } catch (error: unknown) {
     console.error("Fetch Pending Audits Error:", error);
