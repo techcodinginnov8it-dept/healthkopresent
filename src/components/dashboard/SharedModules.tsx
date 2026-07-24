@@ -285,21 +285,49 @@ export function ChatPanel({
 
 function VideoStream({ stream, muted, active }: { stream: MediaStream | null; muted?: boolean; active: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
+
   useEffect(() => {
     const video = ref.current;
-    if (!video) {
+    if (!video || !stream) {
       return;
     }
 
     video.srcObject = stream;
-    void video.play().catch(() => {
-      // Browser autoplay policies can still block unmuted remote playback until the user interacts.
-    });
+
+    const attemptPlay = async () => {
+      try {
+        await video.play();
+      } catch {
+        // If unmuted autoplay fails due to browser policy, mute temporarily to render video feed
+        if (!muted) {
+          video.muted = true;
+          try {
+            await video.play();
+          } catch {
+            // Silence inner error
+          }
+        }
+      }
+    };
+
+    void attemptPlay();
+
+    const handleUserInteraction = () => {
+      if (!muted && video.muted) {
+        video.muted = false;
+        void video.play().catch(() => {});
+      }
+    };
+
+    window.addEventListener("click", handleUserInteraction, { once: true });
+    window.addEventListener("keydown", handleUserInteraction, { once: true });
 
     return () => {
       video.srcObject = null;
+      window.removeEventListener("click", handleUserInteraction);
+      window.removeEventListener("keydown", handleUserInteraction);
     };
-  }, [stream]);
+  }, [muted, stream]);
 
   if (!stream) return null;
 
@@ -328,6 +356,7 @@ function ConsultationVideoTile({
   cameraOn = true,
   micOn = true,
   muted = false,
+  isCompact = false,
   className = "",
   tone = "teal",
 }: {
@@ -338,6 +367,7 @@ function ConsultationVideoTile({
   cameraOn?: boolean;
   micOn?: boolean;
   muted?: boolean;
+  isCompact?: boolean;
   className?: string;
   tone?: "teal" | "slate";
 }) {
@@ -345,23 +375,85 @@ function ConsultationVideoTile({
 
   useEffect(() => {
     const video = ref.current;
-    if (!video) {
+    if (!video || !stream) {
       return;
     }
 
     video.srcObject = stream;
-    void video.play().catch(() => {
-      // Autoplay can still wait for a user interaction depending on browser policy.
-    });
+
+    const attemptPlay = async () => {
+      try {
+        await video.play();
+      } catch {
+        if (!muted) {
+          video.muted = true;
+          try {
+            await video.play();
+          } catch {
+            // Ignore fallback error
+          }
+        }
+      }
+    };
+
+    void attemptPlay();
+
+    const handleUserInteraction = () => {
+      if (!muted && video.muted) {
+        video.muted = false;
+        void video.play().catch(() => {});
+      }
+    };
+
+    window.addEventListener("click", handleUserInteraction, { once: true });
+    window.addEventListener("keydown", handleUserInteraction, { once: true });
 
     return () => {
       video.srcObject = null;
+      window.removeEventListener("click", handleUserInteraction);
+      window.removeEventListener("keydown", handleUserInteraction);
     };
-  }, [stream]);
+  }, [muted, stream]);
 
   const hasVideo = Boolean(stream?.getVideoTracks().length);
   const hasAudio = Boolean(stream?.getAudioTracks().length);
   const showFeed = Boolean(stream && hasVideo);
+
+  if (isCompact) {
+    return (
+      <div className={`relative h-full w-full overflow-hidden rounded-xl border border-white/20 bg-slate-950 shadow-2xl ${className}`}>
+        {stream && showFeed ? (
+          <video
+            ref={ref}
+            autoPlay
+            playsInline
+            muted={muted}
+            className={`h-full w-full object-cover transition-opacity duration-500 ${active ? "opacity-100" : "opacity-35"}`}
+          />
+        ) : (
+          <div className="flex h-full w-full flex-col items-center justify-center bg-slate-900 p-2 text-center">
+            <div className="h-7 w-7 rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-black text-slate-300">
+              {label.substring(0, 2).toUpperCase()}
+            </div>
+            <p className="mt-1 text-[10px] font-bold text-slate-400">Camera Off</p>
+          </div>
+        )}
+        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-slate-950/90 via-slate-950/50 to-transparent px-3 py-2">
+          <span className="text-[11px] font-black tracking-wide text-white drop-shadow">You</span>
+          <div className="flex items-center gap-1.5">
+            <span
+              className={`h-2 w-2 rounded-full ${cameraOn ? "bg-emerald-400 ring-2 ring-emerald-400/20" : "bg-rose-500"}`}
+              title={cameraOn ? "Camera active" : "Camera off"}
+            />
+            <span
+              className={`h-2 w-2 rounded-full ${micOn ? "bg-emerald-400 ring-2 ring-emerald-400/20" : "bg-rose-500"}`}
+              title={micOn ? "Microphone active" : "Microphone muted"}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`relative overflow-hidden rounded-xl border border-slate-800 bg-slate-950 ${className}`}>
@@ -623,39 +715,51 @@ export function LiveConsultationPanel({
             onRefreshDevices={onRefreshDevices}
           />
         </div>
-        <div className="relative grid min-h-[520px] gap-4 p-4 pb-28 md:grid-cols-2">
-          <div className={`relative min-h-[420px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900 ${remoteVideoActive ? "md:col-span-2" : ""}`}>
+        <div className="grid min-h-[480px] gap-4 p-4 pb-28 md:grid-cols-2">
+          {/* Left Side: Patient Feed */}
+          <div className="relative min-h-[420px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
             <ConsultationVideoTile
-              stream={remoteStream}
-              label={counterpartName}
-              detail={counterpartCameraOn ? (role === "doctor" ? "Patient stream" : "Doctor stream") : "Camera disabled"}
-              active={counterpartCameraOn}
-              cameraOn={counterpartCameraOn}
-              micOn={counterpartMicOn}
-              muted={false}
+              stream={role === "doctor" ? remoteStream : localStream}
+              label={role === "doctor" ? counterpartName : "Your stream"}
+              detail={
+                role === "doctor"
+                  ? counterpartCameraOn
+                    ? "Patient stream"
+                    : "Camera disabled"
+                  : isCameraOn
+                    ? "Local preview"
+                    : "Camera disabled"
+              }
+              active={role === "doctor" ? Boolean(counterpartCameraOn) : isCameraOn}
+              cameraOn={role === "doctor" ? counterpartCameraOn : isCameraOn}
+              micOn={role === "doctor" ? counterpartMicOn : isMicOn}
+              muted={role === "patient"}
               className="h-full min-h-[420px]"
-              tone="teal"
+              tone={role === "doctor" ? "teal" : "slate"}
             />
           </div>
-          <div className={`relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900 ${remoteVideoActive ? "absolute bottom-32 right-6 z-10 h-32 w-44 shadow-2xl shadow-black/50 md:bottom-28 md:right-8 md:h-40 md:w-56" : "min-h-[420px]"}`}>
+
+          {/* Right Side: Doctor Feed */}
+          <div className="relative min-h-[420px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
             <ConsultationVideoTile
-              stream={localStream}
-              label="Your stream"
-              detail={isCameraOn ? "Local preview" : "Camera disabled"}
-              active={isCameraOn}
-              cameraOn={isCameraOn}
-              micOn={isMicOn}
-              muted={true}
+              stream={role === "doctor" ? localStream : remoteStream}
+              label={role === "doctor" ? "Your stream" : counterpartName}
+              detail={
+                role === "doctor"
+                  ? isCameraOn
+                    ? "Local preview"
+                    : "Camera disabled"
+                  : counterpartCameraOn
+                    ? "Doctor stream"
+                    : "Camera disabled"
+              }
+              active={role === "doctor" ? isCameraOn : Boolean(counterpartCameraOn)}
+              cameraOn={role === "doctor" ? isCameraOn : counterpartCameraOn}
+              micOn={role === "doctor" ? isMicOn : counterpartMicOn}
+              muted={role === "doctor"}
               className="h-full min-h-[420px]"
-              tone="slate"
+              tone={role === "doctor" ? "slate" : "teal"}
             />
-            <div className="hidden">
-              <div>
-                <div className={`mx-auto h-16 w-16 rounded-full ${isCameraOn ? "bg-slate-700" : "bg-brand-red/30"}`} />
-                <p className="mt-4 text-sm font-black">Your stream</p>
-                <p className="mt-1 text-xs text-slate-400">{isCameraOn ? "Waiting for camera access" : "Camera disabled"}</p>
-              </div>
-            </div>
           </div>
         </div>
         <footer className="absolute bottom-5 left-1/2 flex -translate-x-1/2 flex-wrap items-center justify-center gap-4 rounded-full border border-white/10 bg-[rgba(24,24,27,0.7)] px-5 py-3 shadow-2xl shadow-black/30 backdrop-blur-[12px]">
