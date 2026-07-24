@@ -163,7 +163,6 @@ export default async function AdminDashboardPage() {
                 </div>
               </div>
             </div>
-
             <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Consultation volume</p>
               <div className="mt-6 space-y-4">
