@@ -81,7 +81,7 @@ export async function bookAppointment(data: BookAppointmentPayload) {
       return { success: false, error: "Please provide a valid future appointment date and time." };
     }
 
-    // Ensure the patient exists in Postgres and has a linked User row.
+    // Ensure the patient exists in Postgres.
     let patientRecord = null;
     try {
       patientRecord = await prisma.patient.findUnique({
@@ -101,10 +101,6 @@ export async function bookAppointment(data: BookAppointmentPayload) {
           hipaaConsent: true,
           emailVerified: true,
           isActive: true,
-          userId: true,
-          user: {
-            select: { id: true, email: true, password: true, role: true },
-          },
         },
       });
     } catch (err) {
@@ -120,76 +116,27 @@ export async function bookAppointment(data: BookAppointmentPayload) {
       }
 
       try {
-        await prisma.$transaction(async (tx) => {
-          const user = await tx.user.upsert({
-            where: { email: mockPatient.email.toLowerCase() },
-            create: {
-              email: mockPatient.email.toLowerCase(),
-              password: mockPatient.password,
-              role: "PATIENT",
-              emailVerified: mockPatient.emailVerified,
-              isActive: mockPatient.isActive,
-            },
-            update: {
-              password: mockPatient.password,
-              role: "PATIENT",
-              emailVerified: mockPatient.emailVerified,
-              isActive: mockPatient.isActive,
-            },
-          });
-
-          await tx.patient.create({
-            data: {
-              id: session.userId,
-              userId: user.id,
-              firstName: mockPatient.firstName,
-              middleName: mockPatient.middleName,
-              lastName: mockPatient.lastName,
-              suffix: mockPatient.suffix,
-              email: mockPatient.email.toLowerCase(),
-              countryCode: mockPatient.countryCode,
-              phone: mockPatient.phone,
-              dob: mockPatient.dob,
-              gender: mockPatient.gender,
-              password: mockPatient.password,
-              hipaaConsent: mockPatient.hipaaConsent,
-              emailVerified: mockPatient.emailVerified,
-              isActive: mockPatient.isActive,
-            },
-          });
+        await prisma.patient.create({
+          data: {
+            id: session.userId,
+            firstName: mockPatient.firstName,
+            middleName: mockPatient.middleName,
+            lastName: mockPatient.lastName,
+            suffix: mockPatient.suffix,
+            email: mockPatient.email.toLowerCase(),
+            countryCode: mockPatient.countryCode,
+            phone: mockPatient.phone,
+            dob: mockPatient.dob,
+            gender: mockPatient.gender,
+            password: mockPatient.password,
+            hipaaConsent: mockPatient.hipaaConsent,
+            emailVerified: mockPatient.emailVerified,
+            isActive: mockPatient.isActive,
+          },
         });
         console.log(`[bookAppointment] Successfully synced mock patient "${mockPatient.email}" to Postgres with ID "${session.userId}"`);
       } catch (syncErr) {
         console.error(`[bookAppointment] Failed to sync mock patient to Postgres:`, syncErr);
-        return { success: false, error: "Could not initialize patient record in the database." };
-      }
-    } else if (!patientRecord.userId || !patientRecord.user || patientRecord.user.email !== patientRecord.email || patientRecord.user.password !== patientRecord.password || patientRecord.user.role !== "PATIENT") {
-      try {
-        await prisma.$transaction(async (tx) => {
-          const user = await tx.user.upsert({
-            where: { email: patientRecord.email.toLowerCase() },
-            create: {
-              email: patientRecord.email.toLowerCase(),
-              password: patientRecord.password,
-              role: "PATIENT",
-              emailVerified: patientRecord.emailVerified,
-              isActive: patientRecord.isActive,
-            },
-            update: {
-              password: patientRecord.password,
-              role: "PATIENT",
-              emailVerified: patientRecord.emailVerified,
-              isActive: patientRecord.isActive,
-            },
-          });
-
-          await tx.patient.update({
-            where: { id: patientRecord.id },
-            data: { userId: user.id },
-          });
-        });
-      } catch (syncErr) {
-        console.error("[bookAppointment] Failed to backfill patient user link:", syncErr);
         return { success: false, error: "Could not initialize patient record in the database." };
       }
     }
