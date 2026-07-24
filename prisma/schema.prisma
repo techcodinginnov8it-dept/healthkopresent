@@ -12,6 +12,12 @@ datasource db {
 // Enums
 // ─────────────────────────────────────────────
 
+enum UserRole {
+  PATIENT
+  DOCTOR
+  ADMIN
+}
+
 enum ConsultationStatus {
   PENDING
   CONFIRMED
@@ -40,11 +46,65 @@ enum DoctorSpecialty {
 }
 
 // ─────────────────────────────────────────────
+// Central Account User Table
+// ─────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  role          UserRole  @default(PATIENT)
+  isActive      Boolean   @default(true)
+  emailVerified Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  patient       Patient?
+  doctor        Doctor?
+  admin         Admin?
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────
+// Admin Portal User
+// ─────────────────────────────────────────────
+
+model Admin {
+  id              String    @id @default(uuid())
+  userId          String    @unique @map("user_id")
+  name            String    @default("System Administrator")
+  email           String    @unique
+  role            String    @default("SUPER_ADMIN")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Direct administrative relations for oversight
+  managedPatients Patient[] @relation("AdminPatients")
+  managedDoctors  Doctor[]  @relation("AdminDoctors")
+
+  @@index([email])
+  @@map("admins")
+}
+
+// ─────────────────────────────────────────────
 // Patient — registered portal users
 // ─────────────────────────────────────────────
 
 model Patient {
   id            String         @id @default(uuid())
+
+  // Central User Account Link
+  userId        String         @unique @map("user_id")
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Admin Oversight Link
+  createdById   String?        @map("created_by_id")
+  createdBy     Admin?         @relation("AdminPatients", fields: [createdById], references: [id], onDelete: SetNull)
 
   // Name segments (split for HIPAA-compliant storage)
   firstName     String
@@ -105,8 +165,20 @@ model Patient {
 model Doctor {
   id             String          @id @default(uuid())
 
+  // Central User Account Link
+  userId         String          @unique @map("user_id")
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Admin Oversight Link
+  createdById    String?         @map("created_by_id")
+  createdBy      Admin?          @relation("AdminDoctors", fields: [createdById], references: [id], onDelete: SetNull)
+
   // Identity
   name           String
+  firstName      String?         @map("first_name")
+  middleName     String?         @map("middle_name")
+  lastName       String?         @map("last_name")
+  suffix         String?         @map("suffix")
   npi            String          @unique
   email          String          @unique
   password       String
@@ -221,6 +293,10 @@ model DoctorAudit {
   id             String      @id @default(uuid())
   doctorId       String?     @map("doctor_id")
   npi            String
+  firstName      String?     @map("first_name")
+  middleName     String?     @map("middle_name")
+  lastName       String?     @map("last_name")
+  suffix         String?     @map("suffix")
   licenseNumber  String      @map("license_number")
   licenseState   String      @map("license_state")
   specialty      String
@@ -228,9 +304,11 @@ model DoctorAudit {
   gradYear       Int         @map("grad_year")
   yearsExp       Int         @map("years_exp")
   documentName   String?     @map("document_name")
+  approvalType   String      @default("PRC_PRIMARY_SOURCE_VERIFICATION") @map("approval_type")
   status         AuditStatus @default(PENDING)
   signature      String
   consent        Boolean     @default(false)
+  doctorEmail    String?     @map("doctor_email")
   submittedAt    DateTime    @default(now()) @map("submitted_at")
   updatedAt      DateTime    @updatedAt @map("updated_at")
 

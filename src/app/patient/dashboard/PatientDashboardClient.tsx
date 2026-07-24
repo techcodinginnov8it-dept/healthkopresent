@@ -1619,10 +1619,10 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
         <div className="space-y-6">
           <StatGrid
             stats={[
-              { label: "Upcoming Consultations", value: upcomingAppointments.length },
-              { label: "Recent Doctors", value: recentDoctorNames.length },
-              { label: "Completed", value: completedAppointments.length },
-              { label: "Pending Rx", value: prescriptions.length },
+              { label: "Upcoming Consultations", value: upcomingAppointments.length, helper: "scheduled appointments" },
+              { label: "Recent Doctors", value: recentDoctorNames.length, helper: "doctors consulted" },
+              { label: "Completed", value: completedAppointments.length, helper: "finished consultations" },
+              { label: "Pending Rx", value: prescriptions.length, helper: "prescriptions pending" },
             ]}
           />
 

@@ -258,10 +258,14 @@ export async function updateConsultationVitals(data: UpdateConsultationVitalsPay
         return { success: false, error: "Consultation not found or unauthorized access." };
       }
 
+      const vitalsText = [
+        bloodPressure ? `BP: ${bloodPressure}` : "",
+        heartRate ? `HR: ${heartRate}` : "",
+        bodyTemperature ? `Temp: ${bodyTemperature}` : "",
+      ].filter(Boolean).join(", ");
+
       const updated = mockDb.updateConsultation(data.consultationId, {
-        bloodPressure: bloodPressure || null,
-        heartRate: heartRate || null,
-        bodyTemperature: bodyTemperature || null,
+        notes: vitalsText || null,
       });
 
       revalidatePath("/doctor/dashboard");

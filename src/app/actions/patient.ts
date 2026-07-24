@@ -5,6 +5,7 @@ import { getErrorMessage } from "@/lib/errors";
 import { isPrismaConfigured, prisma } from "@/lib/prisma";
 import { requirePatientSession } from "@/lib/auth/patient-session";
 import { mockDb } from "@/lib/mockDb";
+import { Prisma } from "@prisma/client";
 import {
   DEFAULT_DURATION_MINUTES,
   getFullyBookedMessage,
@@ -81,30 +82,72 @@ export async function bookAppointment(data: BookAppointmentPayload) {
       return { success: false, error: "Please provide a valid future appointment date and time." };
     }
 
-    // Ensure the patient exists in Postgres (sync if necessary)
-    let patientExists = false;
+    // Ensure the patient exists in Postgres and has a linked User row.
+    let patientRecord = null;
     try {
-      const patientCount = await prisma.patient.count({
+      patientRecord = await prisma.patient.findUnique({
         where: { id: session.userId },
+        select: {
+          id: true,
+          email: true,
+          password: true,
+          firstName: true,
+          middleName: true,
+          lastName: true,
+          suffix: true,
+          countryCode: true,
+          phone: true,
+          dob: true,
+          gender: true,
+          hipaaConsent: true,
+          emailVerified: true,
+          isActive: true,
+          userId: true,
+          user: {
+            select: { id: true, email: true, password: true, role: true },
+          },
+        },
       });
-      patientExists = patientCount > 0;
     } catch (err) {
-      console.warn("[bookAppointment] Failed to check patient existence in Postgres:", err);
+      console.warn("[bookAppointment] Failed to load patient record in Postgres:", err);
     }
 
-    if (!patientExists) {
+    if (!patientRecord) {
       console.log(`[bookAppointment] Patient "${session.userId}" not found in Postgres. Attempting to sync from mockDb...`);
       const mockPatient = mockDb.findPatientById(session.userId) || mockDb.findPatientByEmail(session.email);
-      if (mockPatient) {
-        try {
-          await prisma.patient.create({
+      if (!mockPatient) {
+        console.warn(`[bookAppointment] Patient not found in mockDb either!`);
+        return { success: false, error: "Patient session is invalid or record not found." };
+      }
+
+      try {
+        await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+          const user = await tx.user.upsert({
+            where: { email: mockPatient.email.toLowerCase() },
+            create: {
+              email: mockPatient.email.toLowerCase(),
+              password: mockPatient.password,
+              role: "PATIENT",
+              emailVerified: mockPatient.emailVerified,
+              isActive: mockPatient.isActive,
+            },
+            update: {
+              password: mockPatient.password,
+              role: "PATIENT",
+              emailVerified: mockPatient.emailVerified,
+              isActive: mockPatient.isActive,
+            },
+          });
+
+          await tx.patient.create({
             data: {
               id: session.userId,
+              userId: user.id,
               firstName: mockPatient.firstName,
               middleName: mockPatient.middleName,
               lastName: mockPatient.lastName,
               suffix: mockPatient.suffix,
-              email: mockPatient.email,
+              email: mockPatient.email.toLowerCase(),
               countryCode: mockPatient.countryCode,
               phone: mockPatient.phone,
               dob: mockPatient.dob,
@@ -115,14 +158,40 @@ export async function bookAppointment(data: BookAppointmentPayload) {
               isActive: mockPatient.isActive,
             },
           });
-          console.log(`[bookAppointment] Successfully synced mock patient "${mockPatient.email}" to Postgres with ID "${session.userId}"`);
-        } catch (syncErr) {
-          console.error(`[bookAppointment] Failed to sync mock patient to Postgres:`, syncErr);
-          return { success: false, error: "Could not initialize patient record in the database." };
-        }
-      } else {
-        console.warn(`[bookAppointment] Patient not found in mockDb either!`);
-        return { success: false, error: "Patient session is invalid or record not found." };
+        });
+        console.log(`[bookAppointment] Successfully synced mock patient "${mockPatient.email}" to Postgres with ID "${session.userId}"`);
+      } catch (syncErr) {
+        console.error(`[bookAppointment] Failed to sync mock patient to Postgres:`, syncErr);
+        return { success: false, error: "Could not initialize patient record in the database." };
+      }
+    } else if (!patientRecord.userId || !patientRecord.user || patientRecord.user.email !== patientRecord.email || patientRecord.user.password !== patientRecord.password || patientRecord.user.role !== "PATIENT") {
+      try {
+        await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+          const user = await tx.user.upsert({
+            where: { email: patientRecord.email.toLowerCase() },
+            create: {
+              email: patientRecord.email.toLowerCase(),
+              password: patientRecord.password,
+              role: "PATIENT",
+              emailVerified: patientRecord.emailVerified,
+              isActive: patientRecord.isActive,
+            },
+            update: {
+              password: patientRecord.password,
+              role: "PATIENT",
+              emailVerified: patientRecord.emailVerified,
+              isActive: patientRecord.isActive,
+            },
+          });
+
+          await tx.patient.update({
+            where: { id: patientRecord.id },
+            data: { userId: user.id },
+          });
+        });
+      } catch (syncErr) {
+        console.error("[bookAppointment] Failed to backfill patient user link:", syncErr);
+        return { success: false, error: "Could not initialize patient record in the database." };
       }
     }
 

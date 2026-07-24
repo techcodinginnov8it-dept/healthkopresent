@@ -1303,9 +1303,9 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
           <StatGrid
             tone="dark"
             stats={[
-              { label: "Pending", value: pendingAppointments.length },
-              { label: "Confirmed", value: confirmedAppointments.length },
-              { label: "Patients", value: patients.length },
+              { label: "Pending", value: pendingAppointments.length, helper: "awaiting confirmation" },
+              { label: "Confirmed", value: confirmedAppointments.length, helper: "scheduled appointments" },
+              { label: "Patients", value: patients.length, helper: "total patients" },
             ]}
           />
           <section className="rounded-xl border border-slate-850 bg-slate-900 p-5">
