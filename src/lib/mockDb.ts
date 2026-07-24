@@ -74,6 +74,9 @@ export type MockConsultation = {
   reason: string | null;
   notes: string | null;
   prescription: string | null;
+  bloodPressure: string | null;
+  heartRate: string | null;
+  bodyTemperature: string | null;
   duration: number;
   createdAt: string;
   updatedAt: string;
@@ -100,12 +103,31 @@ export type MockVideoSession = {
   updatedAt: string;
 };
 
+export type MockDoctorAudit = {
+  id: string;
+  doctorId: string | null;
+  npi: string;
+  licenseNumber: string;
+  licenseState: string;
+  specialty: string;
+  medicalSchool: string;
+  gradYear: number;
+  yearsExp: number;
+  documentName: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  signature: string;
+  consent: boolean;
+  submittedAt: string;
+  updatedAt: string;
+};
+
 type MockDbSchema = {
   patients: MockPatient[];
   doctors: MockDoctor[];
   consultations: MockConsultation[];
   emailOtps: MockEmailOtp[];
   videoSessions?: MockVideoSession[];
+  audits?: MockDoctorAudit[];
 };
 
 function getDb(): MockDbSchema {
@@ -117,7 +139,7 @@ function getDb(): MockDbSchema {
           id: "doc-sarah-jenkins-123",
           npi: "1982736450",
           email: "s.jenkins@healthko.com",
-          password: bcrypt.hashSync("doctor123", 10),
+          password: bcrypt.hashSync("123456", 10),
           name: "Dr. Sarah Jenkins",
           specialty: "Board-Certified Cardiologist",
           rating: 4.9,
@@ -137,7 +159,7 @@ function getDb(): MockDbSchema {
           id: "doc-marcus-vance-456",
           npi: "1098273645",
           email: "m.vance@healthko.com",
-          password: bcrypt.hashSync("doctor123", 10),
+          password: bcrypt.hashSync("123456", 10),
           name: "Dr. Marcus Vance",
           specialty: "Pediatric Medicine Specialist",
           rating: 4.8,
@@ -157,7 +179,7 @@ function getDb(): MockDbSchema {
           id: "doc-aaliyah-patel-789",
           npi: "1234567890",
           email: "a.patel@healthko.com",
-          password: bcrypt.hashSync("doctor123", 10),
+          password: bcrypt.hashSync("123456", 10),
           name: "Dr. Aaliyah Patel",
           specialty: "Family Practitioner & Telehealth Lead",
           rating: 4.9,
@@ -181,6 +203,7 @@ function getDb(): MockDbSchema {
         consultations: [],
         emailOtps: [],
         videoSessions: [],
+        audits: [],
       };
 
       fs.writeFileSync(DB_PATH, JSON.stringify(initialDb, null, 2), "utf8");
@@ -190,6 +213,7 @@ function getDb(): MockDbSchema {
     const raw = fs.readFileSync(DB_PATH, "utf8");
     const parsed = JSON.parse(raw) as MockDbSchema;
     parsed.videoSessions ||= [];
+    parsed.audits ||= [];
     return parsed;
   } catch (error) {
     console.error("Error reading mock database, using empty state:", error);
@@ -303,12 +327,68 @@ export const mockDb = {
   getDoctorsList(): Omit<MockDoctor, "password">[] {
     const db = getDb();
     return db.doctors
-      .filter((d) => d.isActive)
+      .filter((d) => d.isActive && d.isVerified)
       .map((doctor) => {
         const rest = { ...doctor } as Partial<MockDoctor>;
         delete rest.password;
         return rest as Omit<MockDoctor, "password">;
       });
+  },
+
+  getAdminMetrics() {
+    const db = getDb();
+    const totalPatients = db.patients.length;
+    const totalDoctors = db.doctors.length;
+    const activePatients = db.patients.filter((patient) => patient.isActive).length;
+    const activeDoctors = db.doctors.filter((doctor) => doctor.isActive).length;
+    const onlineDoctors = db.doctors.filter(
+      (doctor) => doctor.isActive && doctor.status?.toUpperCase() === "ONLINE"
+    ).length;
+    const offlineDoctors = db.doctors.filter(
+      (doctor) => doctor.isActive && doctor.status?.toUpperCase() !== "ONLINE"
+    ).length;
+    const totalConsultations = db.consultations.length;
+
+    const now = new Date();
+    const dayStart = new Date(now);
+    dayStart.setHours(0, 0, 0, 0);
+    const weekStart = new Date(dayStart);
+    weekStart.setDate(weekStart.getDate() - 6);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const countByRange = (records: { createdAt: string }[], from: Date) =>
+      records.filter((record) => new Date(record.createdAt) >= from).length;
+
+    const dailyNewPatients = countByRange(db.patients, dayStart);
+    const weeklyNewPatients = countByRange(db.patients, weekStart);
+    const monthlyNewPatients = countByRange(db.patients, monthStart);
+
+    const dailyNewDoctors = countByRange(db.doctors, dayStart);
+    const weeklyNewDoctors = countByRange(db.doctors, weekStart);
+    const monthlyNewDoctors = countByRange(db.doctors, monthStart);
+
+    const dailyConsultations = countByRange(db.consultations, dayStart);
+    const weeklyConsultations = countByRange(db.consultations, weekStart);
+    const monthlyConsultations = countByRange(db.consultations, monthStart);
+
+    return {
+      totalPatients,
+      totalDoctors,
+      activePatients,
+      activeDoctors,
+      onlineDoctors,
+      offlineDoctors,
+      totalConsultations,
+      dailyNewPatients,
+      weeklyNewPatients,
+      monthlyNewPatients,
+      dailyNewDoctors,
+      weeklyNewDoctors,
+      monthlyNewDoctors,
+      dailyConsultations,
+      weeklyConsultations,
+      monthlyConsultations,
+    };
   },
 
   // --- OTPs ---
@@ -365,6 +445,7 @@ export const mockDb = {
       .filter((c) => c.patientId === patientId)
       .map((c) => {
         const doctor = this.findDoctorById(c.doctorId);
+        const videoSession = db.videoSessions?.find((vs) => vs.consultationId === c.id) || null;
         return {
           ...c,
           scheduledAt: new Date(c.scheduledAt),
@@ -380,6 +461,9 @@ export const mockDb = {
                 name: "Unknown Doctor",
                 specialty: "General Medicine",
               },
+          videoSession: videoSession
+            ? { roomId: videoSession.roomId, status: videoSession.status }
+            : null,
         };
       })
       .sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
@@ -446,6 +530,9 @@ export const mockDb = {
       reason: data.reason,
       notes: null,
       prescription: null,
+      bloodPressure: null,
+      heartRate: null,
+      bodyTemperature: null,
       duration: data.duration,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

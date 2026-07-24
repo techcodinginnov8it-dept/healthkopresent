@@ -7,6 +7,67 @@ import { isPrismaConfigured, prisma } from "@/lib/prisma";
 import { requirePatientSession } from "@/lib/auth/patient-session";
 import { mockDb } from "@/lib/mockDb";
 
+const PATIENT_BOOKINGS_SELECT = {
+  orderBy: { scheduledAt: "asc" as const },
+  select: {
+    id: true,
+    scheduledAt: true,
+    status: true,
+    reason: true,
+    duration: true,
+    prescription: true,
+    bloodPressure: true,
+    heartRate: true,
+    bodyTemperature: true,
+    createdAt: true,
+    doctor: {
+      select: {
+        id: true,
+        name: true,
+        specialty: true,
+      },
+    },
+    // Include active video session so the patient dashboard can hydrate
+    // authorizedRooms on page load without needing a socket event.
+    videoSession: {
+      select: {
+        roomId: true,
+        status: true,
+      },
+    },
+  },
+};
+
+const PATIENT_PROFILE_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  image: true,
+  phone: true,
+  countryCode: true,
+  dob: true,
+  gender: true,
+  address: true,
+  city: true,
+  state: true,
+  zipCode: true,
+  country: true,
+  height: true,
+  weight: true,
+  bloodType: true,
+  allergies: true,
+  existingConditions: true,
+  currentMedications: true,
+  emergencyContactName: true,
+  emergencyContactPhone: true,
+  emergencyContactRelation: true,
+  emailVerified: true,
+  createdAt: true,
+  updatedAt: true,
+  bookings: PATIENT_BOOKINGS_SELECT,
+};
+
 export const getPatientDashboardData = cache(async () => {
   const session = await requirePatientSession();
 
@@ -14,86 +75,49 @@ export const getPatientDashboardData = cache(async () => {
     return getMockPatientDashboardData(session);
   }
 
+  let patient = null;
+
   try {
-    const patient = await prisma.patient.findUnique({
+    patient = await prisma.patient.findUnique({
       where: { id: session.userId },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        image: true,
-        phone: true,
-        countryCode: true,
-        dob: true,
-        gender: true,
-        address: true,
-        city: true,
-        state: true,
-        zipCode: true,
-        country: true,
-        height: true,
-        weight: true,
-        bloodType: true,
-        allergies: true,
-        existingConditions: true,
-        currentMedications: true,
-        emergencyContactName: true,
-        emergencyContactPhone: true,
-        emergencyContactRelation: true,
-        emailVerified: true,
-        createdAt: true,
-        updatedAt: true,
-        bookings: {
-          orderBy: { scheduledAt: "asc" },
-          select: {
-            id: true,
-            scheduledAt: true,
-            status: true,
-            reason: true,
-            duration: true,
-            prescription: true,
-            createdAt: true,
-            doctor: {
-              select: {
-                id: true,
-                name: true,
-                specialty: true,
-              },
-            },
-          },
-        },
-      },
+      select: PATIENT_PROFILE_SELECT,
     });
-
-    if (!patient) {
-      redirect("/signin");
-    }
-
-    return {
-      session,
-      patient,
-    };
   } catch (error) {
-    console.warn("Prisma getPatientDashboardData failed, falling back to mock JSON database:", error);
-    return getMockPatientDashboardData(session);
+    console.error("[getPatientDashboardData] Prisma query failed:", error);
+    throw error;
   }
+
+  if (!patient) {
+    const mockPatient = mockDb.findPatientById(session.userId);
+    if (mockPatient) {
+      return getMockPatientDashboardData(session);
+    }
+    redirect("/signin");
+  }
+
+  return {
+    session,
+    patient,
+  };
 });
 
 function getMockPatientDashboardData(session: { userId: string; email: string }) {
   try {
-    const patientData = mockDb.findPatientById(session.userId);
+    const patientData = mockDb.findPatientById(session.userId) ?? mockDb.findPatientByEmail(session.email);
+
     if (!patientData) {
       redirect("/signin");
     }
 
-    const bookings = mockDb.getBookingsForPatient(session.userId);
+    const bookings = mockDb.getBookingsForPatient(patientData.id);
 
     return {
       session,
       patient: {
         id: patientData.id,
         firstName: patientData.firstName,
+        middleName: patientData.middleName,
+        suffix: patientData.suffix,
         lastName: patientData.lastName,
         email: patientData.email,
         image: patientData.image ?? null,

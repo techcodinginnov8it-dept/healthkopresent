@@ -191,9 +191,7 @@ export function AppointmentCalendar({
   const resolvedAnchorDate = startOfDay(anchorDate || new Date());
   const days = getCalendarDays(viewMode, resolvedAnchorDate);
   const availabilityWindow = parseAvailability(availability);
-  const hours = availabilityWindow
-    ? Array.from({ length: Math.max(1, Math.ceil(availabilityWindow.endMinutes / 60) - Math.floor(availabilityWindow.startMinutes / 60)) }, (_, index) => Math.floor(availabilityWindow.startMinutes / 60) + index)
-    : [8, 9, 10, 11, 13, 14, 15, 16];
+  const hours = Array.from({ length: 24 }, (_, index) => index);
   const dark = tone === "dark";
   const stage = variant === "stage";
   const periodLabel = viewMode === "month"

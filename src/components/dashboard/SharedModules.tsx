@@ -48,7 +48,7 @@ export function StatGrid({
   stats,
   tone = "light",
 }: {
-  stats: { label: string; value: string | number; helper: string }[];
+  stats: { label: string; value: string | number; helper?: string }[];
   tone?: "light" | "dark";
 }) {
   const gridColumns = stats.length >= 4 ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-3";
@@ -64,7 +64,7 @@ export function StatGrid({
         >
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">{stat.label}</p>
           <p className="mt-3 font-display text-3xl font-black">{stat.value}</p>
-          <p className={`mt-1 text-xs font-semibold ${tone === "dark" ? "text-slate-400" : "text-slate-500"}`}>{stat.helper}</p>
+          {stat.helper ? <p className={`mt-1 text-xs font-semibold ${tone === "dark" ? "text-slate-400" : "text-slate-500"}`}>{stat.helper}</p> : null}
         </div>
       ))}
     </div>
@@ -325,6 +325,8 @@ function ConsultationVideoTile({
   label,
   detail,
   active,
+  cameraOn = true,
+  micOn = true,
   muted = false,
   className = "",
   tone = "teal",
@@ -333,6 +335,8 @@ function ConsultationVideoTile({
   label: string;
   detail: string;
   active: boolean;
+  cameraOn?: boolean;
+  micOn?: boolean;
   muted?: boolean;
   className?: string;
   tone?: "teal" | "slate";
@@ -361,13 +365,17 @@ function ConsultationVideoTile({
 
   return (
     <div className={`relative overflow-hidden rounded-xl border border-slate-800 bg-slate-950 ${className}`}>
-      {showFeed ? (
+      {stream ? (
         <video
           ref={ref}
           autoPlay
           playsInline
           muted={muted}
-          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${active ? "opacity-100" : "opacity-35"}`}
+          className={
+            showFeed
+              ? `absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${active ? "opacity-100" : "opacity-35"}`
+              : "sr-only"
+          }
         />
       ) : null}
       <div
@@ -386,24 +394,44 @@ function ConsultationVideoTile({
             <h3 className="mt-1 truncate text-sm font-black text-white">{label}</h3>
             <p className="mt-1 text-xs font-semibold text-slate-200/80">{detail}</p>
           </div>
-          <span
-            className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${
-              showFeed
-                ? active
-                  ? "bg-emerald-500/15 text-emerald-200"
-                  : "bg-amber-500/15 text-amber-200"
-                : "bg-slate-800/90 text-slate-300"
-            }`}
-          >
-            {showFeed ? (active ? "Camera on" : "Camera off") : "No video"}
-          </span>
+          <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+            <span
+              className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${
+                cameraOn
+                  ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/20"
+                  : "bg-rose-500/15 text-rose-300 border border-rose-500/20"
+              }`}
+            >
+              {cameraOn ? "Camera On" : "Camera Off"}
+            </span>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider flex items-center gap-1 ${
+                micOn
+                  ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/20"
+                  : "bg-rose-500/15 text-rose-300 border border-rose-500/20"
+              }`}
+            >
+              {micOn ? (
+                <>
+                  <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+                  </svg>
+                  <span>Mic On</span>
+                </>
+              ) : (
+                <>
+                  <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75 20.25 20.25M9 9.75v2.25a3 3 0 0 0 5.25 2m-.25-6.25v-1.25a3 3 0 0 0-6 0v4.25m4.25 10.25H12V18.75m-6-6v-1.5m12 1.5v-1.5" />
+                  </svg>
+                  <span>Muted</span>
+                </>
+              )}
+            </span>
+          </div>
         </div>
 
         {showFeed ? (
-          <div className="mt-auto flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-950/30 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-100/80 backdrop-blur-sm">
-            <span>{muted ? "Local preview" : "Remote stream"}</span>
-            <span>{hasAudio ? "Audio active" : "Audio unavailable"}</span>
-          </div>
+          <div className="mt-auto h-2" aria-hidden="true" />
         ) : (
           <div className="mt-auto flex flex-1 items-center justify-center p-4 text-center">
             <div>
@@ -418,79 +446,6 @@ function ConsultationVideoTile({
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-type MediaDeviceControlsProps = {
-  devices?: MediaDeviceInfo[];
-  cameraDeviceId?: string;
-  microphoneDeviceId?: string;
-  onCameraDeviceChange?: (deviceId: string) => void;
-  onMicrophoneDeviceChange?: (deviceId: string) => void;
-  onRefreshDevices?: () => void;
-  deviceStatus?: {
-    cameraAvailable: boolean;
-    microphoneAvailable: boolean;
-    permissionState: PermissionState | "unknown";
-    message: string | null;
-  };
-};
-
-function MediaDeviceControls({
-  devices = [],
-  cameraDeviceId = "",
-  microphoneDeviceId = "",
-  onCameraDeviceChange,
-  onMicrophoneDeviceChange,
-  onRefreshDevices,
-  deviceStatus,
-}: MediaDeviceControlsProps) {
-  const cameras = devices.filter((device) => device.kind === "videoinput");
-  const microphones = devices.filter((device) => device.kind === "audioinput");
-
-  return (
-    <div className="grid gap-2 rounded-lg border border-white/10 bg-white/[0.03] p-3 text-xs sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-      <label className="min-w-0 space-y-1 font-bold text-slate-300">
-        Camera
-        <select
-          value={cameraDeviceId}
-          onChange={(event) => onCameraDeviceChange?.(event.target.value)}
-          className="w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-2 text-xs text-white outline-none focus:border-brand-teal"
-        >
-          <option value="">{cameras.length ? "Default camera" : "No camera detected"}</option>
-          {cameras.map((device, index) => (
-            <option key={device.deviceId || `camera-${index}`} value={device.deviceId}>
-              {device.label || `Camera ${index + 1}`}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="min-w-0 space-y-1 font-bold text-slate-300">
-        Microphone
-        <select
-          value={microphoneDeviceId}
-          onChange={(event) => onMicrophoneDeviceChange?.(event.target.value)}
-          className="w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-2 text-xs text-white outline-none focus:border-brand-teal"
-        >
-          <option value="">{microphones.length ? "Default microphone" : "No microphone detected"}</option>
-          {microphones.map((device, index) => (
-            <option key={device.deviceId || `microphone-${index}`} value={device.deviceId}>
-              {device.label || `Microphone ${index + 1}`}
-            </option>
-          ))}
-        </select>
-      </label>
-      <button
-        type="button"
-        onClick={onRefreshDevices}
-        className="self-end rounded-md border border-white/10 px-3 py-2 text-[10px] font-black uppercase text-slate-200 transition hover:bg-white/10"
-      >
-        Recheck
-      </button>
-      {deviceStatus?.message && (
-        <p className="text-[11px] font-semibold text-amber-100 sm:col-span-3">{deviceStatus.message}</p>
-      )}
     </div>
   );
 }
@@ -513,13 +468,6 @@ export function LiveConsultationPanel({
   remoteStream = null,
   connectionState = "new",
   mediaError = null,
-  devices,
-  cameraDeviceId,
-  microphoneDeviceId,
-  deviceStatus,
-  onCameraDeviceChange,
-  onMicrophoneDeviceChange,
-  onRefreshDevices,
 }: {
   role: DashboardRole;
   counterpartName: string;
@@ -538,13 +486,6 @@ export function LiveConsultationPanel({
   remoteStream?: MediaStream | null;
   connectionState?: RTCPeerConnectionState;
   mediaError?: string | null;
-  devices?: MediaDeviceInfo[];
-  cameraDeviceId?: string;
-  microphoneDeviceId?: string;
-  deviceStatus?: MediaDeviceControlsProps["deviceStatus"];
-  onCameraDeviceChange?: (deviceId: string) => void;
-  onMicrophoneDeviceChange?: (deviceId: string) => void;
-  onRefreshDevices?: () => void;
 }) {
   const statusLabel = status === "connected" ? "Connected" : role === "doctor" ? "Waiting for Patient" : "Waiting room";
   const remoteVideoAvailable = Boolean(remoteStream?.getVideoTracks().length);
@@ -554,9 +495,10 @@ export function LiveConsultationPanel({
       ? "Media connected"
       : connectionState === "connecting"
         ? "Connecting media"
-        : connectionState === "failed"
+      : connectionState === "failed"
           ? "Media connection failed"
-          : "Media ready";
+          : null;
+  const patientSideBySideLayout = role === "patient";
 
   return (
     <div className="grid gap-4 xl:grid-cols-12">
@@ -572,71 +514,86 @@ export function LiveConsultationPanel({
           </span>
         </header>
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 px-4 py-3">
-          <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${connectionState === "failed" ? "bg-red-500/15 text-red-200" : "bg-white/10 text-slate-200"}`}>
-            {connectionLabel}
-          </span>
+          {connectionLabel && (
+            <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${connectionState === "failed" ? "bg-red-500/15 text-red-200" : "bg-white/10 text-slate-200"}`}>
+              {connectionLabel}
+            </span>
+          )}
           {mediaError && (
             <span className="rounded-full bg-red-500/15 px-2.5 py-1 text-[10px] font-bold text-red-100">
               {mediaError}
             </span>
           )}
         </div>
-        <div className="border-b border-slate-800 px-4 py-3">
-          <MediaDeviceControls
-            devices={devices}
-            cameraDeviceId={cameraDeviceId}
-            microphoneDeviceId={microphoneDeviceId}
-            deviceStatus={deviceStatus}
-            onCameraDeviceChange={onCameraDeviceChange}
-            onMicrophoneDeviceChange={onMicrophoneDeviceChange}
-            onRefreshDevices={onRefreshDevices}
-          />
-        </div>
-        <div className="relative grid min-h-[520px] gap-4 p-4 pb-28 md:grid-cols-2">
-          <div className={`relative min-h-[420px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900 ${remoteVideoActive ? "md:col-span-2" : ""}`}>
-            <ConsultationVideoTile
-              stream={remoteStream}
-              label={counterpartName}
-              detail={counterpartCameraOn ? (role === "doctor" ? "Patient stream" : "Doctor stream") : "Camera disabled"}
-              active={counterpartCameraOn}
-              muted={false}
-              className="h-full min-h-[420px]"
-              tone="teal"
-            />
-            <div className="hidden" />
-            <div className="hidden">
-              <div>
-                <div className={`mx-auto h-16 w-16 rounded-full ${counterpartCameraOn ? "bg-brand-teal/20" : "bg-brand-red/30"}`} />
-                <p className="mt-4 text-sm font-black">{counterpartName}</p>
-                <p className="mt-1 text-xs text-slate-400">
-                  {counterpartCameraOn ? (role === "doctor" ? "Patient stream" : "Doctor stream") : "Camera disabled"}
-                  {" · "}
-                  {counterpartMicOn ? "Audio live" : "Muted"}
-                </p>
+        <div className={`relative grid min-h-[520px] gap-4 p-4 pb-4 ${patientSideBySideLayout ? "md:grid-cols-2" : "md:grid-cols-2"}`}>
+          {patientSideBySideLayout ? (
+            <>
+              <div className="relative min-h-[420px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+                <ConsultationVideoTile
+                  stream={remoteStream}
+                  label={counterpartName}
+                  detail={counterpartCameraOn ? "Doctor stream" : "Camera disabled"}
+                  active={counterpartCameraOn}
+                  cameraOn={counterpartCameraOn}
+                  micOn={counterpartMicOn}
+                  muted={false}
+                  className="h-full min-h-[420px]"
+                  tone="teal"
+                />
               </div>
-            </div>
-          </div>
-          <div className={`relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900 ${remoteVideoActive ? "absolute bottom-32 right-6 z-10 h-32 w-44 shadow-2xl shadow-black/50 md:bottom-28 md:right-8 md:h-40 md:w-56" : "min-h-[420px]"}`}>
-            <ConsultationVideoTile
-              stream={localStream}
-              label="Your stream"
-              detail={isCameraOn ? "Local preview" : "Camera disabled"}
-              active={isCameraOn}
-              muted={true}
-              className="h-full min-h-[420px]"
-              tone="slate"
-            />
-            <div className="hidden">
-              <div>
-                <div className={`mx-auto h-16 w-16 rounded-full ${isCameraOn ? "bg-slate-700" : "bg-brand-red/30"}`} />
-                <p className="mt-4 text-sm font-black">Your stream</p>
-                <p className="mt-1 text-xs text-slate-400">{isCameraOn ? "Waiting for camera access" : "Camera disabled"}</p>
+              <div className="relative min-h-[420px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+                <ConsultationVideoTile
+                  stream={localStream}
+                  label="Your stream"
+                  detail={isCameraOn ? "Patient stream" : "Camera disabled"}
+                  active={isCameraOn}
+                  cameraOn={isCameraOn}
+                  micOn={isMicOn}
+                  muted={true}
+                  className="h-full min-h-[420px]"
+                  tone="slate"
+                />
               </div>
-            </div>
-          </div>
+            </>
+          ) : (
+            <>
+              <div className={`relative min-h-[420px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900 ${remoteVideoActive ? "md:col-span-2" : ""}`}>
+                <ConsultationVideoTile
+                  stream={remoteStream}
+                  label={counterpartName}
+                  detail={counterpartCameraOn ? (role === "doctor" ? "Patient stream" : "Doctor stream") : "Camera disabled"}
+                  active={counterpartCameraOn}
+                  cameraOn={counterpartCameraOn}
+                  micOn={counterpartMicOn}
+                  muted={false}
+                  className="h-full min-h-[420px]"
+                  tone="teal"
+                />
+              </div>
+              <div className={`relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900 ${remoteVideoActive ? "absolute bottom-20 right-6 z-10 h-32 w-44 shadow-2xl shadow-black/50 md:bottom-20 md:right-8 md:h-40 md:w-56" : "min-h-[420px]"}`}>
+                <ConsultationVideoTile
+                  stream={localStream}
+                  label="Your stream"
+                  detail={isCameraOn ? "Local preview" : "Camera disabled"}
+                  active={isCameraOn}
+                  cameraOn={isCameraOn}
+                  micOn={isMicOn}
+                  muted={true}
+                  className="h-full min-h-[420px]"
+                  tone="slate"
+                />
+                <div className="hidden">
+                  <div>
+                    <div className={`mx-auto h-16 w-16 rounded-full ${isCameraOn ? "bg-slate-700" : "bg-brand-red/30"}`} />
+                    <p className="mt-4 text-sm font-black">Your stream</p>
+                    <p className="mt-1 text-xs text-slate-400">{isCameraOn ? "Waiting for camera access" : "Camera disabled"}</p>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
-        <footer className="absolute bottom-5 left-1/2 flex -translate-x-1/2 flex-wrap items-center justify-center gap-4 rounded-full border border-white/10 bg-[rgba(24,24,27,0.7)] px-5 py-3 shadow-2xl shadow-black/30 backdrop-blur-[12px]">
-          <div className="flex items-center gap-4">
+        <footer className="mx-auto -mt-1 flex w-fit items-center justify-center gap-3 rounded-full border border-white/10 bg-[rgba(24,24,27,0.7)] px-4 py-3 shadow-2xl shadow-black/30 backdrop-blur-[12px]">
           <button
             type="button"
             onClick={onToggleCamera}
@@ -663,7 +620,6 @@ export function LiveConsultationPanel({
           >
             <MicControlIcon off={!isMicOn} />
           </button>
-          </div>
           <button
             type="button"
             onClick={onEnd}
@@ -683,7 +639,6 @@ export function LiveConsultationPanel({
     </div>
   );
 }
-
 export function FloatingConsultationCall({
   role,
   counterpartName,
@@ -691,6 +646,7 @@ export function FloatingConsultationCall({
   isCameraOn,
   isMicOn,
   counterpartCameraOn = true,
+  counterpartMicOn = true,
   localStream = null,
   remoteStream = null,
   connectionState = "new",
@@ -706,6 +662,7 @@ export function FloatingConsultationCall({
   isCameraOn: boolean;
   isMicOn: boolean;
   counterpartCameraOn?: boolean;
+  counterpartMicOn?: boolean;
   localStream?: MediaStream | null;
   remoteStream?: MediaStream | null;
   connectionState?: RTCPeerConnectionState;
@@ -786,6 +743,27 @@ export function FloatingConsultationCall({
       <div className="relative h-44 bg-slate-900">
         <div className="absolute left-3 top-3 z-10 rounded-full border border-white/10 bg-slate-950/70 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-slate-300 backdrop-blur">
           Drag
+        </div>
+        <div className="absolute right-3 top-3 z-10 flex gap-1">
+          {!counterpartCameraOn && (
+            <span className="rounded-full bg-rose-500/80 p-1 text-white backdrop-blur" title="Camera off">
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m16 13 5 3V8l-5 3" />
+                <rect width="14" height="10" x="2" y="7" rx="2" />
+                <path d="M3 3l18 18" />
+              </svg>
+            </span>
+          )}
+          {!counterpartMicOn && (
+            <span className="rounded-full bg-rose-500/80 p-1 text-white backdrop-blur" title="Muted">
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <path d="M12 19v3" />
+                <path d="M3 3l18 18" />
+              </svg>
+            </span>
+          )}
         </div>
         <VideoStream stream={remoteStream} active={counterpartCameraOn} />
         {!remoteVideoActive && (

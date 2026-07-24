@@ -4,6 +4,7 @@ import { createClient as createSupabaseServerClient } from "@/utils/supabase/ser
 import { isPrismaConfigured, prisma } from "@/lib/prisma";
 import { clearPatientSession, createPatientSession } from "@/lib/auth/patient-session";
 import { clearDoctorSession, createDoctorSession } from "@/lib/auth/doctor-session";
+import { clearAdminSession, createAdminSession } from "@/lib/auth/admin-session";
 import bcrypt from "bcryptjs";
 import { randomInt } from "crypto";
 import { redirect } from "next/navigation";
@@ -23,7 +24,7 @@ async function ensureFeaturedDoctorsSeeded() {
         {
           npi: "1982736450",
           email: "s.jenkins@healthko.com",
-          password: await bcrypt.hash("doctor123", 10),
+          password: await bcrypt.hash("123456", 10),
           name: "Dr. Sarah Jenkins",
           specialty: "Board-Certified Cardiologist",
           rating: 4.9,
@@ -32,7 +33,7 @@ async function ensureFeaturedDoctorsSeeded() {
         {
           npi: "1098273645",
           email: "m.vance@healthko.com",
-          password: await bcrypt.hash("doctor123", 10),
+          password: await bcrypt.hash("123456", 10),
           name: "Dr. Marcus Vance",
           specialty: "Pediatric Medicine Specialist",
           rating: 4.8,
@@ -41,7 +42,7 @@ async function ensureFeaturedDoctorsSeeded() {
         {
           npi: "1234567890",
           email: "a.patel@healthko.com",
-          password: await bcrypt.hash("doctor123", 10),
+          password: await bcrypt.hash("123456", 10),
           name: "Dr. Aaliyah Patel",
           specialty: "Family Practitioner & Telehealth Lead",
           rating: 4.9,
@@ -96,6 +97,9 @@ type DoctorLoginPayload = {
   securityKey?: string;
 };
 
+const ADMIN_EMAIL = "admin@healthko.com";
+const ADMIN_PASSWORD_HASH = "$2a$10$GKRhPVU715yCQTPmoyEc5uMZMyZwUcIAM.wojMkY6kgqmorRIpb0O";
+
 async function validateMockPatientLogin({ email, password }: PatientLoginPayload) {
   const patient = mockDb.findPatientByEmail(email);
 
@@ -123,6 +127,14 @@ async function loginMockDoctor({ emailOrNpi, password, securityKey }: DoctorLogi
   const doctor = mockDb.findDoctorByEmailOrNpi(emailOrNpi);
   if (!doctor) {
     return { success: false, error: "No physician matches these credentials" };
+  }
+
+  if (!doctor.isActive) {
+    return { success: false, error: "Your physician account has been deactivated" };
+  }
+
+  if (!doctor.isVerified) {
+    return { success: false, error: "Your credentials are pending verification. An admin will review your submission shortly" };
   }
 
   const isMatch = await bcrypt.compare(password, doctor.password);
@@ -404,7 +416,7 @@ export async function requestPatientSignupOtp(data: PatientSignupPayload): Promi
     } else {
       await prisma.patient.delete({
         where: { email: createdPatient.email }
-      }).catch((dbDeleteErr) => {
+      }).catch((dbDeleteErr: unknown) => {
         console.error("Failed to delete patient during signup rollback:", dbDeleteErr);
       });
     }
@@ -723,6 +735,46 @@ export async function registerPatient(data: PatientSignupPayload) {
   return requestPatientSignupOtp(data);
 }
 
+async function syncMockPatientToPrisma(email: string): Promise<string | null> {
+  if (!isPrismaConfigured()) {
+    return null;
+  }
+  try {
+    const demoPatient = mockDb.findPatientByEmail(email);
+    if (!demoPatient) {
+      return null;
+    }
+    let pgPatient = await prisma.patient.findUnique({
+      where: { email: demoPatient.email },
+    });
+    if (!pgPatient) {
+      pgPatient = await prisma.patient.create({
+        data: {
+          id: demoPatient.id,
+          firstName: demoPatient.firstName,
+          middleName: demoPatient.middleName,
+          lastName: demoPatient.lastName,
+          suffix: demoPatient.suffix,
+          email: demoPatient.email,
+          countryCode: demoPatient.countryCode,
+          phone: demoPatient.phone,
+          dob: demoPatient.dob,
+          gender: demoPatient.gender,
+          password: demoPatient.password,
+          hipaaConsent: demoPatient.hipaaConsent,
+          emailVerified: demoPatient.emailVerified,
+          isActive: demoPatient.isActive,
+        },
+      });
+      console.log(`[syncMockPatientToPrisma] Synced mock patient "${email}" to Postgres.`);
+    }
+    return pgPatient.id;
+  } catch (err) {
+    console.warn("[syncMockPatientToPrisma] Failed to sync mock patient to Prisma:", err);
+    return null;
+  }
+}
+
 export async function loginPatient(data: PatientLoginPayload) {
   const { email, password } = data;
 
@@ -791,8 +843,16 @@ export async function loginPatient(data: PatientLoginPayload) {
       return { success: false, error: "Invalid email or password" };
     }
 
+    let userId = demoPatient.id;
+    if (isPrismaConfigured()) {
+      const syncedId = await syncMockPatientToPrisma(email);
+      if (syncedId) {
+        userId = syncedId;
+      }
+    }
+
     await createPatientSession({
-      userId: demoPatient.id,
+      userId,
       email: demoPatient.email,
     });
 
@@ -815,8 +875,16 @@ export async function loginPatient(data: PatientLoginPayload) {
       return { success: false, error: "Invalid email or password" };
     }
 
+    let userId = patient.id;
+    if (isPrismaConfigured()) {
+      const syncedId = await syncMockPatientToPrisma(email);
+      if (syncedId) {
+        userId = syncedId;
+      }
+    }
+
     await createPatientSession({
-      userId: patient.id,
+      userId,
       email: patient.email,
     });
 
@@ -835,11 +903,14 @@ export async function loginDoctor(data: DoctorLoginPayload) {
   try {
     const { emailOrNpi, password, securityKey } = data;
 
+    console.log("[loginDoctor] Attempt:", { emailOrNpi, passwordLength: password?.length, isPrisma: isPrismaConfigured() });
+
     if (!emailOrNpi || !password) {
       return { success: false, error: "NPI/Email and password are required" };
     }
 
     if (!isPrismaConfigured()) {
+      console.log("[loginDoctor] Using MOCK DB path");
       return loginMockDoctor(data);
     }
 
@@ -856,11 +927,22 @@ export async function loginDoctor(data: DoctorLoginPayload) {
       }
     });
 
+    console.log("[loginDoctor] Prisma lookup result:", doctor ? { id: doctor.id, email: doctor.email, hashPrefix: doctor.password.substring(0, 10) } : "NOT FOUND");
+
     if (!doctor) {
       return { success: false, error: "No physician matches these credentials" };
     }
 
+    if (!doctor.isActive) {
+      return { success: false, error: "Your physician account has been deactivated" };
+    }
+
+    if (!doctor.isVerified) {
+      return { success: false, error: "Your credentials are pending verification. An admin will review your submission shortly" };
+    }
+
     const isMatch = await bcrypt.compare(password, doctor.password);
+    console.log("[loginDoctor] bcrypt.compare result:", isMatch, "| input password:", JSON.stringify(password));
     if (!isMatch) {
       return { success: false, error: "Invalid credentials" };
     }
@@ -895,7 +977,44 @@ export async function loginDoctor(data: DoctorLoginPayload) {
   }
 }
 
+export async function loginAdmin(data: { email: string; password: string }) {
+  const normalizedEmail = data.email?.trim().toLowerCase();
+  const password = data.password ?? "";
+
+  if (!normalizedEmail || !password) {
+    return { success: false, error: "Email and password are required" };
+  }
+
+  if (normalizedEmail !== ADMIN_EMAIL.toLowerCase()) {
+    return { success: false, error: "Invalid admin credentials" };
+  }
+
+  const isMatch = await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
+  if (!isMatch) {
+    return { success: false, error: "Invalid admin credentials" };
+  }
+
+  await createAdminSession({
+    userId: "admin",
+    email: ADMIN_EMAIL,
+  });
+
+  return {
+    success: true,
+    admin: {
+      id: "admin",
+      email: ADMIN_EMAIL,
+      role: "admin",
+    },
+  };
+}
+
 export async function logoutDoctor() {
   await clearDoctorSession();
   redirect("/doctor/signin");
+}
+
+export async function logoutAdmin() {
+  await clearAdminSession();
+  redirect("/admin/signin");
 }

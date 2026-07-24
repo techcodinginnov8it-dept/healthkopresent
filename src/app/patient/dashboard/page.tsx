@@ -1,6 +1,6 @@
 import { getPatientDashboardData } from "@/lib/dal/patient";
 import { getDoctorsList } from "@/app/actions/patient";
-import type { PatientModuleId } from "@/lib/dashboard/types";
+import type { DashboardDoctor, PatientAppointment, PatientModuleId } from "@/lib/dashboard/types";
 import { buildPatientMedicalIdUrl, createPatientMedicalIdToken } from "@/lib/patient-medical-id";
 import { headers } from "next/headers";
 import PatientDashboardClient from "./PatientDashboardClient";
@@ -41,7 +41,7 @@ export default async function PatientDashboardPage({
   // next.js 16 handles Date objects in Server Actions/Props safely, but let's make sure types match.
   const serializedPatient = {
     ...patient,
-    bookings: patient.bookings.map((booking) => ({
+    bookings: patient.bookings.map((booking: PatientAppointment) => ({
       ...booking,
       scheduledAt: new Date(booking.scheduledAt),
       createdAt: new Date(booking.createdAt),
@@ -60,7 +60,7 @@ export default async function PatientDashboardPage({
   });
   const medicalIdUrl = buildPatientMedicalIdUrl(origin, medicalIdToken);
 
-  const serializedDoctors = doctors.map((doc) => ({
+  const serializedDoctors = doctors.map((doc: DashboardDoctor) => ({
     id: doc.id,
     name: doc.name,
     email: doc.email,
@@ -69,6 +69,7 @@ export default async function PatientDashboardPage({
     bio: doc.bio,
     image: doc.image,
     availability: doc.availability,
+    status: doc.status,
     consultFee: doc.consultFee !== null ? Number(doc.consultFee) : null,
     rating: doc.rating,
     reviewCount: doc.reviewCount,

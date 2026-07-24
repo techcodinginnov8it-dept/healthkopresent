@@ -1,12 +1,13 @@
 import type { NextConfig } from "next";
 
-const localNetworkHosts = ["192.168.254.122", "192.168.1.19"];
+const localNetworkHosts = ["192.168.254.184", "192.168.254.122", "192.168.1.19"];
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: [
     ...localNetworkHosts,
     "loose-months-retire.loca.lt",
     "*.loca.lt",
+    "*.lhr.life",
     "farmer-celebrities-pond-binding.trycloudflare.com",
     "*.trycloudflare.com",
     "*.ngrok-free.dev",
@@ -19,6 +20,7 @@ const nextConfig: NextConfig = {
         ...localNetworkHosts.flatMap((host) => [`${host}:3000`, `${host}:3443`]),
         "loose-months-retire.loca.lt",
         "*.loca.lt",
+        "*.lhr.life",
         "farmer-celebrities-pond-binding.trycloudflare.com",
         "*.trycloudflare.com",
         "*.ngrok-free.dev",

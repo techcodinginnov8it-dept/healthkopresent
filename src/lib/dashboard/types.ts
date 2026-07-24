@@ -94,12 +94,19 @@ export type PatientAppointment = {
   duration: number | null;
   prescription: string | null;
   notes?: string | null;
+  bloodPressure?: string | null;
+  heartRate?: string | null;
+  bodyTemperature?: string | null;
   createdAt: Date | string;
   doctor: {
     id?: string;
     name: string;
     specialty: string;
   };
+  videoSession?: {
+    roomId: string;
+    status: string;
+  } | null;
 };
 
 export type DoctorAppointment = {
@@ -109,6 +116,9 @@ export type DoctorAppointment = {
   reason: string | null;
   notes: string | null;
   prescription: string | null;
+  bloodPressure?: string | null;
+  heartRate?: string | null;
+  bodyTemperature?: string | null;
   duration: number | null;
   createdAt: Date | string;
   patient: DashboardPatient;

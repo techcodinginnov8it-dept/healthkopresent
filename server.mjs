@@ -4,9 +4,12 @@ import { readFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import next from "next";
 import { Server } from "socket.io";
+import env from "@next/env";
+
+env.loadEnvConfig(process.cwd());
 
 const dev = process.env.NODE_ENV !== "production";
-const hostname = process.env.HOSTNAME || "0.0.0.0";
+const hostname = process.env.HOSTNAME || "::";
 const port = Number.parseInt(process.env.PORT || "3000", 10);
 const httpsPort = Number.parseInt(process.env.HTTPS_PORT || "", 10);
 const httpsPfxPath = process.env.HTTPS_PFX_PATH;
@@ -44,13 +47,17 @@ function attachSocketServer(server) {
 });
 
   io.on("connection", (socket) => {
+    console.log(`[Socket] Client connected: ${socket.id} (total: ${io.engine.clientsCount})`);
+
     socket.on("dashboard:event", (event) => {
+      console.log(`[Socket] dashboard:event from ${socket.id} type=${event?.type} actorRole=${event?.actorRole} appointmentId=${event?.appointmentId}`);
       socket.broadcast.emit("dashboard:event", event);
     });
 
     socket.on("webrtc:join-room", ({ roomId }) => {
       if (typeof roomId === "string" && roomId) {
         socket.join(roomId);
+        console.log(`[Socket] ${socket.id} joined room: ${roomId}`);
         socket.to(roomId).emit("webrtc:peer-ready-request");
       }
     });
@@ -89,6 +96,10 @@ function attachSocketServer(server) {
       if (typeof roomId === "string" && roomId) {
         socket.to(roomId).emit("webrtc:session-ended");
       }
+    });
+
+    socket.on("disconnect", (reason) => {
+      console.log(`[Socket] Client disconnected: ${socket.id} reason=${reason} (total: ${io.engine.clientsCount})`);
     });
   });
 }

@@ -24,7 +24,7 @@ function signRoomAccess(payload: {
   role: "doctor" | "patient";
   userId: string;
 }) {
-  const exp = Date.now() + 1000 * 60 * 90;
+  const exp = Date.now() + 1000 * 60 * 90; // 90 min
   const body = Buffer.from(JSON.stringify({ ...payload, exp }), "utf8").toString("base64url");
   const signature = createHmac("sha256", getSessionSecret()).update(body).digest("base64url");
   return `${body}.${signature}`;
@@ -34,73 +34,34 @@ function createRoomId(consultationId: string) {
   return `healthko-${consultationId}-${randomBytes(8).toString("hex")}`;
 }
 
-async function startMockVideoSession(consultationId: string): Promise<VideoSessionResult> {
-  try {
-    const session = await requireDoctorSession();
-    const existing = mockDb.getBookingsForDoctor(session.userId).find((booking) => booking.id === consultationId);
-
-    if (!existing || existing.status !== "CONFIRMED") {
-      return { success: false, error: "Only the assigned doctor can start a confirmed consultation." };
-    }
-
-    const videoSession = mockDb.startVideoSession(consultationId, createRoomId(consultationId));
-    return {
-      success: true,
-      roomId: videoSession.roomId,
-      accessToken: signRoomAccess({ consultationId, roomId: videoSession.roomId, role: "doctor", userId: session.userId }),
-    };
-  } catch (mockErr) {
-    console.error("Mock startVideoSession failed:", mockErr);
-    return { success: false, error: "Could not start the secure video session." };
-  }
-}
-
-async function authorizeMockPatientVideoSession(consultationId: string): Promise<VideoSessionResult> {
-  try {
-    const session = await requirePatientSession();
-    const existing = mockDb.getBookingsForPatient(session.userId).find((booking) => booking.id === consultationId);
-    const videoSession = mockDb.findVideoSessionByConsultation(consultationId);
-
-    if (!existing || existing.status !== "CONFIRMED" || videoSession?.status !== "STARTED") {
-      return { success: false, error: "The doctor has not started this consultation yet." };
-    }
-
-    return {
-      success: true,
-      roomId: videoSession.roomId,
-      accessToken: signRoomAccess({ consultationId, roomId: videoSession.roomId, role: "patient", userId: session.userId }),
-    };
-  } catch (mockErr) {
-    console.error("Mock authorizePatientVideoSession failed:", mockErr);
-    return { success: false, error: "Could not authorize secure room access." };
-  }
-}
-
-async function endMockVideoSession(consultationId: string): Promise<{ success: boolean; error?: string }> {
-  try {
-    const doctorSession = await getDoctorSession();
-    const patientSession = await getPatientSession();
-    const userId = doctorSession?.userId || patientSession?.userId;
-
-    if (!userId) {
-      return { success: false, error: "Authenticated session required." };
-    }
-
-    mockDb.endVideoSession(consultationId);
-    return { success: true };
-  } catch (mockErr) {
-    console.error("Mock endVideoSession failed:", mockErr);
-    return { success: false, error: "Could not end the secure video session." };
-  }
-}
+// ─── Doctor: Start a video session ───────────────────────────────────────────
 
 export async function startVideoSession(consultationId: string): Promise<VideoSessionResult> {
-  if (!isPrismaConfigured()) {
-    return startMockVideoSession(consultationId);
-  }
-
   try {
     const session = await requireDoctorSession();
+
+    if (!isPrismaConfigured()) {
+      const consultation = mockDb.getBookingsForDoctor(session.userId).find((booking) => booking.id === consultationId);
+
+      if (!consultation || consultation.doctorId !== session.userId || consultation.status !== "CONFIRMED") {
+        return { success: false, error: "Only the assigned doctor can start a confirmed consultation." };
+      }
+
+      const existing = mockDb.findVideoSessionByConsultation(consultationId);
+      const roomId = existing?.roomId || createRoomId(consultationId);
+
+      mockDb.startVideoSession(consultationId, roomId);
+
+      revalidatePath("/doctor/dashboard");
+      revalidatePath("/patient/dashboard");
+
+      return {
+        success: true,
+        roomId,
+        accessToken: signRoomAccess({ consultationId, roomId, role: "doctor", userId: session.userId }),
+      };
+    }
+
     const consultation = await prisma.consultation.findUnique({
       where: { id: consultationId },
       select: { id: true, doctorId: true, status: true },
@@ -110,6 +71,7 @@ export async function startVideoSession(consultationId: string): Promise<VideoSe
       return { success: false, error: "Only the assigned doctor can start a confirmed consultation." };
     }
 
+    // Reuse existing roomId if the session was already created (e.g. doctor reopened tab)
     const existing = await prisma.videoSession.findUnique({
       where: { consultationId },
       select: { roomId: true },
@@ -124,24 +86,49 @@ export async function startVideoSession(consultationId: string): Promise<VideoSe
 
     revalidatePath("/doctor/dashboard");
     revalidatePath("/patient/dashboard");
+
     return {
       success: true,
       roomId,
       accessToken: signRoomAccess({ consultationId, roomId, role: "doctor", userId: session.userId }),
     };
   } catch (error: unknown) {
-    console.warn("Prisma startVideoSession failed, using mock video session fallback:", error);
-    return startMockVideoSession(consultationId);
+    console.error("[startVideoSession] Failed:", error);
+    return { success: false, error: "Could not start the secure video session." };
   }
 }
 
-export async function authorizePatientVideoSession(consultationId: string): Promise<VideoSessionResult> {
-  if (!isPrismaConfigured()) {
-    return authorizeMockPatientVideoSession(consultationId);
-  }
+// ─── Patient: Authorize joining an active session ─────────────────────────────
 
+export async function authorizePatientVideoSession(consultationId: string): Promise<VideoSessionResult> {
   try {
     const session = await requirePatientSession();
+
+    if (!isPrismaConfigured()) {
+      const consultation = mockDb.getBookingsForPatient(session.userId).find((booking) => booking.id === consultationId);
+      const videoSession = mockDb.findVideoSessionByConsultation(consultationId);
+
+      if (
+        !consultation ||
+        consultation.patientId !== session.userId ||
+        consultation.status !== "CONFIRMED" ||
+        videoSession?.status !== "STARTED"
+      ) {
+        return { success: false, error: "The doctor has not started this consultation yet." };
+      }
+
+      return {
+        success: true,
+        roomId: videoSession.roomId,
+        accessToken: signRoomAccess({
+          consultationId,
+          roomId: videoSession.roomId,
+          role: "patient",
+          userId: session.userId,
+        }),
+      };
+    }
+
     const consultation = await prisma.consultation.findUnique({
       where: { id: consultationId },
       select: {
@@ -150,6 +137,15 @@ export async function authorizePatientVideoSession(consultationId: string): Prom
         status: true,
         videoSession: { select: { roomId: true, status: true } },
       },
+    });
+
+    console.log("[authorizePatientVideoSession] Debug Info:", {
+      consultationId,
+      patientSessionUserId: session?.userId,
+      consultationFound: !!consultation,
+      patientMatch: consultation ? consultation.patientId === session?.userId : false,
+      consultationStatus: consultation?.status,
+      videoSessionStatus: consultation?.videoSession?.status,
     });
 
     if (
@@ -172,17 +168,15 @@ export async function authorizePatientVideoSession(consultationId: string): Prom
       }),
     };
   } catch (error: unknown) {
-    console.warn("Prisma authorizePatientVideoSession failed, using mock fallback:", error);
-    return authorizeMockPatientVideoSession(consultationId);
+    console.error("[authorizePatientVideoSession] Failed:", error);
+    return { success: false, error: "Could not authorize secure room access." };
   }
 }
 
+// ─── Either party: End a video session ───────────────────────────────────────
+
 export async function endVideoSession(consultationId: string): Promise<{ success: boolean; error?: string }> {
   const endedAt = new Date();
-
-  if (!isPrismaConfigured()) {
-    return endMockVideoSession(consultationId);
-  }
 
   try {
     const [doctorSession, patientSession] = await Promise.all([getDoctorSession(), getPatientSession()]);
@@ -191,6 +185,22 @@ export async function endVideoSession(consultationId: string): Promise<{ success
 
     if (!userId || !role) {
       return { success: false, error: "Authenticated session required." };
+    }
+
+    if (!isPrismaConfigured()) {
+      const consultation = mockDb.getBookingsForPatient(userId).find((booking) => booking.id === consultationId)
+        || mockDb.getBookingsForDoctor(userId).find((booking) => booking.id === consultationId);
+
+      if (!consultation) {
+        return { success: false, error: "Consultation not found or unauthorized access." };
+      }
+
+      mockDb.endVideoSession(consultationId);
+
+      revalidatePath("/doctor/dashboard");
+      revalidatePath("/patient/dashboard");
+
+      return { success: true };
     }
 
     const consultation = await prisma.consultation.findUnique({
@@ -209,9 +219,10 @@ export async function endVideoSession(consultationId: string): Promise<{ success
 
     revalidatePath("/doctor/dashboard");
     revalidatePath("/patient/dashboard");
+
     return { success: true };
   } catch (error: unknown) {
-    console.warn("Prisma endVideoSession failed, using mock fallback:", error);
-    return endMockVideoSession(consultationId);
+    console.error("[endVideoSession] Failed:", error);
+    return { success: false, error: "Could not end the secure video session." };
   }
 }

@@ -21,7 +21,7 @@ function getMediaErrorMessage(err: unknown) {
     err instanceof DOMException &&
     (err.name === "NotFoundError" || err.name === "DevicesNotFoundError" || err.name === "OverconstrainedError")
   ) {
-    return "No matching camera or microphone was found. You can still receive the other participant's stream, or connect a device and rejoin.";
+    return "Media devices were not found. Connect a camera or microphone and try again.";
   }
 
   return err instanceof Error
@@ -128,10 +128,7 @@ export function useWebRTC({
         cameraAvailable,
         microphoneAvailable,
         permissionState,
-        message:
-          cameraAvailable || microphoneAvailable
-            ? null
-            : "No camera or microphone was detected. Connect a device or check browser permissions.",
+        message: null,
       });
 
       return availableDevices;
@@ -189,7 +186,6 @@ export function useWebRTC({
 
     const handleDeviceChange = () => {
       void refreshDevices();
-      setError("Camera or microphone devices changed. Rechecking media connection...");
     };
 
     navigator.mediaDevices.addEventListener("devicechange", handleDeviceChange);

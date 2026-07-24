@@ -20,7 +20,7 @@ export async function getDoctorsList() {
 
   try {
     const doctors = await prisma.doctor.findMany({
-      where: { isActive: true },
+      where: { isActive: true, isVerified: true },
       select: {
         id: true,
         name: true,
@@ -42,8 +42,8 @@ export async function getDoctorsList() {
     });
     return { success: true, doctors };
   } catch (error: unknown) {
-    console.warn("Prisma getDoctorsList failed, falling back to mock JSON database:", getErrorMessage(error, "Unknown error"));
-    return getMockDoctorsList();
+    console.error("Prisma getDoctorsList failed:", error);
+    return { success: false, error: getErrorMessage(error, "Failed to retrieve doctors directory.") };
   }
 }
 
@@ -81,25 +81,105 @@ export async function bookAppointment(data: BookAppointmentPayload) {
       return { success: false, error: "Please provide a valid future appointment date and time." };
     }
 
+    // Ensure the patient exists in Postgres (sync if necessary)
+    let patientExists = false;
+    try {
+      const patientCount = await prisma.patient.count({
+        where: { id: session.userId },
+      });
+      patientExists = patientCount > 0;
+    } catch (err) {
+      console.warn("[bookAppointment] Failed to check patient existence in Postgres:", err);
+    }
+
+    if (!patientExists) {
+      console.log(`[bookAppointment] Patient "${session.userId}" not found in Postgres. Attempting to sync from mockDb...`);
+      const mockPatient = mockDb.findPatientById(session.userId) || mockDb.findPatientByEmail(session.email);
+      if (mockPatient) {
+        try {
+          await prisma.patient.create({
+            data: {
+              id: session.userId,
+              firstName: mockPatient.firstName,
+              middleName: mockPatient.middleName,
+              lastName: mockPatient.lastName,
+              suffix: mockPatient.suffix,
+              email: mockPatient.email,
+              countryCode: mockPatient.countryCode,
+              phone: mockPatient.phone,
+              dob: mockPatient.dob,
+              gender: mockPatient.gender,
+              password: mockPatient.password,
+              hipaaConsent: mockPatient.hipaaConsent,
+              emailVerified: mockPatient.emailVerified,
+              isActive: mockPatient.isActive,
+            },
+          });
+          console.log(`[bookAppointment] Successfully synced mock patient "${mockPatient.email}" to Postgres with ID "${session.userId}"`);
+        } catch (syncErr) {
+          console.error(`[bookAppointment] Failed to sync mock patient to Postgres:`, syncErr);
+          return { success: false, error: "Could not initialize patient record in the database." };
+        }
+      } else {
+        console.warn(`[bookAppointment] Patient not found in mockDb either!`);
+        return { success: false, error: "Patient session is invalid or record not found." };
+      }
+    }
+
     const doctor = await prisma.doctor.findUnique({
       where: { id: doctorId },
-      select: { availability: true },
+      select: { isActive: true, isVerified: true, availability: true },
     });
 
     if (!doctor) {
-      return { success: false, error: "Selected doctor is not available." };
+      console.warn(`[bookAppointment] Doctor not found in DB. doctorId received: "${doctorId}"`);
+      return { success: false, error: "Selected doctor is not available for bookings." };
+    }
+    if (!doctor.isActive || !doctor.isVerified) {
+      console.warn(`[bookAppointment] Doctor found but not active/verified. doctorId: "${doctorId}", isActive: ${doctor.isActive}, isVerified: ${doctor.isVerified}`);
+      return { success: false, error: "Selected doctor is not available for bookings." };
     }
 
     if (!isWithinDoctorAvailability(scheduledDate, DEFAULT_DURATION_MINUTES, doctor)) {
       return { success: false, error: getOutsideAvailabilityMessage(doctor.availability) };
     }
 
-    const existingAppointments = await prisma.consultation.findMany({
-      where: { doctorId, status: "CONFIRMED" },
+    // Check patient schedule overlap (checking PENDING and CONFIRMED)
+    const patientAppointments = await prisma.consultation.findMany({
+      where: {
+        patientId: session.userId,
+        status: { in: ["CONFIRMED", "PENDING"] },
+      },
       select: { id: true, scheduledAt: true, duration: true, status: true },
     });
 
-    const conflict = getScheduleConflict(existingAppointments, scheduledDate, DEFAULT_DURATION_MINUTES);
+    const patientConflict = getScheduleConflict(
+      patientAppointments,
+      scheduledDate,
+      DEFAULT_DURATION_MINUTES,
+      undefined,
+      ["CONFIRMED", "PENDING"]
+    );
+    if (patientConflict) {
+      return { success: false, error: "You already have a pending or confirmed appointment in this time window." };
+    }
+
+    // Check doctor schedule conflict (checking PENDING and CONFIRMED)
+    const existingAppointments = await prisma.consultation.findMany({
+      where: {
+        doctorId,
+        status: { in: ["CONFIRMED", "PENDING"] },
+      },
+      select: { id: true, scheduledAt: true, duration: true, status: true },
+    });
+
+    const conflict = getScheduleConflict(
+      existingAppointments,
+      scheduledDate,
+      DEFAULT_DURATION_MINUTES,
+      undefined,
+      ["CONFIRMED", "PENDING"]
+    );
     if (conflict) {
       return { success: false, error: getFullyBookedMessage() };
     }
@@ -118,8 +198,8 @@ export async function bookAppointment(data: BookAppointmentPayload) {
     revalidatePath("/patient/dashboard");
     return { success: true, consultation };
   } catch (error: unknown) {
-    console.warn("Prisma bookAppointment failed, falling back to mock JSON database:", getErrorMessage(error, "Unknown error"));
-    return bookMockAppointment(data);
+    console.error("Prisma bookAppointment failed:", error);
+    return { success: false, error: getErrorMessage(error, "Failed to book appointment in database.") };
   }
 }
 
@@ -155,8 +235,8 @@ export async function confirmFollowUpAppointment(consultationId: string) {
     revalidatePath("/doctor/dashboard");
     return { success: true, consultation: updated };
   } catch (error: unknown) {
-    console.warn("Prisma confirmFollowUpAppointment failed, falling back to mock JSON database:", getErrorMessage(error, "Unknown error"));
-    return confirmMockFollowUpAppointment(consultationId);
+    console.error("Prisma confirmFollowUpAppointment failed:", error);
+    return { success: false, error: getErrorMessage(error, "Failed to confirm follow-up appointment.") };
   }
 }
 
@@ -181,11 +261,24 @@ export async function requestFollowUpReschedule(data: FollowUpReschedulePayload)
 
     const consultation = await prisma.consultation.findUnique({
       where: { id: consultationId },
-      select: { id: true, patientId: true, status: true, notes: true },
+      select: {
+        id: true,
+        patientId: true,
+        status: true,
+        notes: true,
+        doctorId: true,
+        doctor: {
+          select: { availability: true }
+        }
+      },
     });
 
     if (!consultation || consultation.patientId !== session.userId) {
       return { success: false, error: "Follow-up appointment was not found." };
+    }
+
+    if (!isWithinDoctorAvailability(requestedDate, DEFAULT_DURATION_MINUTES, consultation.doctor)) {
+      return { success: false, error: getOutsideAvailabilityMessage(consultation.doctor.availability) };
     }
 
     const updated = await prisma.consultation.update({
@@ -204,8 +297,8 @@ export async function requestFollowUpReschedule(data: FollowUpReschedulePayload)
     revalidatePath("/doctor/dashboard");
     return { success: true, consultation: updated };
   } catch (error: unknown) {
-    console.warn("Prisma requestFollowUpReschedule failed, falling back to mock JSON database:", getErrorMessage(error, "Unknown error"));
-    return requestMockFollowUpReschedule(data);
+    console.error("Prisma requestFollowUpReschedule failed:", error);
+    return { success: false, error: getErrorMessage(error, "Failed to request follow-up rescheduling.") };
   }
 }
 
@@ -224,7 +317,7 @@ async function bookMockAppointment(data: BookAppointmentPayload) {
     }
 
     const doctor = mockDb.findDoctorById(doctorId);
-    if (!doctor) {
+    if (!doctor || !doctor.isActive || !doctor.isVerified) {
       return { success: false, error: "Selected doctor is not available." };
     }
 
@@ -232,7 +325,28 @@ async function bookMockAppointment(data: BookAppointmentPayload) {
       return { success: false, error: getOutsideAvailabilityMessage(doctor.availability) };
     }
 
-    const conflict = getScheduleConflict(mockDb.getBookingsForDoctor(doctorId), scheduledDate, DEFAULT_DURATION_MINUTES);
+    // Check patient schedule overlap (checking PENDING and CONFIRMED)
+    const patientBookings = mockDb.getBookingsForPatient(session.userId);
+    const patientConflict = getScheduleConflict(
+      patientBookings,
+      scheduledDate,
+      DEFAULT_DURATION_MINUTES,
+      undefined,
+      ["CONFIRMED", "PENDING"]
+    );
+    if (patientConflict) {
+      return { success: false, error: "You already have a pending or confirmed appointment in this time window." };
+    }
+
+    // Check doctor schedule conflict (checking PENDING and CONFIRMED)
+    const doctorBookings = mockDb.getBookingsForDoctor(doctorId);
+    const conflict = getScheduleConflict(
+      doctorBookings,
+      scheduledDate,
+      DEFAULT_DURATION_MINUTES,
+      undefined,
+      ["CONFIRMED", "PENDING"]
+    );
     if (conflict) {
       return { success: false, error: getFullyBookedMessage() };
     }
@@ -295,6 +409,15 @@ async function requestMockFollowUpReschedule(data: FollowUpReschedulePayload) {
 
     if (!existing) {
       return { success: false, error: "Follow-up appointment was not found." };
+    }
+
+    const doctor = mockDb.findDoctorById(existing.doctorId);
+    if (!doctor) {
+      return { success: false, error: "Doctor not found." };
+    }
+
+    if (!isWithinDoctorAvailability(requestedDate, DEFAULT_DURATION_MINUTES, doctor)) {
+      return { success: false, error: getOutsideAvailabilityMessage(doctor.availability) };
     }
 
     const updated = mockDb.updateConsultation(consultationId, {
