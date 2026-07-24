@@ -54,24 +54,35 @@ function attachSocketServer(server) {
       socket.broadcast.emit("dashboard:event", event);
     });
 
-    socket.on("webrtc:join-room", ({ roomId }) => {
-      if (typeof roomId === "string" && roomId) {
-        socket.join(roomId);
-        console.log(`[Socket] ${socket.id} joined room: ${roomId}`);
-        socket.to(roomId).emit("webrtc:peer-ready-request");
-      }
-    });
+    // ── WebRTC room membership (role-aware) ─────────────────────────────────
+    // roomMembers: roomId → { doctor: socketId|null, patient: socketId|null }
+    // This lets the server directly tell the doctor when BOTH peers are in the room.
+    function getRoomSlot(roomId) {
+      if (!io.roomMembers) io.roomMembers = new Map();
+      if (!io.roomMembers.has(roomId)) io.roomMembers.set(roomId, { doctor: null, patient: null });
+      return io.roomMembers.get(roomId);
+    }
 
-    socket.on("webrtc:peer-ready", ({ roomId, role }) => {
-      if (typeof roomId === "string" && roomId) {
-        socket.to(roomId).emit("webrtc:peer-ready", { role });
-      }
-    });
+    socket.on("webrtc:join-room", ({ roomId, role }) => {
+      if (typeof roomId !== "string" || !roomId) return;
+      socket.join(roomId);
+      console.log(`[Socket] ${socket.id} (${role}) joined room: ${roomId}`);
 
-    socket.on("webrtc:peer-ready-request", ({ roomId }) => {
-      if (typeof roomId === "string" && roomId) {
-        socket.to(roomId).emit("webrtc:peer-ready-request");
+      const slot = getRoomSlot(roomId);
+      if (role === "doctor" || role === "patient") {
+        slot[role] = socket.id;
       }
+
+      // Tell the doctor to make an offer as soon as both peers are present (only once per connection pair)
+      const pairKey = `${slot.doctor}:${slot.patient}`;
+      if (slot.doctor && slot.patient && slot.lastOfferedPair !== pairKey) {
+        slot.lastOfferedPair = pairKey;
+        console.log(`[Socket] Both peers in room ${roomId} — telling doctor to make offer`);
+        io.to(slot.doctor).emit("webrtc:make-offer");
+      }
+
+      // Also relay a "peer-joined" event so the other side knows someone arrived
+      socket.to(roomId).emit("webrtc:peer-joined", { role: role ?? "unknown" });
     });
 
     socket.on("webrtc:offer", ({ roomId, offer }) => {
@@ -100,6 +111,13 @@ function attachSocketServer(server) {
 
     socket.on("disconnect", (reason) => {
       console.log(`[Socket] Client disconnected: ${socket.id} reason=${reason} (total: ${io.engine.clientsCount})`);
+      // Clean up room membership so the slot can be reused on reconnect
+      if (io.roomMembers) {
+        for (const [, slot] of io.roomMembers.entries()) {
+          if (slot.doctor === socket.id) slot.doctor = null;
+          if (slot.patient === socket.id) slot.patient = null;
+        }
+      }
     });
   });
 }

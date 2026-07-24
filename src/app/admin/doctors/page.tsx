@@ -1,224 +1,98 @@
-"use client";
-
-import { useState, useEffect } from "react";
 import Link from "next/link";
-import { approveDoctorAudit, rejectDoctorAudit, getPendingDoctorAudits } from "@/app/actions/audit";
 
-type DoctorAudit = {
-  id: string;
-  npi: string;
-  licenseNumber: string;
-  licenseState: string;
-  specialty: string;
-  medicalSchool: string;
-  gradYear: number;
-  yearsExp: number;
-  status: string;
-  submittedAt: Date;
-  doctor: {
-    id: string;
-    name: string;
-    email: string;
-    specialty: string;
-  } | null;
-};
+import { getPendingDoctorAudits } from "@/app/actions/audit";
+import { logoutAdmin } from "@/app/actions/auth";
+import { requireAdminSession } from "@/lib/auth/admin-session";
+import { mockDb } from "@/lib/mockDb";
 
-export default function DoctorManagementPage() {
-  const [audits, setAudits] = useState<DoctorAudit[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [approving, setApproving] = useState<string | null>(null);
-  const [rejecting, setRejecting] = useState<string | null>(null);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+import AdminAuditReviewClient from "../dashboard/AdminAuditReviewClient";
 
-  useEffect(() => {
-    fetchPendingAudits();
-  }, []);
+export default async function AdminDoctorsPage() {
+  const session = await requireAdminSession();
+  const metrics = mockDb.getAdminMetrics();
+  const auditsResult = await getPendingDoctorAudits();
+  const audits = auditsResult.success ? auditsResult.audits : [];
 
-  async function fetchPendingAudits() {
-    setLoading(true);
-    try {
-      const result = await getPendingDoctorAudits();
-      if (result.success) {
-        setAudits(result.audits || []);
-      } else {
-        setError(result.error || "Failed to fetch pending audits");
-      }
-    } catch (err) {
-      setError("An error occurred while fetching audits");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleApprove(auditId: string) {
-    setApproving(auditId);
-    setError("");
-    setSuccess("");
-    try {
-      const result = await approveDoctorAudit(auditId);
-      if (result.success) {
-        setSuccess(`${result.message} The doctor can now log in and use their account.`);
-        setAudits((prev) => prev.filter((a) => a.id !== auditId));
-      } else {
-        setError(result.error || "Failed to approve doctor");
-      }
-    } catch (err) {
-      setError("An error occurred while approving the doctor");
-    } finally {
-      setApproving(null);
-    }
-  }
-
-  async function handleReject(auditId: string) {
-    const reason = prompt("Enter rejection reason (optional):");
-    if (reason === null) return; // User cancelled
-
-    setRejecting(auditId);
-    setError("");
-    setSuccess("");
-    try {
-      const result = await rejectDoctorAudit(auditId, reason);
-      if (result.success) {
-        setSuccess(result.message || "Doctor credentials rejected");
-        setAudits((prev) => prev.filter((a) => a.id !== auditId));
-      } else {
-        setError(result.error || "Failed to reject doctor");
-      }
-    } catch (err) {
-      setError("An error occurred while rejecting the doctor");
-    } finally {
-      setRejecting(null);
-    }
-  }
+  const totalDoctors = metrics.totalDoctors;
+  const activeDoctors = metrics.activeDoctors;
+  const pendingReviews = audits.length;
 
   return (
-    <div className="min-h-screen bg-slate-950 px-6 py-10 text-white">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-teal">DOCTOR MANAGEMENT</p>
-            <h1 className="mt-2 text-3xl font-black tracking-tight">Screening & Approvals</h1>
-            <p className="mt-3 max-w-2xl text-sm text-slate-400">
-              Review, screen, and approve new doctors joining the HealthKo platform.
-            </p>
+    <main className="min-h-screen bg-slate-950 px-6 py-10 text-white sm:px-10">
+      <div className="mx-auto max-w-6xl space-y-8">
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl shadow-black/20 backdrop-blur">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-2">
+              <p className="text-xs font-black uppercase tracking-[0.3em] text-brand-teal">Partnership Review</p>
+              <h1 className="font-display text-3xl font-black tracking-tight">Doctors who want to partner with HealthKo</h1>
+              <p className="max-w-2xl text-sm leading-6 text-slate-300">
+                Review new doctor submissions, verify credentials, and approve the practitioners you want to onboard into
+                the HealthKo network. Signed in as <span className="font-semibold text-white">{session.email}</span>.
+              </p>
+            </div>
+
+            <form action={logoutAdmin}>
+              <button
+                type="submit"
+                className="rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/15"
+              >
+                Sign out
+              </button>
+            </form>
           </div>
-          <Link href="/admin/dashboard" className="text-sm font-semibold text-brand-teal hover:text-brand-teal-hover">
-            ← Back to Dashboard
-          </Link>
+
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-5">
+              <p className="text-xs font-black uppercase tracking-wider text-slate-400">Total doctors</p>
+              <p className="mt-2 text-3xl font-black">{totalDoctors}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-5">
+              <p className="text-xs font-black uppercase tracking-wider text-slate-400">Active doctors</p>
+              <p className="mt-2 text-3xl font-black">{activeDoctors}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-5">
+              <p className="text-xs font-black uppercase tracking-wider text-slate-400">Pending partner reviews</p>
+              <p className="mt-2 text-3xl font-black">{pendingReviews}</p>
+            </div>
+          </div>
         </div>
 
-        {error && (
-          <div className="mb-6 rounded-xl border border-brand-red/20 bg-brand-red/10 p-4 text-sm font-semibold text-brand-red">
-            {error}
+        <AdminAuditReviewClient initialAudits={audits} />
+
+        <section className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+            <p className="text-xs font-black uppercase tracking-wider text-slate-400">Review flow</p>
+            <h2 className="mt-2 text-xl font-bold">Approve qualified doctors</h2>
+            <p className="mt-2 text-sm text-slate-300">
+              Confirm licensing, training, and submitted documents before opening access to the clinic platform.
+            </p>
           </div>
-        )}
 
-        {success && (
-          <div className="mb-6 rounded-xl border border-brand-teal/20 bg-brand-teal/10 p-4 text-sm font-semibold text-brand-teal">
-            {success}
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+            <p className="text-xs font-black uppercase tracking-wider text-slate-400">Status</p>
+            <h2 className="mt-2 text-xl font-bold">Credential queue</h2>
+            <p className="mt-2 text-sm text-slate-300">
+              New doctor partnership requests land here automatically as they submit their audit package.
+            </p>
           </div>
-        )}
 
-        {loading ? (
-          <div className="rounded-3xl border border-slate-800 bg-slate-900/80 p-8 text-center">
-            <p className="text-slate-400">Loading pending audits...</p>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+            <p className="text-xs font-black uppercase tracking-wider text-slate-400">Shortcuts</p>
+            <h2 className="mt-2 text-xl font-bold">Jump back to admin</h2>
+            <div className="mt-3 flex flex-col gap-2 text-sm font-semibold">
+              <Link href="/admin/dashboard" className="text-brand-teal hover:underline">
+                Admin dashboard
+              </Link>
+              <Link href="/admin/signin" className="text-brand-teal hover:underline">
+                Admin login
+              </Link>
+              <Link href="/doctor/audit" className="text-brand-teal hover:underline">
+                Doctor audit form
+              </Link>
+            </div>
           </div>
-        ) : audits.length === 0 ? (
-          <div className="rounded-3xl border border-slate-800 bg-slate-900/80 p-8 text-center">
-            <p className="text-lg font-bold text-slate-300">No pending doctor audits</p>
-            <p className="mt-2 text-sm text-slate-400">All doctor applications have been reviewed.</p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {audits.map((audit) => (
-              <div key={audit.id} className="rounded-3xl border border-slate-800 bg-slate-900/80 p-6">
-                <div className="grid gap-6 lg:grid-cols-3">
-                  {/* Doctor Info */}
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Doctor Information</p>
-                    <div className="mt-4 space-y-3">
-                      <div>
-                        <p className="text-sm text-slate-400">Name</p>
-                        <p className="mt-1 font-bold text-white">{audit.doctor?.name || "Unlinked"}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-slate-400">Email</p>
-                        <p className="mt-1 font-bold text-white">{audit.doctor?.email || "N/A"}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-slate-400">NPI</p>
-                        <p className="mt-1 font-mono text-sm font-bold text-white">{audit.npi}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Credentials */}
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Credentials</p>
-                    <div className="mt-4 space-y-3">
-                      <div>
-                        <p className="text-sm text-slate-400">License Number</p>
-                        <p className="mt-1 font-bold text-white">{audit.licenseNumber}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-slate-400">License State</p>
-                        <p className="mt-1 font-bold text-white">{audit.licenseState}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-slate-400">Medical School</p>
-                        <p className="mt-1 font-bold text-white">{audit.medicalSchool}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-slate-400">Years of Experience</p>
-                        <p className="mt-1 font-bold text-white">{audit.yearsExp} years</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Specialty & Actions */}
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Specialty & Actions</p>
-                    <div className="mt-4 space-y-4">
-                      <div>
-                        <p className="text-sm text-slate-400">Specialty</p>
-                        <p className="mt-1 font-bold text-white">{audit.specialty}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-slate-400">Graduated</p>
-                        <p className="mt-1 font-bold text-white">{audit.gradYear}</p>
-                      </div>
-
-                      <div className="pt-4 space-y-2">
-                        <button
-                          onClick={() => handleApprove(audit.id)}
-                          disabled={approving === audit.id}
-                          className="w-full rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-50"
-                        >
-                          {approving === audit.id ? "Approving..." : "✓ Approve & Activate"}
-                        </button>
-                        <button
-                          onClick={() => handleReject(audit.id)}
-                          disabled={rejecting === audit.id}
-                          className="w-full rounded-xl border border-brand-red/30 bg-brand-red/10 px-4 py-3 text-sm font-semibold text-brand-red hover:bg-brand-red/20 disabled:opacity-50"
-                        >
-                          {rejecting === audit.id ? "Rejecting..." : "✗ Reject"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-4 border-t border-slate-700 pt-4">
-                  <p className="text-xs text-slate-500">
-                    Submitted: {new Date(audit.submittedAt).toLocaleString()}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        </section>
       </div>
-    </div>
+    </main>
   );
 }

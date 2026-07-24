@@ -21,6 +21,8 @@ export const getDoctorDashboardData = cache(async () => {
       where: { id: session.userId },
       select: {
         id: true,
+        userId: true,
+        createdById: true,
         name: true,
         email: true,
         npi: true,
@@ -39,6 +41,24 @@ export const getDoctorDashboardData = cache(async () => {
         status: true,
         isVerified: true,
         createdAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            isActive: true,
+            emailVerified: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
         bookings: {
           orderBy: { scheduledAt: "asc" },
           select: {

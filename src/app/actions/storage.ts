@@ -85,34 +85,39 @@ export async function uploadFileToStorage(
       };
     }
 
-    const { data, error } = await supabase.storage
-      .from(STORAGE_BUCKET)
-      .upload(storagePath, buffer, {
-        contentType: file.type,
-        cacheControl: "3600",
-        upsert: false,
-      });
+    try {
+      const { data, error } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .upload(storagePath, buffer, {
+          contentType: file.type,
+          cacheControl: "3600",
+          upsert: false,
+        });
 
-    if (error) {
-      console.error("[Storage Upload Error]", error);
+      if (error) {
+        return {
+          success: false,
+          error: error.message || "Upload to storage failed.",
+        };
+      }
+
+      // Get the public URL
+      const { data: urlData } = supabase.storage
+        .from(STORAGE_BUCKET)
+        .getPublicUrl(data.path);
+
+      return {
+        success: true,
+        url: urlData.publicUrl,
+        path: data.path,
+      };
+    } catch (storageError: unknown) {
       return {
         success: false,
-        error: error.message || "Upload to storage failed.",
+        error: getErrorMessage(storageError, "An unexpected error occurred during upload."),
       };
     }
-
-    // Get the public URL
-    const { data: urlData } = supabase.storage
-      .from(STORAGE_BUCKET)
-      .getPublicUrl(data.path);
-
-    return {
-      success: true,
-      url: urlData.publicUrl,
-      path: data.path,
-    };
   } catch (error: unknown) {
-    console.error("[Storage Action Error]", error);
     return {
       success: false,
       error: getErrorMessage(error, "An unexpected error occurred during upload."),

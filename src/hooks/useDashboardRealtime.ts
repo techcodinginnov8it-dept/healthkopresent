@@ -71,8 +71,12 @@ export function useDashboardRealtime(onEvent?: (event: RealtimeEvent) => void) {
   useEffect(() => {
     const socket = io({
       path: SOCKET_PATH,
-      transports: ["polling", "websocket"],
+      // Force WebSocket from the start — polling causes ICE candidate loss/reordering
+      // which breaks WebRTC signaling. Upgrade negotiation is disabled intentionally.
+      transports: ["websocket"],
       reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
     });
     socketRef.current = socket;
 

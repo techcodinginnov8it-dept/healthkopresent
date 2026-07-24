@@ -33,7 +33,6 @@ export default function SignInPage() {
 
       setInfo(res.message || "");
       router.push("/patient/dashboard");
-      router.refresh();
     } catch {
       setLoading(false);
       setError("A network error occurred. Please verify your connection.");
@@ -197,7 +196,7 @@ export default function SignInPage() {
                 Sign in to Doctor Portal
               </Link>
             </div>
-            <div className="pt-1">
+            <div>
               <span>Need admin access? </span>
               <Link href="/admin/signin" className="text-slate-850 hover:text-brand-teal font-extrabold underline">
                 Sign in to Admin Portal

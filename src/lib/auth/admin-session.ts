@@ -125,7 +125,13 @@ export async function getAdminSession() {
     return null;
   }
 
-  return decodeSession(token);
+  const session = decodeSession(token);
+
+  if (!session) {
+    return null;
+  }
+
+  return session;
 }
 
 export async function requireAdminSession(redirectTo = "/admin/signin") {
