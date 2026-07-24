@@ -1117,6 +1117,13 @@ export async function loginDoctor(data: DoctorLoginPayload) {
   }
 }
 
+export async function logoutDoctor() {
+  await clearDoctorSession();
+  redirect("/doctor/signin");
+}
+
+const ADMIN_EMAIL = "admin@healthko.com";
+const ADMIN_PASSWORD_HASH = "$2a$10$A24WIxraPyqrS6dfZaps0OnP11alyc7ZO0E5CC2LdQgemuzwdvtwm";
 export async function loginAdmin(data: { email: string; password: string }) {
   const normalizedEmail = data.email?.trim().toLowerCase();
   const password = data.password ?? "";
@@ -1132,59 +1139,36 @@ export async function loginAdmin(data: { email: string; password: string }) {
 
   if (isPrismaConfigured()) {
     try {
-      const adminAccount = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        const user = await tx.user.upsert({
-          where: { email: normalizedEmail },
-          create: {
-            email: normalizedEmail,
-            password: ADMIN_PASSWORD_HASH,
-            role: "ADMIN",
-            emailVerified: true,
-            isActive: true,
-          },
-          update: {
-            password: ADMIN_PASSWORD_HASH,
-            role: "ADMIN",
-            emailVerified: true,
-            isActive: true,
-          },
-        });
-
-        const admin = await tx.admin.upsert({
-          where: { email: normalizedEmail },
-          create: {
+      const dbUsers: any = await prisma.$queryRawUnsafe(
+        `SELECT * FROM "users" WHERE LOWER(email) = $1 LIMIT 1`,
+        normalizedEmail
+      );
+      if (Array.isArray(dbUsers) && dbUsers.length > 0) {
+        const user = dbUsers[0];
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (isMatch) {
+          await createAdminSession({
             userId: user.id,
-            name: "System Administrator",
-            email: normalizedEmail,
-            role: "SUPER_ADMIN",
-          },
-          update: {
-            userId: user.id,
-            name: "System Administrator",
-            role: "SUPER_ADMIN",
-          },
-        });
-
-        return { user, admin };
-      });
-
-      adminSessionId = adminAccount.admin.id;
-      const isMatch = await bcrypt.compare(password, adminAccount.user.password);
-      if (!isMatch && !(await bcrypt.compare(password, ADMIN_PASSWORD_HASH))) {
-        return { success: false, error: "Invalid admin credentials" };
+            email: user.email,
+          });
+          return {
+            success: true,
+            admin: {
+              id: user.id,
+              email: user.email,
+              role: user.role ?? "admin",
+            },
+          };
+        }
       }
     } catch (dbErr) {
-      console.warn("Prisma admin check failed, checking hardcoded secret hash:", dbErr);
-      const isMatch = await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
-      if (!isMatch) {
-        return { success: false, error: "Invalid admin credentials" };
-      }
+      console.warn("DB lookup for admin failed, falling back to static hash check:", dbErr);
     }
-  } else {
-    const isMatch = await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
-    if (!isMatch) {
-      return { success: false, error: "Invalid admin credentials" };
-    }
+  }
+
+  const isMatch = await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
+  if (!isMatch) {
+    return { success: false, error: "Invalid admin credentials" };
   }
 
   await createAdminSession({
@@ -1205,10 +1189,5 @@ export async function loginAdmin(data: { email: string; password: string }) {
 export async function logoutAdmin() {
   await clearAdminSession();
   redirect("/admin/signin");
-}
-
-export async function logoutDoctor() {
-  await clearDoctorSession();
-  redirect("/doctor/signin");
 }
 
