@@ -254,26 +254,41 @@ export const mockDb = {
     return db.doctors.find((d) => d.id === id) || null;
   },
 
-  createDoctor(data: Omit<MockDoctor, "id" | "createdAt" | "updatedAt" | "rating" | "reviewCount" | "availability"> & Partial<MockDoctor>): MockDoctor {
+  createDoctor(
+    data: Pick<MockDoctor, "name" | "npi" | "email" | "password" | "specialty"> &
+      Partial<Omit<MockDoctor, "id" | "createdAt" | "updatedAt" | "rating" | "reviewCount" | "availability">>
+  ): MockDoctor {
     const db = getDb();
+    const now = new Date().toISOString();
     const newDoctor: MockDoctor = {
       id: "doc-" + Math.random().toString(36).substr(2, 9),
-      bio: null,
-      image: null,
-      languages: ["English"],
+      name: data.name,
+      firstName: data.firstName ?? null,
+      middleName: data.middleName ?? null,
+      lastName: data.lastName ?? null,
+      suffix: data.suffix ?? null,
+      npi: data.npi,
+      email: data.email,
+      password: data.password,
+      specialty: data.specialty,
+      bio: data.bio ?? null,
+      image: data.image ?? null,
+      languages: data.languages ?? ["English"],
       rating: 5.0,
       reviewCount: 1,
       availability: "Available Today",
-      status: "ONLINE",
-      consultFee: 500,
-      consultationDuration: 30,
-      consultationDurationUnit: "minutes",
-      isActive: true,
-      isFeatured: false,
-      isVerified: true,
-      ...data,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      status: data.status ?? "ONLINE",
+      consultFee: data.consultFee ?? 500,
+      consultationDuration: data.consultationDuration ?? 30,
+      consultationDurationUnit: data.consultationDurationUnit ?? "minutes",
+      licenseNumber: data.licenseNumber ?? null,
+      licenseState: data.licenseState ?? null,
+      yearsExp: data.yearsExp ?? null,
+      isActive: data.isActive ?? true,
+      isFeatured: data.isFeatured ?? false,
+      isVerified: data.isVerified ?? true,
+      createdAt: now,
+      updatedAt: now,
     };
     db.doctors.push(newDoctor);
     saveDb(db);
