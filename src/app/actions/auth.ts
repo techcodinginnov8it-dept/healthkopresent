@@ -4,16 +4,59 @@ import { createClient as createSupabaseServerClient } from "@/utils/supabase/ser
 import { isPrismaConfigured, prisma } from "@/lib/prisma";
 import { clearPatientSession, createPatientSession } from "@/lib/auth/patient-session";
 import { clearDoctorSession, createDoctorSession } from "@/lib/auth/doctor-session";
-import { clearAdminSession, createAdminSession } from "@/lib/auth/admin-session";
-import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { randomInt } from "crypto";
 import { redirect } from "next/navigation";
 import { mockDb } from "@/lib/mockDb";
 import { cookies } from "next/headers";
 
-const ADMIN_EMAIL = "admin@healthko.com";
-const ADMIN_PASSWORD_HASH = "$2a$10$A24WIxraPyqrS6dfZaps0OnP11alyc7ZO0E5CC2LdQgemuzwdvtwm";
+// Seed data helper to ensure demo doctors exist in Supabase
+async function ensureFeaturedDoctorsSeeded() {
+  if (!isPrismaConfigured()) {
+    return;
+  }
+
+  try {
+    const doctorCount = await prisma.doctor.count();
+    if (doctorCount === 0) {
+      const defaultDoctors = [
+        {
+          npi: "1982736450",
+          email: "s.jenkins@healthko.com",
+          password: await bcrypt.hash("123456", 10),
+          name: "Dr. Sarah Jenkins",
+          specialty: "Board-Certified Cardiologist",
+          rating: 4.9,
+          availability: "Mon - Fri, 9AM - 5PM"
+        },
+        {
+          npi: "1098273645",
+          email: "m.vance@healthko.com",
+          password: await bcrypt.hash("123456", 10),
+          name: "Dr. Marcus Vance",
+          specialty: "Pediatric Medicine Specialist",
+          rating: 4.8,
+          availability: "Mon - Thu, 8AM - 4PM"
+        },
+        {
+          npi: "1234567890",
+          email: "a.patel@healthko.com",
+          password: await bcrypt.hash("123456", 10),
+          name: "Dr. Aaliyah Patel",
+          specialty: "Family Practitioner & Telehealth Lead",
+          rating: 4.9,
+          availability: "Tue - Sat, 10AM - 6PM"
+        }
+      ];
+
+      for (const doc of defaultDoctors) {
+        await prisma.doctor.create({ data: doc });
+      }
+    }
+  } catch {
+    console.warn("ensureFeaturedDoctorsSeeded failed, database might be offline. MockDB seeds are already active.");
+  }
+}
 
 type PatientSignupPayload = {
   firstName: string;
@@ -236,225 +279,13 @@ function isOtpWorkflowEnabled() {
   return process.env.NEXT_PUBLIC_ENABLE_OTP === "true";
 }
 
-type PrismaPatientAccountInput = {
-  id?: string;
-  email: string;
-  password: string;
-  firstName: string;
-  middleName?: string | null;
-  lastName: string;
-  suffix?: string | null;
-  countryCode: string;
-  phone: string;
-  dob: string;
-  gender?: string | null;
-  hipaaConsent: boolean;
-  emailVerified: boolean;
-  isActive?: boolean;
-};
-
-type PrismaDoctorAccountInput = {
-  id?: string;
-  email: string;
-  password: string;
-  name: string;
-  npi: string;
-  specialty: string;
-  firstName?: string | null;
-  middleName?: string | null;
-  lastName?: string | null;
-  suffix?: string | null;
-  isActive?: boolean;
-  isVerified?: boolean;
-  emailVerified: boolean;
-};
-
-async function ensurePrismaPatientAccount(tx: Prisma.TransactionClient, input: PrismaPatientAccountInput) {
-  const user = await tx.user.upsert({
-    where: { email: input.email },
-    create: {
-      email: input.email,
-      password: input.password,
-      role: "PATIENT",
-      emailVerified: input.emailVerified,
-      isActive: input.isActive ?? true,
-    },
-    update: {
-      password: input.password,
-      role: "PATIENT",
-      emailVerified: input.emailVerified,
-      isActive: input.isActive ?? true,
-    },
-  });
-
-  const patient = await tx.patient.upsert({
-    where: { email: input.email },
-    create: {
-      ...(input.id ? { id: input.id } : {}),
-      userId: user.id,
-      firstName: input.firstName,
-      middleName: input.middleName ?? null,
-      lastName: input.lastName,
-      suffix: input.suffix ?? null,
-      email: input.email,
-      countryCode: input.countryCode,
-      phone: input.phone,
-      dob: input.dob,
-      gender: input.gender ?? null,
-      password: input.password,
-      hipaaConsent: input.hipaaConsent,
-      emailVerified: input.emailVerified,
-      isActive: input.isActive ?? true,
-    },
-    update: {
-      userId: user.id,
-      firstName: input.firstName,
-      middleName: input.middleName ?? null,
-      lastName: input.lastName,
-      suffix: input.suffix ?? null,
-      countryCode: input.countryCode,
-      phone: input.phone,
-      dob: input.dob,
-      gender: input.gender ?? null,
-      password: input.password,
-      hipaaConsent: input.hipaaConsent,
-      emailVerified: input.emailVerified,
-      isActive: input.isActive ?? true,
-    },
-  });
-
-  return { user, patient };
-}
-
-async function ensurePrismaDoctorAccount(tx: Prisma.TransactionClient, input: PrismaDoctorAccountInput) {
-  const user = await tx.user.upsert({
-    where: { email: input.email },
-    create: {
-      email: input.email,
-      password: input.password,
-      role: "DOCTOR",
-      emailVerified: input.emailVerified,
-      isActive: input.isActive ?? true,
-    },
-    update: {
-      password: input.password,
-      role: "DOCTOR",
-      emailVerified: input.emailVerified,
-      isActive: input.isActive ?? true,
-    },
-  });
-
-  const doctor = await tx.doctor.upsert({
-    where: { email: input.email },
-    create: {
-      ...(input.id ? { id: input.id } : {}),
-      userId: user.id,
-      name: input.name,
-      firstName: input.firstName ?? null,
-      middleName: input.middleName ?? null,
-      lastName: input.lastName ?? null,
-      suffix: input.suffix ?? null,
-      npi: input.npi,
-      email: input.email,
-      password: input.password,
-      specialty: input.specialty,
-      isActive: input.isActive ?? true,
-      isVerified: input.isVerified ?? false,
-    },
-    update: {
-      userId: user.id,
-      name: input.name,
-      firstName: input.firstName ?? null,
-      middleName: input.middleName ?? null,
-      lastName: input.lastName ?? null,
-      suffix: input.suffix ?? null,
-      password: input.password,
-      specialty: input.specialty,
-      isActive: input.isActive ?? true,
-      isVerified: input.isVerified ?? false,
-    },
-  });
-
-  return { user, doctor };
-}
-
-async function syncPrismaPatientAccount(email: string) {
-  const patient = await prisma.patient.findUnique({
-    where: { email },
-    include: { user: true },
-  });
-
-  if (!patient) {
-    return null;
-  }
-
-  if (!patient.user || patient.user.email !== patient.email || patient.user.password !== patient.password || patient.user.role !== "PATIENT") {
-    const synced = await prisma.$transaction(async (tx) => ensurePrismaPatientAccount(tx, {
-      id: patient.id,
-      email: patient.email,
-      password: patient.password,
-      firstName: patient.firstName,
-      middleName: patient.middleName,
-      lastName: patient.lastName,
-      suffix: patient.suffix,
-      countryCode: patient.countryCode,
-      phone: patient.phone,
-      dob: patient.dob,
-      gender: patient.gender,
-      hipaaConsent: patient.hipaaConsent,
-      emailVerified: patient.emailVerified,
-      isActive: patient.isActive,
-    }));
-
-    return synced;
-  }
-
-  return { user: patient.user, patient };
-}
-
-async function syncPrismaDoctorAccount(emailOrNpi: string) {
-  const doctor = await prisma.doctor.findFirst({
-    where: {
-      OR: [{ email: emailOrNpi }, { npi: emailOrNpi }],
-    },
-    include: { user: true },
-  });
-
-  if (!doctor) {
-    return null;
-  }
-
-  if (!doctor.user || doctor.user.email !== doctor.email || doctor.user.password !== doctor.password || doctor.user.role !== "DOCTOR") {
-    const synced = await prisma.$transaction(async (tx) => ensurePrismaDoctorAccount(tx, {
-      id: doctor.id,
-      email: doctor.email,
-      password: doctor.password,
-      name: doctor.name,
-      npi: doctor.npi,
-      specialty: doctor.specialty,
-      firstName: doctor.firstName,
-      middleName: doctor.middleName,
-      lastName: doctor.lastName,
-      suffix: doctor.suffix,
-      isActive: doctor.isActive,
-      isVerified: doctor.isVerified,
-      emailVerified: true,
-    }));
-
-    return synced;
-  }
-
-  return { user: doctor.user, doctor };
-}
-
 /**
  * Step 1 of patient signup: create the account and email an OTP.
  */
 export async function requestPatientSignupOtp(data: PatientSignupPayload): Promise<PatientOtpResponse> {
   const { firstName, middleName, lastName, suffix, email, countryCode, phone, dob, gender, password, hipaaConsent } = data;
-  const normalizedEmail = email.trim().toLowerCase();
 
-  if (!firstName || !lastName || !normalizedEmail || !phone || !dob || !password) {
+  if (!firstName || !lastName || !email || !phone || !dob || !password) {
     return { success: false, error: "Missing required fields" };
   }
 
@@ -463,42 +294,39 @@ export async function requestPatientSignupOtp(data: PatientSignupPayload): Promi
 
   // Step 1: Create the patient record in either Prisma or Mock DB fallback
   try {
+    // Try Prisma DB signup first
     const existingPatient = await prisma.patient.findUnique({
-      where: { email: normalizedEmail },
-      select: { id: true },
+      where: { email }
     });
 
     if (existingPatient) {
-      return { success: false, error: "An account with this email already exists" };
+      return { success: false, error: "A patient with this email already exists" };
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const patientAccount = await prisma.$transaction(async (tx) => {
-      const account = await ensurePrismaPatientAccount(tx, {
-        email: normalizedEmail,
-        password: hashedPassword,
+    const patient = await prisma.patient.create({
+      data: {
         firstName,
         middleName: middleName || null,
         lastName,
         suffix: suffix || null,
+        email,
         countryCode,
         phone,
         dob,
         gender: gender || null,
+        password: hashedPassword,
         hipaaConsent,
         emailVerified: false,
-        isActive: true,
-      });
-
-      return account.patient;
+      }
     });
 
-    createdPatient = { id: patientAccount.id, email: patientAccount.email, firstName: patientAccount.firstName };
+    createdPatient = { id: patient.id, email: patient.email, firstName: patient.firstName };
   } catch (error: unknown) {
     console.warn("Prisma signup failed, falling back to mock JSON database:", error);
     try {
-      const existingPatient = mockDb.findPatientByEmail(normalizedEmail);
+      const existingPatient = mockDb.findPatientByEmail(email);
       if (existingPatient) {
         return { success: false, error: "A patient with this email already exists" };
       }
@@ -509,7 +337,7 @@ export async function requestPatientSignupOtp(data: PatientSignupPayload): Promi
         middleName: middleName || null,
         lastName,
         suffix: suffix || null,
-        email: normalizedEmail,
+        email,
         countryCode,
         phone,
         dob,
@@ -528,23 +356,17 @@ export async function requestPatientSignupOtp(data: PatientSignupPayload): Promi
   }
 
   if (!isOtpWorkflowEnabled()) {
-      if (isMockDb) {
-        mockDb.updatePatient(createdPatient.email, { emailVerified: true });
-      } else {
-        await prisma.$transaction(async (tx) => {
-          await tx.patient.update({
-            where: { email: createdPatient.email },
-            data: { emailVerified: true },
-          });
-          await tx.user.update({
-            where: { email: createdPatient.email },
-            data: { emailVerified: true },
-          });
-        });
-      }
+    if (isMockDb) {
+      mockDb.updatePatient(createdPatient.email, { emailVerified: true });
+    } else {
+      await prisma.patient.update({
+        where: { email: createdPatient.email },
+        data: { emailVerified: true },
+      });
+    }
 
-      await createPatientSession({
-        userId: createdPatient.id,
+    await createPatientSession({
+      userId: createdPatient.id,
       email: createdPatient.email,
     });
 
@@ -580,15 +402,10 @@ export async function requestPatientSignupOtp(data: PatientSignupPayload): Promi
     if (isMockDb) {
       mockDb.deletePatient(createdPatient.email);
     } else {
-      await prisma.$transaction(async (tx) => {
-        await tx.patient.delete({
-          where: { email: createdPatient.email },
-        });
-        await tx.user.delete({
-          where: { email: createdPatient.email },
-        });
+      await prisma.patient.delete({
+        where: { email: createdPatient.email }
       }).catch((dbDeleteErr) => {
-        console.error("Failed to delete patient/user during signup rollback:", dbDeleteErr);
+        console.error("Failed to delete patient during signup rollback:", dbDeleteErr);
       });
     }
 
@@ -642,31 +459,24 @@ export async function verifyPatientSignupOtp(data: {
 
   try {
     const { email, otp } = data;
-    const normalizedEmail = email.trim().toLowerCase();
 
-    if (!normalizedEmail || !otp || otp.length !== 6) {
+    if (!email || !otp || otp.length !== 6) {
       return { success: false, error: "A valid 6-digit verification code is required." };
     }
 
     const patient = await prisma.patient.findUnique({
-      where: { email: normalizedEmail },
+      where: { email },
     });
 
     if (!patient) {
       return { success: false, error: "We could not find that patient account." };
     }
 
-    await verifyPatientOtpCode(normalizedEmail, otp, "signup_verify");
+    await verifyPatientOtpCode(email, otp, "signup_verify");
 
-    await prisma.$transaction(async (tx) => {
-      await tx.patient.update({
-        where: { email: normalizedEmail },
-        data: { emailVerified: true },
-      });
-      await tx.user.update({
-        where: { email: normalizedEmail },
-        data: { emailVerified: true },
-      });
+    await prisma.patient.update({
+      where: { email },
+      data: { emailVerified: true },
     });
 
     await createPatientSession({
@@ -683,16 +493,15 @@ export async function verifyPatientSignupOtp(data: {
     console.warn("Prisma signup verification failed, falling back to mock database:", error);
     try {
       const { email, otp } = data;
-      const normalizedEmail = email.trim().toLowerCase();
-      const patient = mockDb.findPatientByEmail(normalizedEmail);
+      const patient = mockDb.findPatientByEmail(email);
 
       if (!patient) {
         return { success: false, error: "We could not find that patient account." };
       }
 
-      await verifyPatientOtpCode(normalizedEmail, otp, "signup_verify");
+      await verifyPatientOtpCode(email, otp, "signup_verify");
 
-      mockDb.updatePatient(normalizedEmail, { emailVerified: true });
+      mockDb.updatePatient(email, { emailVerified: true });
 
       await createPatientSession({
         userId: patient.id,
@@ -716,29 +525,29 @@ export async function verifyPatientSignupOtp(data: {
  */
 export async function requestPatientLoginOtp(data: PatientLoginPayload): Promise<PatientOtpResponse> {
   let validatedPatient: { email: string; firstName: string; emailVerified: boolean } | null = null;
-  const normalizedEmail = data.email.trim().toLowerCase();
-  const { password } = data;
+  const { email, password } = data;
 
-  if (!normalizedEmail || !password) {
+  if (!email || !password) {
     return { success: false, error: "Email and password are required" };
   }
 
   // Step 1: Validate credentials using Prisma or Mock DB fallback
   if (!isPrismaConfigured()) {
-    validatedPatient = await validateMockPatientLogin({ email: normalizedEmail, password });
+    validatedPatient = await validateMockPatientLogin(data);
 
     if (!validatedPatient) {
       return { success: false, error: "Invalid email or password" };
     }
   } else {
     try {
-      const synced = await syncPrismaPatientAccount(normalizedEmail);
+      const patient = await prisma.patient.findUnique({
+        where: { email }
+      });
 
-      if (!synced) {
+      if (!patient) {
         return { success: false, error: "Invalid email or password" };
       }
 
-      const { patient } = synced;
       const isMatch = await bcrypt.compare(password, patient.password);
       if (!isMatch) {
         return { success: false, error: "Invalid email or password" };
@@ -747,7 +556,7 @@ export async function requestPatientLoginOtp(data: PatientLoginPayload): Promise
       validatedPatient = { email: patient.email, firstName: patient.firstName, emailVerified: patient.emailVerified };
     } catch (error: unknown) {
       console.warn("Prisma login request failed, falling back to mock database:", error);
-      validatedPatient = await validateMockPatientLogin({ email: normalizedEmail, password });
+      validatedPatient = await validateMockPatientLogin(data);
 
       if (!validatedPatient) {
         return { success: false, error: "Invalid email or password" };
@@ -923,29 +732,13 @@ async function syncMockPatientToPrisma(email: string): Promise<string | null> {
     if (!demoPatient) {
       return null;
     }
-    const pgPatient = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.upsert({
-        where: { email: demoPatient.email.toLowerCase() },
-        create: {
-          email: demoPatient.email.toLowerCase(),
-          password: demoPatient.password,
-          role: "PATIENT",
-          emailVerified: demoPatient.emailVerified,
-          isActive: demoPatient.isActive,
-        },
-        update: {
-          password: demoPatient.password,
-          role: "PATIENT",
-          emailVerified: demoPatient.emailVerified,
-          isActive: demoPatient.isActive,
-        },
-      });
-
-      return tx.patient.upsert({
-        where: { email: demoPatient.email },
-        create: {
+    let pgPatient = await prisma.patient.findUnique({
+      where: { email: demoPatient.email },
+    });
+    if (!pgPatient) {
+      pgPatient = await prisma.patient.create({
+        data: {
           id: demoPatient.id,
-          userId: user.id,
           firstName: demoPatient.firstName,
           middleName: demoPatient.middleName,
           lastName: demoPatient.lastName,
@@ -960,24 +753,9 @@ async function syncMockPatientToPrisma(email: string): Promise<string | null> {
           emailVerified: demoPatient.emailVerified,
           isActive: demoPatient.isActive,
         },
-        update: {
-          userId: user.id,
-          firstName: demoPatient.firstName,
-          middleName: demoPatient.middleName,
-          lastName: demoPatient.lastName,
-          suffix: demoPatient.suffix,
-          countryCode: demoPatient.countryCode,
-          phone: demoPatient.phone,
-          dob: demoPatient.dob,
-          gender: demoPatient.gender,
-          password: demoPatient.password,
-          hipaaConsent: demoPatient.hipaaConsent,
-          emailVerified: demoPatient.emailVerified,
-          isActive: demoPatient.isActive,
-        },
       });
-    });
-    console.log(`[syncMockPatientToPrisma] Synced mock patient "${email}" to Postgres.`);
+      console.log(`[syncMockPatientToPrisma] Synced mock patient "${email}" to Postgres.`);
+    }
     return pgPatient.id;
   } catch (err) {
     console.warn("[syncMockPatientToPrisma] Failed to sync mock patient to Prisma:", err);
@@ -986,7 +764,7 @@ async function syncMockPatientToPrisma(email: string): Promise<string | null> {
 }
 
 export async function loginPatient(data: PatientLoginPayload) {
-  const email = data.email.trim().toLowerCase();
+  const email = data.email?.trim().toLowerCase();
   const { password } = data;
 
   if (!email || !password) {
@@ -994,51 +772,93 @@ export async function loginPatient(data: PatientLoginPayload) {
   }
 
   try {
-    // Try Prisma first if configured
-    if (isPrismaConfigured()) {
-      try {
-        const synced = await syncPrismaPatientAccount(email);
+    if (!isPrismaConfigured()) {
+      const patientRecord = mockDb.findPatientByEmail(email);
 
-        if (synced) {
-          const { patient } = synced;
-          const isMatch = await bcrypt.compare(password, patient.password);
+      if (!patientRecord) {
+        return { success: false, error: "Invalid email or password" };
+      }
 
-          if (isMatch) {
+      const isMatch = await bcrypt.compare(password, patientRecord.password);
+
+      if (!isMatch) {
+        return { success: false, error: "Invalid email or password" };
+      }
+
+      await createPatientSession({
+        userId: patientRecord.id,
+        email: patientRecord.email,
+      });
+
+      return {
+        success: true,
+        email: patientRecord.email,
+        message: "Welcome back. Redirecting to your dashboard.",
+      };
+    }
+
+    const patient = await prisma.patient.findUnique({
+      where: { email },
+    });
+
+    if (patient) {
+      const isMatch = await bcrypt.compare(password, patient.password);
+
+      if (!isMatch) {
+        const mockPatient = mockDb.findPatientByEmail(email);
+        if (mockPatient) {
+          const mockMatch = await bcrypt.compare(password, mockPatient.password);
+          if (mockMatch) {
             await createPatientSession({
-              userId: patient.id,
-              email: patient.email,
+              userId: mockPatient.id,
+              email: mockPatient.email,
             });
 
             return {
               success: true,
-              email: patient.email,
+              email: mockPatient.email,
               message: "Welcome back. Redirecting to your dashboard.",
             };
           }
-          console.warn(`[loginPatient] Password mismatch for ${email} in Prisma`);
         }
-      } catch (prismaError) {
-        console.warn("[loginPatient] Prisma lookup error:", prismaError);
+
+        return { success: false, error: "Invalid email or password" };
       }
+
+      await createPatientSession({
+        userId: patient.id,
+        email: patient.email,
+      });
+
+      return {
+        success: true,
+        email: patient.email,
+        message: "Welcome back. Redirecting to your dashboard.",
+      };
     }
 
-    // Fallback to MockDB
     const demoPatient = mockDb.findPatientByEmail(email);
 
     if (!demoPatient) {
-      console.warn(`[loginPatient] No patient found in MockDB for ${email}`);
       return { success: false, error: "Invalid email or password" };
     }
 
     const isMatch = await bcrypt.compare(password, demoPatient.password);
 
     if (!isMatch) {
-      console.warn(`[loginPatient] Password mismatch for ${email} in MockDB`);
       return { success: false, error: "Invalid email or password" };
     }
 
+    let userId = demoPatient.id;
+    if (isPrismaConfigured()) {
+      const syncedId = await syncMockPatientToPrisma(email);
+      if (syncedId) {
+        userId = syncedId;
+      }
+    }
+
     await createPatientSession({
-      userId: demoPatient.id,
+      userId,
       email: demoPatient.email,
     });
 
@@ -1048,8 +868,37 @@ export async function loginPatient(data: PatientLoginPayload) {
       message: "Welcome back. Redirecting to your dashboard.",
     };
   } catch (error: unknown) {
-    console.error("[loginPatient] Unexpected error:", error);
-    return { success: false, error: "Invalid email or password" };
+    console.warn("Prisma patient login failed, falling back to mock database:", error);
+    const patient = mockDb.findPatientByEmail(email);
+
+    if (!patient) {
+      return { success: false, error: "Invalid email or password" };
+    }
+
+    const isMatch = await bcrypt.compare(password, patient.password);
+
+    if (!isMatch) {
+      return { success: false, error: "Invalid email or password" };
+    }
+
+    let userId = patient.id;
+    if (isPrismaConfigured()) {
+      const syncedId = await syncMockPatientToPrisma(email);
+      if (syncedId) {
+        userId = syncedId;
+      }
+    }
+
+    await createPatientSession({
+      userId,
+      email: patient.email,
+    });
+
+    return {
+      success: true,
+      email: patient.email,
+      message: "Welcome back. Redirecting to your dashboard.",
+    };
   }
 }
 
@@ -1058,8 +907,7 @@ export async function loginPatient(data: PatientLoginPayload) {
  */
 export async function loginDoctor(data: DoctorLoginPayload) {
   try {
-    const emailOrNpi = data.emailOrNpi.trim();
-    const { password, securityKey } = data;
+    const { emailOrNpi, password, securityKey } = data;
 
     console.log("[loginDoctor] Attempt:", { emailOrNpi, passwordLength: password?.length, isPrisma: isPrismaConfigured() });
 
@@ -1072,19 +920,29 @@ export async function loginDoctor(data: DoctorLoginPayload) {
       return loginMockDoctor(data);
     }
 
-    const synced = await syncPrismaDoctorAccount(emailOrNpi);
-    const doctor = synced?.doctor ?? null;
+    // Ensure our doctor seeds are loaded in Prisma
+    await ensureFeaturedDoctorsSeeded();
+
+    // Query either NPI or email
+    const doctor = await prisma.doctor.findFirst({
+      where: {
+        OR: [
+          { email: emailOrNpi },
+          { npi: emailOrNpi }
+        ]
+      }
+    });
 
     console.log("[loginDoctor] Prisma lookup result:", doctor ? { id: doctor.id, email: doctor.email, hashPrefix: doctor.password.substring(0, 10) } : "NOT FOUND");
 
     if (!doctor) {
-      return { success: false, error: "No physician matches these credentials" };
+      return loginMockDoctor(data);
     }
 
     const isMatch = await bcrypt.compare(password, doctor.password);
     console.log("[loginDoctor] bcrypt.compare result:", isMatch, "| input password:", JSON.stringify(password));
     if (!isMatch) {
-      return { success: false, error: "Invalid credentials" };
+      return loginMockDoctor(data);
     }
 
     // Verify 6-digit passcode check
@@ -1115,96 +973,6 @@ export async function loginDoctor(data: DoctorLoginPayload) {
       return { success: false, error: "Licensure lookup failed" };
     }
   }
-}
-
-export async function loginAdmin(data: { email: string; password: string }) {
-  const normalizedEmail = data.email?.trim().toLowerCase();
-  const password = data.password ?? "";
-  let adminSessionId = "admin";
-
-  if (!normalizedEmail || !password) {
-    return { success: false, error: "Email and password are required" };
-  }
-
-  if (normalizedEmail !== ADMIN_EMAIL.toLowerCase()) {
-    return { success: false, error: "Invalid admin credentials" };
-  }
-
-  if (isPrismaConfigured()) {
-    try {
-      const adminAccount = await prisma.$transaction(async (tx) => {
-        const user = await tx.user.upsert({
-          where: { email: normalizedEmail },
-          create: {
-            email: normalizedEmail,
-            password: ADMIN_PASSWORD_HASH,
-            role: "ADMIN",
-            emailVerified: true,
-            isActive: true,
-          },
-          update: {
-            password: ADMIN_PASSWORD_HASH,
-            role: "ADMIN",
-            emailVerified: true,
-            isActive: true,
-          },
-        });
-
-        const admin = await tx.admin.upsert({
-          where: { email: normalizedEmail },
-          create: {
-            userId: user.id,
-            name: "System Administrator",
-            email: normalizedEmail,
-            role: "SUPER_ADMIN",
-          },
-          update: {
-            userId: user.id,
-            name: "System Administrator",
-            role: "SUPER_ADMIN",
-          },
-        });
-
-        return { user, admin };
-      });
-
-      adminSessionId = adminAccount.admin.id;
-      const isMatch = await bcrypt.compare(password, adminAccount.user.password);
-      if (!isMatch && !(await bcrypt.compare(password, ADMIN_PASSWORD_HASH))) {
-        return { success: false, error: "Invalid admin credentials" };
-      }
-    } catch (dbErr) {
-      console.warn("Prisma admin check failed, checking hardcoded secret hash:", dbErr);
-      const isMatch = await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
-      if (!isMatch) {
-        return { success: false, error: "Invalid admin credentials" };
-      }
-    }
-  } else {
-    const isMatch = await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
-    if (!isMatch) {
-      return { success: false, error: "Invalid admin credentials" };
-    }
-  }
-
-  await createAdminSession({
-    userId: adminSessionId,
-    email: normalizedEmail,
-  });
-
-  return {
-    success: true,
-    admin: {
-      id: adminSessionId,
-      email: normalizedEmail,
-      role: "admin",
-    },
-  };
-}
-
-export async function logoutAdmin() {
-  await clearAdminSession();
-  redirect("/admin/signin");
 }
 
 export async function logoutDoctor() {
