@@ -101,7 +101,7 @@ const ADMIN_EMAIL = "admin@healthko.com";
 const ADMIN_PASSWORD_HASH = "$2a$10$GKRhPVU715yCQTPmoyEc5uMZMyZwUcIAM.wojMkY6kgqmorRIpb0O";
 
 async function validateMockPatientLogin({ email, password }: PatientLoginPayload) {
-  const patient = mockDb.findPatientByEmail(email);
+  const patient = mockDb.findPatientByEmail(email.toLowerCase());
 
   if (!patient) {
     return null;
@@ -295,7 +295,8 @@ function isOtpWorkflowEnabled() {
  * Step 1 of patient signup: create the account and email an OTP.
  */
 export async function requestPatientSignupOtp(data: PatientSignupPayload): Promise<PatientOtpResponse> {
-  const { firstName, middleName, lastName, suffix, email, countryCode, phone, dob, gender, password, hipaaConsent } = data;
+  const { firstName, middleName, lastName, suffix, countryCode, phone, dob, gender, password, hipaaConsent } = data;
+  const email = data.email?.trim().toLowerCase();
 
   if (!firstName || !lastName || !email || !phone || !dob || !password) {
     return { success: false, error: "Missing required fields" };
@@ -537,7 +538,8 @@ export async function verifyPatientSignupOtp(data: {
  */
 export async function requestPatientLoginOtp(data: PatientLoginPayload): Promise<PatientOtpResponse> {
   let validatedPatient: { email: string; firstName: string; emailVerified: boolean } | null = null;
-  const { email, password } = data;
+  const email = data.email?.trim().toLowerCase();
+  const { password } = data;
 
   if (!email || !password) {
     return { success: false, error: "Email and password are required" };
@@ -776,7 +778,8 @@ async function syncMockPatientToPrisma(email: string): Promise<string | null> {
 }
 
 export async function loginPatient(data: PatientLoginPayload) {
-  const { email, password } = data;
+  const email = data.email?.trim().toLowerCase();
+  const { password } = data;
 
   if (!email || !password) {
     return { success: false, error: "Email and password are required" };
