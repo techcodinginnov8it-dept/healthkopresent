@@ -695,6 +695,30 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
   // the server data changes (router.refresh), not when the user dismisses.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patient.bookings]);
+  // Auto-pre-join: silently authorize + join WebRTC as soon as the doctor
+  // starts the session (even before patient clicks "Join").
+  // The Join button then just reveals the video UI — no network call needed.
+  const autoJoinedRef = React.useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (session.roomId) {
+      // Already in a session — nothing to auto-join
+      return;
+    }
+    const pendingEntries = Object.entries(authorizedRooms);
+    if (pendingEntries.length === 0) return;
+
+    const [appointmentId] = pendingEntries[0];
+    if (autoJoinedRef.current.has(appointmentId)) return;
+
+    const booking = patient.bookings.find((b) => b.id === appointmentId);
+    if (!booking) return;
+
+    autoJoinedRef.current.add(appointmentId);
+    console.log("[PatientDashboard] Auto-pre-joining WebRTC for appointment", appointmentId);
+    void joinAuthorizedSession(booking as PatientAppointment);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authorizedRooms, session.roomId]);
+
   const webRTC = useWebRTC({
     roomId: session.roomId,
     role: "patient",
@@ -1039,6 +1063,13 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
   };
 
   const startLiveSession = (appointment: PatientAppointment) => {
+    // If already pre-joined in the background, just reveal the live UI.
+    if (session.roomId && session.activeAppointment?.id === appointment.id) {
+      setDismissedStartedId(appointment.id);
+      setActiveModule("live");
+      return;
+    }
+
     if (authorizedRooms[appointment.id]) {
       void joinAuthorizedSession(appointment);
       return;

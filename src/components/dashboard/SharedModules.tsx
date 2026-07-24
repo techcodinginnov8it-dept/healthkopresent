@@ -373,6 +373,29 @@ function ConsultationVideoTile({
 }) {
   const ref = useRef<HTMLVideoElement>(null);
 
+  // Track count state: forces re-render when video/audio tracks are added or removed
+  // to the same MediaStream object (React won't re-render on mutable stream mutations).
+  const [streamTracks, setStreamTracks] = useState<MediaStreamTrack[]>(
+    () => stream?.getTracks() ?? []
+  );
+
+  useEffect(() => {
+    if (!stream) {
+      setStreamTracks([]);
+      return;
+    }
+    // Sync immediately in case tracks already exist
+    setStreamTracks(stream.getTracks());
+
+    const refresh = () => setStreamTracks(stream.getTracks());
+    stream.addEventListener("addtrack", refresh);
+    stream.addEventListener("removetrack", refresh);
+    return () => {
+      stream.removeEventListener("addtrack", refresh);
+      stream.removeEventListener("removetrack", refresh);
+    };
+  }, [stream]);
+
   useEffect(() => {
     const video = ref.current;
     if (!video || !stream) {
@@ -415,8 +438,8 @@ function ConsultationVideoTile({
     };
   }, [muted, stream]);
 
-  const hasVideo = Boolean(stream?.getVideoTracks().length);
-  const hasAudio = Boolean(stream?.getAudioTracks().length);
+  const hasVideo = streamTracks.some((t) => t.kind === "video");
+  const hasAudio = streamTracks.some((t) => t.kind === "audio");
   const showFeed = Boolean(stream && hasVideo);
 
   if (isCompact) {
@@ -716,49 +739,39 @@ export function LiveConsultationPanel({
           />
         </div>
         <div className="grid min-h-[480px] gap-4 p-4 pb-28 md:grid-cols-2">
-          {/* Left Side: Patient Feed */}
+          {/* Left: Your local camera preview */}
           <div className="relative min-h-[420px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
             <ConsultationVideoTile
-              stream={role === "doctor" ? remoteStream : localStream}
-              label={role === "doctor" ? counterpartName : "Your stream"}
-              detail={
-                role === "doctor"
-                  ? counterpartCameraOn
-                    ? "Patient stream"
-                    : "Camera disabled"
-                  : isCameraOn
-                    ? "Local preview"
-                    : "Camera disabled"
-              }
-              active={role === "doctor" ? Boolean(counterpartCameraOn) : isCameraOn}
-              cameraOn={role === "doctor" ? counterpartCameraOn : isCameraOn}
-              micOn={role === "doctor" ? counterpartMicOn : isMicOn}
-              muted={role === "patient"}
+              stream={localStream}
+              label="Your stream"
+              detail={isCameraOn ? "Local preview" : "Camera disabled"}
+              active={isCameraOn}
+              cameraOn={isCameraOn}
+              micOn={isMicOn}
+              muted={true}
               className="h-full min-h-[420px]"
-              tone={role === "doctor" ? "teal" : "slate"}
+              tone="slate"
             />
           </div>
 
-          {/* Right Side: Doctor Feed */}
+          {/* Right: Counterpart remote feed */}
           <div className="relative min-h-[420px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
             <ConsultationVideoTile
-              stream={role === "doctor" ? localStream : remoteStream}
-              label={role === "doctor" ? "Your stream" : counterpartName}
+              stream={remoteStream}
+              label={counterpartName}
               detail={
-                role === "doctor"
-                  ? isCameraOn
-                    ? "Local preview"
-                    : "Camera disabled"
-                  : counterpartCameraOn
-                    ? "Doctor stream"
-                    : "Camera disabled"
+                counterpartCameraOn
+                  ? role === "doctor"
+                    ? "Patient stream"
+                    : "Doctor stream"
+                  : "Camera disabled"
               }
-              active={role === "doctor" ? isCameraOn : Boolean(counterpartCameraOn)}
-              cameraOn={role === "doctor" ? isCameraOn : counterpartCameraOn}
-              micOn={role === "doctor" ? isMicOn : counterpartMicOn}
-              muted={role === "doctor"}
+              active={Boolean(counterpartCameraOn)}
+              cameraOn={counterpartCameraOn}
+              micOn={counterpartMicOn}
+              muted={false}
               className="h-full min-h-[420px]"
-              tone={role === "doctor" ? "slate" : "teal"}
+              tone="teal"
             />
           </div>
         </div>
