@@ -982,7 +982,7 @@ export async function logoutDoctor() {
 }
 
 const ADMIN_EMAIL = "admin@healthko.com";
-const ADMIN_PASSWORD_HASH = "$2a$10$GKRhPVU715yCQTPmoyEc5uMZMyZwUcIAM.wojMkY6kgqmorRIpb0O";
+const ADMIN_PASSWORD_HASH = "$2a$10$A24WIxraPyqrS6dfZaps0OnP11alyc7ZO0E5CC2LdQgemuzwdvtwm";
 
 export async function loginAdmin(data: { email: string; password: string }) {
   const normalizedEmail = data.email?.trim().toLowerCase();
@@ -994,6 +994,35 @@ export async function loginAdmin(data: { email: string; password: string }) {
 
   if (normalizedEmail !== ADMIN_EMAIL.toLowerCase()) {
     return { success: false, error: "Invalid admin credentials" };
+  }
+
+  if (isPrismaConfigured()) {
+    try {
+      const dbUsers: any = await prisma.$queryRawUnsafe(
+        `SELECT * FROM "users" WHERE LOWER(email) = $1 LIMIT 1`,
+        normalizedEmail
+      );
+      if (Array.isArray(dbUsers) && dbUsers.length > 0) {
+        const user = dbUsers[0];
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (isMatch) {
+          await createAdminSession({
+            userId: user.id,
+            email: user.email,
+          });
+          return {
+            success: true,
+            admin: {
+              id: user.id,
+              email: user.email,
+              role: user.role ?? "admin",
+            },
+          };
+        }
+      }
+    } catch (dbErr) {
+      console.warn("DB lookup for admin failed, falling back to static hash check:", dbErr);
+    }
   }
 
   const isMatch = await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
