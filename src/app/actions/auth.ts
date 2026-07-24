@@ -1211,3 +1211,4 @@ export async function logoutDoctor() {
   await clearDoctorSession();
   redirect("/doctor/signin");
 }
+
