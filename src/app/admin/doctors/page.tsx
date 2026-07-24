@@ -15,7 +15,7 @@ export default async function AdminDoctorsPage() {
 
   const totalDoctors = metrics.totalDoctors;
   const activeDoctors = metrics.activeDoctors;
-  const pendingReviews = audits.length;
+  const pendingReviews = audits.filter((a) => a.status === "PENDING" || a.status === "UNDER_REVIEW").length;
 
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-10 text-white sm:px-10">

@@ -51,7 +51,9 @@ export default async function AdminDashboardPage() {
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-5">
               <p className="text-xs font-black uppercase tracking-wider text-slate-400">Pending audits</p>
-              <p className="mt-2 text-3xl font-black">{audits.length}</p>
+              <p className="mt-2 text-3xl font-black">
+                {audits.filter((a) => a.status === "PENDING" || a.status === "UNDER_REVIEW").length}
+              </p>
             </div>
           </div>
         </div>
