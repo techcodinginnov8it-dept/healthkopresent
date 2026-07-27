@@ -79,6 +79,9 @@ export type MockConsultation = {
   notes: string | null;
   prescription: string | null;
   duration: number;
+  bloodPressure?: string | null;
+  heartRate?: string | null;
+  bodyTemperature?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -256,22 +259,32 @@ export const mockDb = {
 
   createDoctor(data: Omit<MockDoctor, "id" | "createdAt" | "updatedAt" | "rating" | "reviewCount" | "availability"> & Partial<MockDoctor>): MockDoctor {
     const db = getDb();
+    const {
+      bio = null,
+      image = null,
+      languages = ["English"],
+      consultFee = 500,
+      isActive = true,
+      isFeatured = false,
+      isVerified = true,
+      ...rest
+    } = data;
     const newDoctor: MockDoctor = {
       id: "doc-" + Math.random().toString(36).substr(2, 9),
-      bio: null,
-      image: null,
-      languages: ["English"],
       rating: 5.0,
       reviewCount: 1,
       availability: "Available Today",
       status: "ONLINE",
-      consultFee: 500,
       consultationDuration: 30,
       consultationDurationUnit: "minutes",
-      isActive: true,
-      isFeatured: false,
-      isVerified: true,
-      ...data,
+      bio,
+      image,
+      languages,
+      consultFee,
+      isActive,
+      isFeatured,
+      isVerified,
+      ...rest,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -627,6 +640,9 @@ export const mockDb = {
       notes: null,
       prescription: null,
       duration: data.duration,
+      bloodPressure: null,
+      heartRate: null,
+      bodyTemperature: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
