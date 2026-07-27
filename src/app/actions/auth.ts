@@ -51,7 +51,26 @@ async function ensureFeaturedDoctorsSeeded() {
       ];
 
       for (const doc of defaultDoctors) {
-        await prisma.doctor.create({ data: doc });
+        const user = await prisma.user.upsert({
+          where: { email: doc.email },
+          create: { email: doc.email, password: doc.password, role: "DOCTOR" },
+          update: { password: doc.password },
+        });
+        await prisma.doctor.upsert({
+          where: { email: doc.email },
+          create: {
+            ...doc,
+            user: {
+              connect: { id: user.id },
+            },
+          },
+          update: {
+            ...doc,
+            user: {
+              connect: { id: user.id },
+            },
+          },
+        });
       }
     }
   } catch {
@@ -306,8 +325,15 @@ export async function requestPatientSignupOtp(data: PatientSignupPayload): Promi
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    const user = await prisma.user.upsert({
+      where: { email },
+      create: { email, password: hashedPassword, role: "PATIENT" },
+      update: { password: hashedPassword },
+    });
+
     const patient = await prisma.patient.create({
       data: {
+        userId: user.id,
         firstName,
         middleName: middleName || null,
         lastName,
@@ -737,9 +763,19 @@ async function syncMockPatientToPrisma(email: string): Promise<string | null> {
       where: { email: demoPatient.email },
     });
     if (!pgPatient) {
+      const user = await prisma.user.upsert({
+        where: { email: demoPatient.email },
+        create: {
+          email: demoPatient.email,
+          password: demoPatient.password,
+          role: "PATIENT",
+        },
+        update: { password: demoPatient.password },
+      });
       pgPatient = await prisma.patient.create({
         data: {
           id: demoPatient.id,
+          userId: user.id,
           firstName: demoPatient.firstName,
           middleName: demoPatient.middleName,
           lastName: demoPatient.lastName,
