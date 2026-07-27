@@ -15,6 +15,73 @@ import { cookies } from "next/headers";
 const ADMIN_EMAIL = "admin@healthko.com";
 const ADMIN_PASSWORD_HASH = "$2a$10$A24WIxraPyqrS6dfZaps0OnP11alyc7ZO0E5CC2LdQgemuzwdvtwm";
 
+// Seed data helper to ensure demo doctors exist in Supabase
+async function ensureFeaturedDoctorsSeeded() {
+  if (!isPrismaConfigured()) {
+    return;
+  }
+
+  try {
+    const doctorCount = await prisma.doctor.count();
+    if (doctorCount === 0) {
+      const defaultDoctors = [
+        {
+          npi: "1982736450",
+          email: "s.jenkins@healthko.com",
+          password: await bcrypt.hash("123456", 10),
+          name: "Dr. Sarah Jenkins",
+          specialty: "Board-Certified Cardiologist",
+          rating: 4.9,
+          availability: "Mon - Fri, 9AM - 5PM"
+        },
+        {
+          npi: "1098273645",
+          email: "m.vance@healthko.com",
+          password: await bcrypt.hash("123456", 10),
+          name: "Dr. Marcus Vance",
+          specialty: "Pediatric Medicine Specialist",
+          rating: 4.8,
+          availability: "Mon - Thu, 8AM - 4PM"
+        },
+        {
+          npi: "1234567890",
+          email: "a.patel@healthko.com",
+          password: await bcrypt.hash("123456", 10),
+          name: "Dr. Aaliyah Patel",
+          specialty: "Family Practitioner & Telehealth Lead",
+          rating: 4.9,
+          availability: "Tue - Sat, 10AM - 6PM"
+        }
+      ];
+
+      for (const doc of defaultDoctors) {
+        const user = await prisma.user.upsert({
+          where: { email: doc.email },
+          create: { email: doc.email, password: doc.password, role: "DOCTOR" },
+          update: { password: doc.password },
+        });
+        await prisma.doctor.upsert({
+          where: { email: doc.email },
+          create: {
+            ...doc,
+            user: {
+              connect: { id: user.id },
+            },
+          },
+          update: {
+            ...doc,
+            user: {
+              connect: { id: user.id },
+            },
+          },
+        });
+      }
+    }
+  } catch {
+    console.warn("ensureFeaturedDoctorsSeeded failed, database might be offline. MockDB seeds are already active.");
+  }
+}
+
 type PatientSignupPayload = {
   firstName: string;
   middleName?: string;
