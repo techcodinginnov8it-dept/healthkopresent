@@ -116,9 +116,21 @@ export async function bookAppointment(data: BookAppointmentPayload) {
       }
 
       try {
+        const user = await prisma.user.upsert({
+          where: { email: mockPatient.email.toLowerCase() },
+          create: {
+            email: mockPatient.email.toLowerCase(),
+            password: mockPatient.password,
+            role: "PATIENT",
+          },
+          update: { password: mockPatient.password },
+        });
         await prisma.patient.create({
           data: {
             id: session.userId,
+            user: {
+              connect: { id: user.id },
+            },
             firstName: mockPatient.firstName,
             middleName: mockPatient.middleName,
             lastName: mockPatient.lastName,
