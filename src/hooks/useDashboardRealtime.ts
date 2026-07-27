@@ -69,7 +69,8 @@ export function useDashboardRealtime(onEvent?: (event: RealtimeEvent) => void) {
   );
 
   useEffect(() => {
-    const socket = io({
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || undefined;
+    const socket = io(socketUrl, {
       path: SOCKET_PATH,
       // Force WebSocket from the start — polling causes ICE candidate loss/reordering
       // which breaks WebRTC signaling. Upgrade negotiation is disabled intentionally.
@@ -127,8 +128,8 @@ export function useDashboardRealtime(onEvent?: (event: RealtimeEvent) => void) {
     window.setTimeout(() => setReconnectState(null), 900);
   }, []);
 
-  const joinVideoRoom = useCallback((roomId: string) => {
-    socketRef.current?.emit("webrtc:join-room", { roomId });
+  const joinVideoRoom = useCallback((roomId: string, role: "doctor" | "patient") => {
+    socketRef.current?.emit("webrtc:join-room", { roomId, role });
   }, []);
 
   const endVideoRoom = useCallback((roomId: string) => {
