@@ -222,16 +222,22 @@ export function AppointmentCalendar({
             <button
               type="button"
               onClick={() => stepCalendar(-1)}
-              className="grid h-8 w-8 place-items-center rounded-full bg-white/10 text-slate-200 transition hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-brand-teal/40"
+              className={`grid h-8 w-8 place-items-center rounded-full transition hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-brand-teal/40 ${
+                dark ? "bg-white/10 text-slate-200 hover:bg-white/15" : "border border-slate-200 bg-white text-slate-700 hover:border-brand-teal/40"
+              }`}
               aria-label="Previous calendar period"
             >
               <ChevronIcon direction="left" />
             </button>
-            <span className="rounded-full bg-white/10 px-2.5 py-1 text-slate-200">{periodLabel}</span>
+            <span className={`rounded-full px-2.5 py-1 ${dark ? "bg-white/10 text-slate-200" : "border border-slate-200 bg-white text-slate-700"}`}>
+              {periodLabel}
+            </span>
             <button
               type="button"
               onClick={() => stepCalendar(1)}
-              className="grid h-8 w-8 place-items-center rounded-full bg-white/10 text-slate-200 transition hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-brand-teal/40"
+              className={`grid h-8 w-8 place-items-center rounded-full transition hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-brand-teal/40 ${
+                dark ? "bg-white/10 text-slate-200 hover:bg-white/15" : "border border-slate-200 bg-white text-slate-700 hover:border-brand-teal/40"
+              }`}
               aria-label="Next calendar period"
             >
               <ChevronIcon direction="right" />
@@ -241,7 +247,11 @@ export function AppointmentCalendar({
               <select
                 value={viewMode}
                 onChange={(event) => onViewModeChange?.(event.target.value as CalendarViewMode)}
-                className="h-8 appearance-none rounded-full border border-white/10 bg-slate-950 px-3 pr-8 text-[10px] font-black uppercase text-white outline-none transition hover:border-brand-teal/60 focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/30"
+                className={`h-8 appearance-none rounded-full px-3 pr-8 text-[10px] font-black uppercase outline-none transition focus:ring-2 focus:ring-brand-teal/30 ${
+                  dark
+                    ? "border border-white/10 bg-slate-950 text-white hover:border-brand-teal/60 focus:border-brand-teal"
+                    : "border border-slate-200 bg-white text-slate-700 hover:border-brand-teal/40 focus:border-brand-teal"
+                }`}
               >
                 {(["day", "week", "month"] as const).map((mode) => (
                   <option key={mode} value={mode}>
@@ -249,14 +259,14 @@ export function AppointmentCalendar({
                   </option>
                 ))}
               </select>
-              <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400">
+              <span className={`pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 ${dark ? "text-slate-400" : "text-slate-500"}`}>
                 <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                   <path d="m6 9 6 6 6-6" />
                 </svg>
               </span>
             </label>
-            <span className="rounded-full bg-sky-400/15 px-2.5 py-1 text-sky-200">Confirmed</span>
-            <span className="rounded-full bg-amber-400/15 px-2.5 py-1 text-amber-200">Pending</span>
+            <span className={`rounded-full px-2.5 py-1 ${dark ? "bg-sky-400/15 text-sky-200" : "border border-sky-200 bg-sky-50 text-sky-700"}`}>Confirmed</span>
+            <span className={`rounded-full px-2.5 py-1 ${dark ? "bg-amber-400/15 text-amber-200" : "border border-amber-200 bg-amber-50 text-amber-700"}`}>Pending</span>
           </div>
         )}
       </div>

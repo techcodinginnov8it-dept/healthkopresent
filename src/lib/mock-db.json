@@ -206,7 +206,9 @@
       "specialty": "Family Medicine",
       "bio": "Demo doctor account for local testing.",
       "image": null,
-      "languages": ["English"],
+      "languages": [
+        "English"
+      ],
       "rating": 5,
       "reviewCount": 1,
       "availability": "Mon - Fri, 9AM - 5PM",
@@ -266,8 +268,8 @@
       "isFeatured": true,
       "isVerified": true,
       "createdAt": "2026-05-20T20:58:55.679Z",
-      "updatedAt": "2026-07-09T15:20:24.043Z",
-      "status": "ONLINE",
+      "updatedAt": "2026-07-27T13:37:14.271Z",
+      "status": "OFFLINE",
       "licenseNumber": null,
       "licenseState": null,
       "yearsExp": null,
@@ -668,5 +670,6 @@
       "createdAt": "2026-07-09T19:07:46.714Z",
       "updatedAt": "2026-07-09T19:08:46.090Z"
     }
-  ]
+  ],
+  "audits": []
 }

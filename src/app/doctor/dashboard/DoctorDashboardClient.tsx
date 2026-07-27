@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { logoutDoctor } from "@/app/actions/auth";
-import { acceptAppointment, cancelAppointment, completeConsultation, referAppointment, rescheduleAppointment, scheduleFollowUpAppointment, updateConsultationVitals } from "@/app/actions/doctor";
+import { acceptAppointment, cancelAppointment, completeConsultation, referAppointment, rescheduleAppointment, scheduleFollowUpAppointment } from "@/app/actions/doctor";
 import { updateDoctorStatus } from "@/app/actions/settings";
 import { endVideoSession, startVideoSession } from "@/app/actions/video-session";
 import { AppointmentCalendar, type CalendarViewMode } from "@/components/dashboard/AppointmentCalendar";
@@ -140,26 +140,26 @@ function getPatientAge(dob: string) {
 function getStatusClasses(status: string) {
   switch (status) {
     case "CONFIRMED":
-      return "border-emerald-300/20 bg-emerald-400/10 text-emerald-100";
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
     case "PENDING":
-      return "border-amber-300/20 bg-amber-400/10 text-amber-100";
+      return "border-amber-200 bg-amber-50 text-amber-700";
     case "COMPLETED":
-      return "border-sky-300/20 bg-sky-400/10 text-sky-100";
+      return "border-sky-200 bg-sky-50 text-sky-700";
     case "CANCELLED":
-      return "border-red-300/20 bg-red-400/10 text-red-100";
+      return "border-red-200 bg-red-50 text-red-700";
     default:
-      return "border-slate-700 bg-slate-800 text-slate-200";
+      return "border-slate-200 bg-slate-100 text-slate-700";
   }
 }
 
 function getDoctorStatusMeta(status?: string | null) {
   switch (status) {
     case "BUSY":
-      return { label: "Busy", className: "border-amber-300/40 bg-amber-300/10 text-amber-100" };
+      return { label: "Busy", className: "border-amber-200 bg-amber-50 text-amber-700" };
     case "OFFLINE":
-      return { label: "Offline", className: "border-slate-700 bg-slate-900 text-slate-300" };
+      return { label: "Offline", className: "border-slate-200 bg-slate-50 text-slate-600" };
     default:
-      return { label: "Online", className: "border-emerald-300/40 bg-emerald-300/10 text-emerald-100" };
+      return { label: "Online", className: "border-emerald-200 bg-emerald-50 text-emerald-700" };
   }
 }
 
@@ -236,14 +236,14 @@ function PatientOperationsHub({
 
   return (
     <section className="grid min-h-[calc(100vh-9rem)] gap-4 xl:grid-cols-[320px_minmax(0,1fr)_360px] 2xl:grid-cols-[360px_minmax(0,1fr)_400px]">
-      <aside className="flex min-h-0 flex-col rounded-xl border border-slate-850 bg-slate-900">
-        <header className="border-b border-slate-850 p-4">
+      <aside className="flex min-h-0 flex-col rounded-xl border border-slate-200 bg-slate-50">
+        <header className="border-b border-slate-200 p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Directory</p>
-              <h2 className="mt-1 text-lg font-black text-white">Patients</h2>
+              <h2 className="mt-1 text-lg font-black text-slate-950">Patients</h2>
             </div>
-            <span className="rounded-full bg-slate-950 px-2.5 py-1 text-[10px] font-black text-slate-300">
+            <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-slate-600">
               {allPatientCount}
             </span>
           </div>
@@ -251,7 +251,7 @@ function PatientOperationsHub({
             value={patientSearch}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Search patient, reason, contact"
-            className="mt-4 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold text-white outline-none focus:border-brand-teal"
+            className="mt-4 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-950 outline-none focus:border-brand-teal"
           />
           <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
             {PATIENT_STATUS_FILTERS.map((filter) => (
@@ -259,7 +259,7 @@ function PatientOperationsHub({
                 key={filter.id}
                 type="button"
                 onClick={() => onStatusFilterChange(filter.id)}
-                className={getTabButtonClassName({ active: statusFilter === filter.id, tone: "dark" })}
+                  className={getTabButtonClassName({ active: statusFilter === filter.id, tone: "light" })}
               >
                 {filter.label}
               </button>
@@ -280,12 +280,12 @@ function PatientOperationsHub({
                   className={`w-full rounded-xl border p-3 text-left transition ${
                     isSelected
                       ? "border-brand-teal bg-brand-teal/10 shadow-[0_0_0_1px_rgba(20,184,166,0.2)]"
-                      : "border-slate-800 bg-slate-950 hover:border-slate-700"
+                      : "border-slate-200 bg-white hover:border-slate-200"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-black text-white">{getPatientDisplayName(patient)}</p>
+                      <p className="truncate text-sm font-black text-slate-950">{getPatientDisplayName(patient)}</p>
                     </div>
                     {patient.activeAppointment && (
                       <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-200">
@@ -294,9 +294,9 @@ function PatientOperationsHub({
                     )}
                   </div>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                    <span className="rounded-lg bg-slate-900 px-2 py-1 text-[10px] font-black text-slate-300">{patient.pending.length} pending</span>
-                    <span className="rounded-lg bg-slate-900 px-2 py-1 text-[10px] font-black text-slate-300">{patient.confirmed.length} active</span>
-                    <span className="rounded-lg bg-slate-900 px-2 py-1 text-[10px] font-black text-slate-300">{patient.completed.length} records</span>
+                    <span className="rounded-lg bg-slate-50 px-2 py-1 text-[10px] font-black text-slate-600">{patient.pending.length} pending</span>
+                    <span className="rounded-lg bg-slate-50 px-2 py-1 text-[10px] font-black text-slate-600">{patient.confirmed.length} active</span>
+                    <span className="rounded-lg bg-slate-50 px-2 py-1 text-[10px] font-black text-slate-600">{patient.completed.length} records</span>
                   </div>
                   <p className="mt-3 text-[11px] font-semibold text-slate-500">{nextLabel}</p>
                 </button>
@@ -311,19 +311,19 @@ function PatientOperationsHub({
       <section className="min-w-0 space-y-4">
         {selectedPatient ? (
           <>
-            <section className="rounded-xl border border-slate-850 bg-slate-900 p-5 text-white">
+            <section className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-slate-950">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-2xl font-black">{selectedPatientName}</h2>
-                    <span className="rounded-full border border-slate-700 bg-slate-950 px-2.5 py-1 text-[10px] font-black uppercase text-slate-300">
+                    <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase text-slate-600">
                       {selectedPatient.emailVerified ? "Verified" : "Unverified"}
                     </span>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {selectedPatientActiveAppointment ? (
-                    <button type="button" onClick={onOpenLive} className="rounded-lg bg-brand-red px-3 py-2 text-xs font-black text-white">
+                    <button type="button" onClick={onOpenLive} className="rounded-lg bg-brand-red px-3 py-2 text-xs font-black text-slate-950">
                       Open Live Room
                     </button>
                   ) : selectedPatient.nextAppointment ? (
@@ -331,7 +331,7 @@ function PatientOperationsHub({
                       type="button"
                       disabled={actionLoadingId === selectedPatient.nextAppointment.id}
                       onClick={() => onStartLive(selectedPatient.nextAppointment as DoctorAppointment)}
-                      className="rounded-lg bg-brand-red px-3 py-2 text-xs font-black text-white disabled:bg-slate-800"
+                      className="rounded-lg bg-brand-red px-3 py-2 text-xs font-black text-slate-950 disabled:bg-slate-100"
                     >
                       Start Consultation
                     </button>
@@ -339,7 +339,7 @@ function PatientOperationsHub({
                   <button
                     type="button"
                     onClick={() => onOpenFollowUp(selectedPatient.id, selectedConsultation?.reason)}
-                    className="rounded-lg bg-brand-teal px-3 py-2 text-xs font-black text-white"
+                    className="rounded-lg bg-brand-teal px-3 py-2 text-xs font-black text-slate-950"
                   >
                     Schedule Follow-Up
                   </button>
@@ -352,7 +352,7 @@ function PatientOperationsHub({
                   { label: "Completed", value: selectedPatient.completed.length },
                   { label: "Prescriptions", value: selectedPatient.prescriptions.length },
                 ].map((stat) => (
-                  <div key={stat.label} className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-3">
+                  <div key={stat.label} className="rounded-lg border border-slate-200 bg-white px-3 py-3">
                     <p className="text-xl font-black">{stat.value}</p>
                     <p className="mt-1 text-[10px] font-black uppercase tracking-wider text-slate-500">{stat.label}</p>
                   </div>
@@ -361,11 +361,11 @@ function PatientOperationsHub({
             </section>
 
             <section className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_340px]">
-              <div className="rounded-xl border border-slate-850 bg-slate-900 p-4">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Clinical Workspace</p>
-                    <h3 className="text-base font-black text-white">Consultation Context</h3>
+                    <h3 className="text-base font-black text-slate-950">Consultation Context</h3>
                   </div>
                   {selectedConsultation && (
                     <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase ${getStatusClasses(selectedConsultation.status)}`}>
@@ -375,13 +375,13 @@ function PatientOperationsHub({
                 </div>
                 {selectedConsultation ? (
                   <div className="space-y-4">
-                    <div className="rounded-xl border border-amber-300/20 border-l-4 border-l-amber-300 bg-amber-300/10 p-4">
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-200">Chief Complaint</p>
-                      <p className="mt-2 text-sm font-semibold leading-relaxed text-amber-50">
-                        {selectedConsultation.reason || "No chief complaint captured."}
-                      </p>
-                      <p className="mt-3 text-xs font-bold text-amber-100">{formatDateTime(selectedConsultation.scheduledAt)}</p>
-                    </div>
+                      <div className="rounded-xl border border-slate-200 border-l-4 border-l-brand-red bg-white p-4">
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-red">Chief Complaint</p>
+                        <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-700">
+                          {selectedConsultation.reason || "No chief complaint captured."}
+                        </p>
+                        <p className="mt-3 text-xs font-bold text-slate-500">{formatDateTime(selectedConsultation.scheduledAt)}</p>
+                      </div>
                     <div className="grid gap-3 lg:grid-cols-2">
                       <ClinicalTextBlock title="Active Care Notes" body={selectedConsultation.notes || "No signed clinical notes for this encounter."} />
                       <ClinicalTextBlock title="Medication Plan" body={selectedConsultation.prescription || "No prescription issued for this encounter."} />
@@ -393,7 +393,7 @@ function PatientOperationsHub({
                             type="button"
                             disabled={actionLoadingId === selectedConsultation.id}
                             onClick={() => onAccept(selectedConsultation.id)}
-                            className="rounded-lg bg-brand-teal px-3 py-2 text-xs font-black text-white disabled:bg-slate-800"
+                            className="rounded-lg bg-brand-teal px-3 py-2 text-xs font-black text-slate-950 disabled:bg-slate-100"
                           >
                             Accept Request
                           </button>
@@ -401,7 +401,7 @@ function PatientOperationsHub({
                             type="button"
                             disabled={actionLoadingId === selectedConsultation.id}
                             onClick={() => onCancel(selectedConsultation.id)}
-                            className="rounded-lg bg-slate-800 px-3 py-2 text-xs font-black text-white"
+                            className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-black text-slate-950"
                           >
                             Cancel
                           </button>
@@ -414,15 +414,15 @@ function PatientOperationsHub({
                 )}
               </div>
 
-              <div className="rounded-xl border border-slate-850 bg-slate-900 p-4">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Realtime Communication</p>
                 <div className="mt-3">
                   {selectedPatientActiveAppointment ? (
                     <ChatPanel role="doctor" messages={selectedPatientMessages} onSend={onSendMessage} />
                   ) : (
-                    <div className="rounded-xl border border-slate-800 bg-slate-950 p-5">
-                      <p className="text-sm font-black text-white">No active consultation chat</p>
-                      <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-400">
+                    <div className="rounded-xl border border-slate-200 bg-white p-5">
+                      <p className="text-sm font-black text-slate-950">No active consultation chat</p>
+                      <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-500">
                         Start or open a live room for this patient to continue secure consultation messaging.
                       </p>
                     </div>
@@ -436,17 +436,17 @@ function PatientOperationsHub({
         )}
       </section>
 
-      <aside className="min-h-0 rounded-xl border border-slate-850 bg-slate-900">
-        <header className="border-b border-slate-850 p-4">
+      <aside className="min-h-0 rounded-xl border border-slate-200 bg-slate-50">
+        <header className="border-b border-slate-200 p-4">
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Records</p>
-          <h2 className="mt-1 text-lg font-black text-white">Patient Chart</h2>
+          <h2 className="mt-1 text-lg font-black text-slate-950">Patient Chart</h2>
           <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
             {PATIENT_RECORD_TABS.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => onRecordsTabChange(tab.id)}
-                className={getTabButtonClassName({ active: recordsTab === tab.id, tone: "dark" })}
+                className={getTabButtonClassName({ active: recordsTab === tab.id, tone: "light" })}
               >
                 {tab.label}
               </button>
@@ -478,7 +478,7 @@ function PatientOperationsHub({
                     selectedPatient.prescriptions.map((appointment) => (
                       <AppointmentCard
                         key={appointment.id}
-                        tone="dark"
+                        tone="light"
                         title={appointment.prescription || "Prescription"}
                         subtitle={getPatientDisplayName(selectedPatient)}
                         scheduledAt={appointment.scheduledAt}
@@ -494,11 +494,11 @@ function PatientOperationsHub({
 
               {recordsTab === "session" && (
                 <div className="space-y-3">
-                  <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Live Session Status</p>
-                    <p className="mt-2 text-lg font-black text-white">{selectedPatientLiveStatus}</p>
+                    <p className="mt-2 text-lg font-black text-slate-950">{selectedPatientLiveStatus}</p>
                     {selectedPatientActiveAppointment && (
-                      <button type="button" onClick={onOpenLive} className="mt-4 w-full rounded-lg bg-brand-red px-3 py-2 text-xs font-black text-white">
+                      <button type="button" onClick={onOpenLive} className="mt-4 w-full rounded-lg bg-brand-red px-3 py-2 text-xs font-black text-slate-950">
                         Return To Live Room
                       </button>
                     )}
@@ -522,9 +522,9 @@ function PatientOperationsHub({
 
 function ClinicalTextBlock({ title, body }: { title: string; body: string }) {
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">{title}</p>
-      <p className="mt-2 whitespace-pre-wrap text-sm font-semibold leading-relaxed text-slate-200">{body}</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm font-semibold leading-relaxed text-slate-700">{body}</p>
     </div>
   );
 }
@@ -549,16 +549,16 @@ function RecordTimeline({
             type="button"
             onClick={() => onSelectConsultation(appointment.id)}
             className={`w-full rounded-xl border p-3 text-left ${
-              isSelected ? "border-brand-teal bg-brand-teal/10" : "border-slate-800 bg-slate-950 hover:border-slate-700"
+              isSelected ? "border-brand-teal bg-brand-teal/10" : "border-slate-200 bg-white hover:border-slate-200"
             }`}
           >
             <div className="flex items-start justify-between gap-3">
-              <p className="text-xs font-black text-white">{formatDateTime(appointment.scheduledAt)}</p>
+              <p className="text-xs font-black text-slate-950">{formatDateTime(appointment.scheduledAt)}</p>
               <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${getStatusClasses(appointment.status)}`}>
                 {appointment.status}
               </span>
             </div>
-            <p className="mt-2 line-clamp-2 text-xs font-semibold text-slate-400">
+            <p className="mt-2 line-clamp-2 text-xs font-semibold text-slate-500">
               {appointment.reason || appointment.notes || appointment.prescription || "Clinical encounter"}
             </p>
           </button>
@@ -577,7 +577,8 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
   const [sidebarImage, setSidebarImage] = useState<string | null>(doctor.image ?? null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [clinicalNotes, setClinicalNotes] = useState("");
-  const [prescriptionText, setPrescriptionText] = useState("");
+  const [prescriptionDraft, setPrescriptionDraft] = useState("");
+  const [savedPrescriptionText, setSavedPrescriptionText] = useState("");
   const [diagnosisText, setDiagnosisText] = useState("");
   const [referralTargets, setReferralTargets] = useState<Record<string, string>>({});
   const [submitState, setSubmitState] = useState({ loading: false, error: "", success: "" });
@@ -593,7 +594,6 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
   const [selectedConsultationId, setSelectedConsultationId] = useState("");
   const [selectedLiveAppointmentId, setSelectedLiveAppointmentId] = useState("");
   const [consultationQueueFilter, setConsultationQueueFilter] = useState<ConsultationQueueFilter>("all");
-  const [vitalsForm, setVitalsForm] = useState({ bloodPressure: "", heartRate: "", bodyTemperature: "" });
   const [patientRecordsTab, setPatientRecordsTab] = useState<PatientRecordsTab>("records");
   const [patientReferenceTime] = useState(() => Date.now());
   const [calendarAnchorDate, setCalendarAnchorDate] = useState(() => {
@@ -604,12 +604,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
   const [doctorAvailability, setDoctorAvailability] = useState(doctor.availability);
   const [doctorStatus, setDoctorStatus] = useState<DoctorStatusValue>(normalizeDoctorStatus(doctor.status));
   const [isUpdatingStatus, startStatusTransition] = useTransition();
-  const [isSavingVitals, setIsSavingVitals] = useState(false);
   const [toasts, setToasts] = useState<{ id: string; tone: "success" | "error"; message: string }[]>([]);
-
-  useEffect(() => {
-    setSidebarImage(doctor.image ?? null);
-  }, [doctor.image]);
 
   const showToast = useCallback((tone: "success" | "error", message: string) => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -884,30 +879,6 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     );
   }, [selectedConsultationId, selectedPatient]);
 
-  const selectedLiveAppointmentKey = selectedLiveAppointment?.id || "";
-  const selectedLiveAppointmentBloodPressure = selectedLiveAppointment?.bloodPressure || "";
-  const selectedLiveAppointmentHeartRate = selectedLiveAppointment?.heartRate || "";
-  const selectedLiveAppointmentBodyTemperature = selectedLiveAppointment?.bodyTemperature || "";
-
-  useEffect(() => {
-    const nextVitals = selectedLiveAppointmentKey
-      ? {
-          bloodPressure: selectedLiveAppointmentBloodPressure,
-          heartRate: selectedLiveAppointmentHeartRate,
-          bodyTemperature: selectedLiveAppointmentBodyTemperature,
-        }
-      : { bloodPressure: "", heartRate: "", bodyTemperature: "" };
-
-    Promise.resolve().then(() => {
-      setVitalsForm(nextVitals);
-    });
-  }, [
-    selectedLiveAppointmentKey,
-    selectedLiveAppointmentBloodPressure,
-    selectedLiveAppointmentHeartRate,
-    selectedLiveAppointmentBodyTemperature,
-  ]);
-
   const notificationSeed = useMemo<DashboardNotification[]>(
     () => [
       ...pendingAppointments.slice(0, 4).map((booking) =>
@@ -1104,36 +1075,10 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     }
   };
 
-  const handleSaveVitals = async (event: React.FormEvent) => {
-    event.preventDefault();
-
-    if (!selectedLiveAppointment) {
-      return;
-    }
-
-    setIsSavingVitals(true);
-    try {
-      const result = await updateConsultationVitals({
-        consultationId: selectedLiveAppointment.id,
-        bloodPressure: vitalsForm.bloodPressure,
-        heartRate: vitalsForm.heartRate,
-        bodyTemperature: vitalsForm.bodyTemperature,
-      });
-
-      if (result.success) {
-        showToast("success", "Vitals updated and saved to the consultation record.");
-        router.refresh();
-      } else {
-        showToast("error", result.error || "Could not save consultation vitals.");
-      }
-    } finally {
-      setIsSavingVitals(false);
-    }
-  };
-
   const startLiveSession = async (appointment: DoctorAppointment) => {
     setClinicalNotes(appointment.notes || "");
-    setPrescriptionText(appointment.prescription || "");
+    setPrescriptionDraft(appointment.prescription || "");
+    setSavedPrescriptionText(appointment.prescription || "");
     setDiagnosisText(appointment.reason || "");
     setActionLoadingId(appointment.id);
     const result = await startVideoSession(appointment.id);
@@ -1164,7 +1109,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
       return;
     }
 
-    if (!clinicalNotes.trim() || !prescriptionText.trim()) {
+    if (!clinicalNotes.trim() || !savedPrescriptionText.trim()) {
       showToast("error", "Clinical notes and prescription are required.");
       setSubmitState({ loading: false, error: "", success: "" });
       return;
@@ -1174,7 +1119,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     const result = await completeConsultation({
       consultationId: session.activeAppointment.id,
       notes: clinicalNotes,
-      prescription: prescriptionText,
+      prescription: savedPrescriptionText,
       reason: diagnosisText || undefined,
     });
 
@@ -1194,6 +1139,18 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     router.refresh();
   };
 
+  const handleSavePrescription = () => {
+    const nextPrescription = prescriptionDraft.trim();
+
+    if (!nextPrescription) {
+      showToast("error", "Enter a prescription before saving it.");
+      return;
+    }
+
+    setSavedPrescriptionText(nextPrescription);
+    showToast("success", "Prescription draft saved.");
+  };
+
   const handleEndSession = async () => {
     const roomId = session.roomId;
     if (session.activeAppointment) {
@@ -1207,11 +1164,12 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     router.refresh();
   };
 
-  const tone = "dark" as const;
+  const tone = "light" as const;
 
   return (
     <DashboardShell
       role="doctor"
+      theme="light"
       activeModule={activeModule}
       navItems={navItems}
       title={doctor.name}
@@ -1233,14 +1191,14 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
         />
       }
       statusIndicator={
-        <label className="flex items-center gap-2 rounded-full border border-slate-800 bg-slate-950 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-200">
-          <span className={`h-2.5 w-2.5 rounded-full ${doctorStatusMeta.label === "Busy" ? "bg-amber-400" : doctorStatusMeta.label === "Offline" ? "bg-slate-500" : "bg-emerald-400"}`} />
+        <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-700">
+          <span className={`h-2.5 w-2.5 rounded-full ${doctorStatusMeta.label === "Busy" ? "bg-amber-400" : doctorStatusMeta.label === "Offline" ? "bg-slate-400" : "bg-emerald-400"}`} />
           <span className="sr-only">Update availability status</span>
           <select
             value={doctorStatus}
             onChange={(event) => handleDoctorStatusChange(normalizeDoctorStatus(event.target.value))}
             disabled={isUpdatingStatus}
-            className="cursor-pointer bg-transparent text-[10px] font-black uppercase tracking-widest text-slate-200 outline-none disabled:cursor-wait"
+            className="cursor-pointer bg-transparent text-[10px] font-black uppercase tracking-widest text-slate-700 outline-none disabled:cursor-wait"
             aria-label="Update availability status"
           >
             {DOCTOR_STATUS_OPTIONS.map((option) => (
@@ -1256,7 +1214,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
       onNavigate={setActiveModule}
       onLogout={() => (
         <form action={logoutDoctor}>
-          <button type="submit" className="w-full rounded-xl bg-slate-850 px-3 py-2.5 text-xs font-black uppercase tracking-[0.2em] text-white">
+          <button type="submit" className="w-full rounded-xl bg-slate-200 px-3 py-2.5 text-xs font-black uppercase tracking-[0.2em] text-slate-950">
             Sign Out
           </button>
         </form>
@@ -1301,16 +1259,16 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
       {activeModule === "overview" && (
         <div className="space-y-6">
           <StatGrid
-            tone="dark"
+            tone="light"
             stats={[
               { label: "Pending", value: pendingAppointments.length, helper: "awaiting confirmation" },
               { label: "Confirmed", value: confirmedAppointments.length, helper: "scheduled appointments" },
               { label: "Patients", value: patients.length, helper: "total patients" },
             ]}
           />
-          <section className="rounded-xl border border-slate-850 bg-slate-900 p-5">
+          <section className="rounded-xl border border-slate-200 bg-slate-50 p-5">
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-black text-white">Clinical Queue</h2>
+              <h2 className="text-lg font-black text-slate-950">Clinical Queue</h2>
             </div>
             <div className="space-y-3">
               {confirmedAppointments.length ? (
@@ -1325,37 +1283,37 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                   return (
                     <article
                       key={booking.id}
-                      className="rounded-xl border border-slate-800 bg-slate-950 p-4 text-white transition hover:border-slate-700"
+                      className="rounded-xl border border-slate-200 bg-white p-4 text-slate-950 transition hover:border-slate-200"
                     >
                       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(220px,1fr)_auto] lg:items-center">
                         <div className="min-w-0 space-y-2">
                           <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="truncate text-sm font-black text-white">
+                            <h3 className="truncate text-sm font-black text-slate-950">
                               {booking.patient.firstName} {booking.patient.lastName}
                             </h3>
                             <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${getStatusClasses(booking.status)}`}>
                               {booking.status}
                             </span>
                           </div>
-                          <p className="text-xs font-semibold text-slate-400">
+                          <p className="text-xs font-semibold text-slate-500">
                             {patientInfo} | {patientGenderText}
                           </p>
-                          <p className="text-xs font-semibold leading-relaxed text-slate-300">
+                          <p className="text-xs font-semibold leading-relaxed text-slate-600">
                             <span className="font-black uppercase tracking-[0.16em] text-slate-500">Reason for Consultation:</span>{" "}
                             {booking.reason || "No reason provided."}
                           </p>
                         </div>
 
-                        <div className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3 text-left lg:text-center">
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-left lg:text-center">
                           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Live Consultation Schedule</p>
-                          <p className="mt-2 text-sm font-black text-white">{formatDateTime(booking.scheduledAt)}</p>
+                          <p className="mt-2 text-sm font-black text-slate-950">{formatDateTime(booking.scheduledAt)}</p>
                         </div>
 
                         <div className="flex lg:justify-end">
                           <button
                             type="button"
                             onClick={() => startLiveSession(booking)}
-                            className="w-full rounded-lg bg-brand-red px-4 py-3 text-xs font-black text-white lg:w-auto"
+                            className="w-full rounded-lg bg-brand-red px-4 py-3 text-xs font-black text-slate-950 lg:w-auto"
                           >
                             Start Consultation
                           </button>
@@ -1392,19 +1350,40 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
             mediaError={webRTC.error}
             chat={<ChatPanel role="doctor" messages={session.messages} onSend={session.sendMessage} />}
             documentation={
-              <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+              <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-brand-teal">Clinical Documentation</p>
                 <form onSubmit={handleComplete} className="mt-4 space-y-3">
-                  <div className="rounded-xl border border-amber-400/20 border-l-4 border-l-amber-300 bg-amber-300/10 p-4">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-200">Chief Complaint</p>
-                    <p className="mt-2 text-sm font-semibold leading-relaxed text-amber-50">
+                  <div className="rounded-xl border border-slate-200 border-l-4 border-l-brand-red bg-white p-4">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-red">Chief Complaint</p>
+                    <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-700">
                       {diagnosisText || "No chief complaint was provided for this appointment."}
                     </p>
                   </div>
-                  <textarea value={clinicalNotes} onChange={(event) => setClinicalNotes(event.target.value)} rows={4} placeholder="Consultation notes" className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-brand-teal" />
-                  <input value={prescriptionText} onChange={(event) => setPrescriptionText(event.target.value)} placeholder="Prescription" className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-brand-teal" />
-                  <button type="submit" disabled={submitState.loading} className="w-full rounded-lg bg-brand-teal px-4 py-2.5 text-xs font-black text-white disabled:bg-slate-800">
-                    {submitState.loading ? "Saving..." : "Complete & Issue Prescription"}
+                  <textarea value={clinicalNotes} onChange={(event) => setClinicalNotes(event.target.value)} rows={4} placeholder="Consultation notes" className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-brand-teal" />
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Prescription</label>
+                    <textarea
+                      value={prescriptionDraft}
+                      onChange={(event) => setPrescriptionDraft(event.target.value)}
+                      rows={5}
+                      placeholder="Type the prescription here. Press Enter to add a new line."
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-brand-teal"
+                    />
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-[10px] font-semibold text-slate-500">
+                        {savedPrescriptionText ? "Prescription ready to save with the consultation." : "Save the draft before completing the consultation."}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleSavePrescription}
+                        className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-black text-slate-950"
+                      >
+                        Save Prescription
+                      </button>
+                    </div>
+                  </div>
+                  <button type="submit" disabled={submitState.loading} className="w-full rounded-lg bg-brand-teal px-4 py-2.5 text-xs font-black text-slate-950 disabled:bg-slate-100">
+                    {submitState.loading ? "Saving..." : "Complete Consultation"}
                   </button>
                 </form>
               </section>
@@ -1412,17 +1391,17 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
           />
         ) : (
           <section className="grid min-h-[calc(100vh-9rem)] gap-5 xl:grid-cols-[40fr_60fr]">
-            <aside className="min-h-0 rounded-xl border border-slate-850 bg-slate-900">
-              <header className="border-b border-slate-850 p-4">
+            <aside className="min-h-0 rounded-xl border border-slate-200 bg-slate-50">
+              <header className="border-b border-slate-200 p-4">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Live Consultation</p>
-                <h2 className="mt-1 text-lg font-black text-white">Appointment Queue</h2>
+                <h2 className="mt-1 text-lg font-black text-slate-950">Appointment Queue</h2>
                 <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
                   {CONSULTATION_QUEUE_FILTERS.map((filter) => (
                     <button
                       key={filter.id}
                       type="button"
                       onClick={() => setConsultationQueueFilter(filter.id)}
-                      className={getTabButtonClassName({ active: consultationQueueFilter === filter.id, tone: "dark" })}
+                      className={getTabButtonClassName({ active: consultationQueueFilter === filter.id, tone: "light" })}
                     >
                       {filter.label}
                     </button>
@@ -1439,13 +1418,13 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                       type="button"
                       onClick={() => setSelectedLiveAppointmentId(booking.id)}
                       className={`w-full rounded-xl border p-4 text-left transition ${
-                        active ? "border-brand-teal bg-brand-teal/10 shadow-[0_0_0_1px_rgba(20,184,166,0.22)]" : "border-slate-800 bg-slate-950 hover:border-slate-700"
+                        active ? "border-brand-teal bg-brand-teal/10 shadow-[0_0_0_1px_rgba(20,184,166,0.22)]" : "border-slate-200 bg-white hover:border-slate-200"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-black text-white">{booking.patient.firstName} {booking.patient.lastName}</p>
-                          <p className="mt-1 text-xs font-semibold text-slate-400">{formatDateTime(booking.scheduledAt)}</p>
+                          <p className="truncate text-sm font-black text-slate-950">{booking.patient.firstName} {booking.patient.lastName}</p>
+                          <p className="mt-1 text-xs font-semibold text-slate-500">{formatDateTime(booking.scheduledAt)}</p>
                         </div>
                         <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${getStatusClasses(booking.status)}`}>
                           {booking.status}
@@ -1459,27 +1438,27 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
               </div>
             </aside>
 
-            <section className="min-w-0 rounded-xl border border-slate-850 bg-slate-900">
+            <section className="min-w-0 rounded-xl border border-slate-200 bg-slate-50">
               {selectedLiveAppointment ? (
                 <div className="flex h-full flex-col">
-                  <header className="border-b border-slate-850 p-5">
+                  <header className="border-b border-slate-200 p-5">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h2 className="text-2xl font-black text-white">
+                          <h2 className="text-2xl font-black text-slate-950">
                             {selectedLiveAppointment.patient.firstName} {selectedLiveAppointment.patient.lastName}
                           </h2>
                           <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase ${getStatusClasses(selectedLiveAppointment.status)}`}>
                             {selectedLiveAppointment.status}
                           </span>
                         </div>
-                        <p className="mt-2 text-xs font-semibold text-slate-400">Patient ID: {selectedLiveAppointment.patient.id}</p>
+                        <p className="mt-2 text-xs font-semibold text-slate-500">Patient ID: {selectedLiveAppointment.patient.id}</p>
                       </div>
                       <button
                         type="button"
                         disabled={selectedLiveAppointment.status !== "CONFIRMED" || actionLoadingId === selectedLiveAppointment.id}
                         onClick={() => startLiveSession(selectedLiveAppointment)}
-                        className="rounded-lg bg-brand-red px-5 py-3 text-xs font-black text-white disabled:bg-slate-800 disabled:text-slate-500"
+                        className="rounded-lg bg-brand-red px-5 py-3 text-xs font-black text-slate-950 disabled:bg-slate-100 disabled:text-slate-500"
                       >
                         Start Consultation
                       </button>
@@ -1487,69 +1466,21 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                   </header>
 
                   <div className="grid flex-1 gap-4 p-5">
-                    <section className="rounded-xl border border-amber-300/20 border-l-4 border-l-amber-300 bg-amber-300/10 p-4">
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-200">Chief Complaint</p>
-                      <p className="mt-3 text-sm font-semibold leading-relaxed text-amber-50">
+                    <section className="rounded-xl border border-slate-200 border-l-4 border-l-brand-red bg-white p-4">
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-red">Chief Complaint</p>
+                      <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-700">
                         {selectedLiveAppointment.reason || "No chief complaint was provided for this appointment."}
                       </p>
                     </section>
-
-                    <section className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Vitals</p>
-                      <form onSubmit={handleSaveVitals} className="mt-4 space-y-4">
-                        <div className="grid gap-3 md:grid-cols-3">
-                          {[
-                            {
-                              label: "Blood Pressure",
-                              value: vitalsForm.bloodPressure,
-                              placeholder: "120/80 mmHg",
-                              onChange: (value: string) => setVitalsForm((current) => ({ ...current, bloodPressure: value })),
-                            },
-                            {
-                              label: "Heart Rate",
-                              value: vitalsForm.heartRate,
-                              placeholder: "72 bpm",
-                              onChange: (value: string) => setVitalsForm((current) => ({ ...current, heartRate: value })),
-                            },
-                            {
-                              label: "Body Temperature",
-                              value: vitalsForm.bodyTemperature,
-                              placeholder: "36.8 °C",
-                              onChange: (value: string) => setVitalsForm((current) => ({ ...current, bodyTemperature: value })),
-                            },
-                          ].map((vital) => (
-                            <label key={vital.label} className="rounded-lg border border-slate-800 bg-slate-900 p-4">
-                              <span className="block text-[10px] font-black uppercase tracking-wider text-slate-500">{vital.label}</span>
-                              <input
-                                value={vital.value}
-                                onChange={(event) => vital.onChange(event.target.value)}
-                                placeholder={vital.placeholder}
-                                className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-black text-white outline-none placeholder:text-slate-600 focus:border-brand-teal"
-                              />
-                            </label>
-                          ))}
-                        </div>
-                        <div className="flex justify-end">
-                          <button
-                            type="submit"
-                            disabled={isSavingVitals}
-                            className="rounded-lg bg-brand-teal px-4 py-2.5 text-xs font-black text-white disabled:bg-slate-800"
-                          >
-                            {isSavingVitals ? "Saving..." : "Update Vitals"}
-                          </button>
-                        </div>
-                      </form>
-                    </section>
-
-                    <section className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                    <section className="rounded-xl border border-slate-200 bg-white p-4">
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Attached Documents</p>
                       <div className="mt-4 grid gap-3 md:grid-cols-2">
-                        <div className="rounded-lg border border-dashed border-slate-700 bg-slate-900 p-4">
-                          <p className="text-sm font-black text-white">Lab results</p>
+                        <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4">
+                          <p className="text-sm font-black text-slate-950">Lab results</p>
                           <p className="mt-1 text-xs font-semibold text-slate-500">No uploaded lab file is attached to this consultation.</p>
                         </div>
-                        <div className="rounded-lg border border-dashed border-slate-700 bg-slate-900 p-4">
-                          <p className="text-sm font-black text-white">Imaging</p>
+                        <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4">
+                          <p className="text-sm font-black text-slate-950">Imaging</p>
                           <p className="mt-1 text-xs font-semibold text-slate-500">No imaging file is attached to this consultation.</p>
                         </div>
                       </div>
@@ -1599,7 +1530,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
       {activeModule === "schedule" && (
         <section className="grid min-h-[calc(100vh-9rem)] gap-5 xl:grid-cols-[minmax(0,3fr)_minmax(360px,2fr)]">
           <div className="space-y-4">
-            <section className="rounded-xl border border-slate-850 bg-slate-900 p-5 text-white">
+            <section className="rounded-xl border border-slate-200 bg-white p-5 text-slate-950">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Main Stage</p>
@@ -1609,13 +1540,13 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-center">
-                  <div className="rounded-lg border border-sky-300/20 bg-sky-400/10 px-4 py-3">
-                    <p className="text-2xl font-black text-sky-100">{confirmedAppointments.length}</p>
-                    <p className="text-[10px] font-black uppercase text-sky-200">Confirmed</p>
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+                    <p className="text-2xl font-black text-slate-950">{confirmedAppointments.length}</p>
+                    <p className="text-[10px] font-black uppercase text-emerald-700">Confirmed</p>
                   </div>
-                  <div className="rounded-lg border border-amber-300/20 bg-amber-400/10 px-4 py-3">
-                    <p className="text-2xl font-black text-amber-100">{pendingAppointments.length}</p>
-                    <p className="text-[10px] font-black uppercase text-amber-200">Pending</p>
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                    <p className="text-2xl font-black text-slate-950">{pendingAppointments.length}</p>
+                    <p className="text-[10px] font-black uppercase text-amber-700">Pending</p>
                   </div>
                 </div>
               </div>
@@ -1641,18 +1572,18 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
           </div>
 
           <aside className="space-y-4">
-            <section className="rounded-xl border border-slate-850 bg-slate-900 p-4">
+            <section className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="mb-3">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Action Panel</p>
-                <h2 className="text-base font-black text-white">Follow-Up Scheduling</h2>
+                <h2 className="text-base font-black text-slate-950">Follow-Up Scheduling</h2>
               </div>
               <form onSubmit={handleScheduleFollowUp} className="grid gap-3">
-                <label className="space-y-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                <label className="space-y-1 text-[10px] font-black uppercase tracking-wider text-slate-500">
                   Patient
                   <select
                     value={followUpPatientId}
                     onChange={(event) => setFollowUpPatientId(event.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold normal-case text-white"
+                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold normal-case text-slate-950"
                   >
                     <option value="">Select patient with history</option>
                     {patients.map((patientRecord) => (
@@ -1663,51 +1594,51 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                   </select>
                 </label>
                 <div className="grid grid-cols-2 gap-3">
-                  <label className="space-y-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  <label className="space-y-1 text-[10px] font-black uppercase tracking-wider text-slate-500">
                     Date
-                    <input type="date" value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold text-white" />
+                    <input type="date" value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-950" />
                   </label>
-                  <label className="space-y-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  <label className="space-y-1 text-[10px] font-black uppercase tracking-wider text-slate-500">
                     Time
-                    <input type="time" value={followUpTime} onChange={(event) => setFollowUpTime(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold text-white" />
+                    <input type="time" value={followUpTime} onChange={(event) => setFollowUpTime(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-950" />
                   </label>
                 </div>
-                <label className="space-y-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                <label className="space-y-1 text-[10px] font-black uppercase tracking-wider text-slate-500">
                   Reason
-                  <input value={followUpReason} onChange={(event) => setFollowUpReason(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold normal-case text-white" />
+                  <input value={followUpReason} onChange={(event) => setFollowUpReason(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold normal-case text-slate-950" />
                 </label>
-                <button type="submit" disabled={scheduleState.loading || !patients.length} className="rounded-lg bg-brand-teal px-4 py-2.5 text-xs font-black text-white disabled:bg-slate-800">
+                <button type="submit" disabled={scheduleState.loading || !patients.length} className="rounded-lg bg-brand-teal px-4 py-2.5 text-xs font-black text-slate-950 disabled:bg-slate-100">
                   {scheduleState.loading ? "Scheduling..." : "Schedule Follow-Up"}
                 </button>
               </form>
             </section>
 
-            <section className="rounded-xl border border-amber-300/20 bg-amber-300/10 p-4 shadow-[0_0_32px_rgba(245,158,11,0.08)]">
+            <section className="rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-[0_0_32px_rgba(15,92,122,0.06)]">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-200">Needs Review</p>
-                  <h2 className="text-base font-black text-white">Pending Appointments</h2>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-red">Needs Review</p>
+                  <h2 className="text-base font-black text-slate-950">Pending Appointments</h2>
                 </div>
-                <span className="rounded-full bg-amber-300 px-2.5 py-1 text-[10px] font-black text-slate-950">{pendingAppointments.length} active</span>
+                <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-slate-700">{pendingAppointments.length} active</span>
               </div>
               <div className="max-h-[32vh] space-y-3 overflow-y-auto pr-1">
                 {pendingAppointments.length ? pendingAppointments.map((booking) => (
-                  <article key={booking.id} className="rounded-lg border border-amber-200/20 bg-slate-950/70 p-3 text-white shadow-[0_0_18px_rgba(245,158,11,0.08)]">
+                  <article key={booking.id} className="rounded-lg border border-slate-200 bg-white p-3 text-slate-950 shadow-[0_0_18px_rgba(15,92,122,0.06)]">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-black">{booking.patient.firstName} {booking.patient.lastName}</p>
-                        <p className="mt-1 text-[11px] font-semibold text-amber-100">{formatDateTime(booking.scheduledAt)}</p>
-                        <p className="mt-1 line-clamp-2 text-xs text-slate-300">{booking.reason || "No reason provided."}</p>
+                        <p className="mt-1 text-[11px] font-semibold text-slate-500">{formatDateTime(booking.scheduledAt)}</p>
+                        <p className="mt-1 line-clamp-2 text-xs text-slate-600">{booking.reason || "No reason provided."}</p>
                       </div>
-                      <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-black uppercase text-amber-100">Request</span>
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black uppercase text-slate-700">Request</span>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <button type="button" disabled={actionLoadingId === booking.id} onClick={() => handleAccept(booking.id)} className="rounded-lg bg-brand-teal px-3 py-2 text-[11px] font-black text-white disabled:bg-slate-800">Accept</button>
-                      <button type="button" disabled={actionLoadingId === booking.id} onClick={() => handleCancel(booking.id)} className="rounded-lg bg-slate-800 px-3 py-2 text-[11px] font-black text-white">Cancel</button>
+                      <button type="button" disabled={actionLoadingId === booking.id} onClick={() => handleAccept(booking.id)} className="rounded-lg bg-brand-teal px-3 py-2 text-[11px] font-black text-slate-950 disabled:bg-slate-100">Accept</button>
+                      <button type="button" disabled={actionLoadingId === booking.id} onClick={() => handleCancel(booking.id)} className="rounded-lg bg-slate-100 px-3 py-2 text-[11px] font-black text-slate-950">Cancel</button>
                       <select
                         value={referralTargets[booking.id] || ""}
                         onChange={(event) => setReferralTargets((current) => ({ ...current, [booking.id]: event.target.value }))}
-                        className="min-w-28 rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-[11px] font-bold text-white"
+                        className="min-w-28 rounded-lg border border-slate-200 bg-white px-2 py-2 text-[11px] font-bold text-slate-950"
                         aria-label="Refer to doctor"
                       >
                         <option value="">Refer</option>
@@ -1717,29 +1648,29 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                           </option>
                         ))}
                       </select>
-                      <button type="button" disabled={actionLoadingId === booking.id || !referralTargets[booking.id]} onClick={() => handleReferral(booking.id)} className="rounded-lg bg-brand-red px-3 py-2 text-[11px] font-black text-white disabled:bg-slate-800">Send</button>
+                      <button type="button" disabled={actionLoadingId === booking.id || !referralTargets[booking.id]} onClick={() => handleReferral(booking.id)} className="rounded-lg bg-brand-red px-3 py-2 text-[11px] font-black text-slate-950 disabled:bg-slate-100">Send</button>
                     </div>
                   </article>
                 )) : <EmptyState title="No pending requests" body="Patient bookings arrive here in realtime." />}
               </div>
             </section>
 
-            <section className="rounded-xl border border-slate-850 bg-slate-900 p-4">
+            <section className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-sky-200">Agenda Ticker</p>
-                  <h2 className="text-base font-black text-white">Confirmed Appointments</h2>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Agenda Ticker</p>
+                  <h2 className="text-base font-black text-slate-950">Confirmed Appointments</h2>
                 </div>
-                <span className="rounded-full bg-sky-400/15 px-2.5 py-1 text-[10px] font-black uppercase text-sky-100">Live-ready</span>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase text-slate-700">Live-ready</span>
               </div>
               <div className="max-h-[360px] min-h-32 space-y-2 overflow-y-auto pr-1">
                 {visibleConfirmedAppointments.length ? visibleConfirmedAppointments.map((booking) => (
-                  <article key={booking.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">
+                  <article key={booking.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
                     <div className="min-w-0">
-                      <p className="truncate text-xs font-black text-white">{booking.patient.firstName} {booking.patient.lastName}</p>
-                      <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-400">{booking.reason || "No reason provided."}</p>
+                      <p className="truncate text-xs font-black text-slate-950">{booking.patient.firstName} {booking.patient.lastName}</p>
+                      <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">{booking.reason || "No reason provided."}</p>
                     </div>
-                    <time className="shrink-0 text-right text-[11px] font-black text-sky-100">{formatDateTime(booking.scheduledAt)}</time>
+                    <time className="shrink-0 text-right text-[11px] font-black text-slate-600">{formatDateTime(booking.scheduledAt)}</time>
                   </article>
                 )) : <EmptyState title="No confirmed visits" body="Accepted requests move into this schedule." />}
               </div>
@@ -1750,7 +1681,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
 
       {activeModule === "notes" && (
         <section className="space-y-3">
-          <h2 className="text-lg font-black text-white">Consultation Notes</h2>
+          <h2 className="text-lg font-black text-slate-950">Consultation Notes</h2>
           {completedConsultations.length ? completedConsultations.map((booking) => (
             <AppointmentCard
               key={booking.id}
@@ -1783,9 +1714,9 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
       {activeModule === "notifications" && (
         <section className="space-y-3">
           {dashboardNotifications.notifications.length ? dashboardNotifications.notifications.map((item) => (
-            <article key={item.id} className="rounded-xl border border-slate-850 bg-slate-900 p-4">
-              <p className="text-sm font-black text-white">{item.title}</p>
-              <p className="mt-1 text-xs font-semibold text-slate-400">{item.body}</p>
+            <article key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-black text-slate-950">{item.title}</p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">{item.body}</p>
               <p className="mt-2 text-[10px] font-black uppercase tracking-wider text-slate-500">{item.kind || "system"} / {formatDateTime(item.createdAt)}</p>
             </article>
           )) : <EmptyState title="No notifications" body="Appointment, message, and prescription alerts appear here." />}
@@ -1795,7 +1726,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
       {activeModule === "analytics" && (
         <div className="space-y-5">
           <StatGrid
-            tone="dark"
+            tone="light"
             stats={[
               { label: "Completed", value: completedConsultations.length, helper: "closed consultations" },
               { label: "Rating", value: doctor.rating.toFixed(1), helper: `${doctor.reviewCount} reviews` },
@@ -1837,4 +1768,5 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     </DashboardShell>
   );
 }
+
 

@@ -150,11 +150,6 @@ function formatRecordedVitals(appointment: Pick<PatientAppointment, "bloodPressu
   return { bloodPressure, heartRate, bodyTemperature };
 }
 
-function formatVitalsSummary(appointment: Pick<PatientAppointment, "bloodPressure" | "heartRate" | "bodyTemperature">) {
-  const vitals = formatRecordedVitals(appointment);
-  return `${vitals.bloodPressure} | ${vitals.heartRate} | ${vitals.bodyTemperature}`;
-}
-
 function getAgeFromDob(dob: string) {
   const birthDate = new Date(dob);
   if (Number.isNaN(birthDate.getTime())) {
@@ -944,10 +939,6 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       medicalAccessAppointments[0] ||
       null,
     [medicalAccessAppointments, selectedMedicalAppointmentId]
-  );
-  const selectedMedicalVitals = useMemo(
-    () => (selectedMedicalAppointment ? formatRecordedVitals(selectedMedicalAppointment) : null),
-    [selectedMedicalAppointment]
   );
   const selectedDoctor = useMemo(
     () => doctors.find((doctor) => doctor.id === selectedDoctorId),
@@ -2331,7 +2322,6 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                     <section className="grid gap-3 md:grid-cols-4">
                       {[
                         { label: "Chief Complaint", value: selectedMedicalAppointment.reason || "No chief complaint recorded." },
-                        { label: "Vitals", value: selectedMedicalVitals ? formatVitalsSummary(selectedMedicalVitals) : "Not recorded" },
                         { label: "Duration", value: `${selectedMedicalAppointment.duration || DEFAULT_DURATION_MINUTES} minutes` },
                         { label: "Status", value: selectedMedicalAppointment.status },
                       ].map((item) => (
