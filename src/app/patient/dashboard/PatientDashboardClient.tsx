@@ -736,6 +736,18 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     },
   });
   const receiveRealtimeEvent = session.receiveRealtimeEvent;
+  const handleToggleScreenShare = useCallback(async () => {
+    if (webRTC.isScreenSharing) {
+      await webRTC.stopScreenShare();
+      session.setScreenSharing(false);
+      return;
+    }
+
+    const started = await webRTC.startScreenShare();
+    if (started) {
+      session.setScreenSharing(true);
+    }
+  }, [session, webRTC.isScreenSharing, webRTC.startScreenShare, webRTC.stopScreenShare]);
 
   const handleCopyMedicalIdLink = useCallback(async () => {
     try {
@@ -970,7 +982,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     setJoiningAppointmentId("");
     setBlockedAppointment(null);
     session.enterAuthorizedRoom(appointment, result.roomId, result.accessToken);
-    realtime.joinVideoRoom(result.roomId);
+    realtime.joinVideoRoom(result.roomId, "patient");
     setActiveModule("live");
     realtime.publish({
       type: "session:joined",
@@ -1395,16 +1407,22 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
           status={session.status}
           isCameraOn={session.isCameraOn}
           isMicOn={session.isMicOn}
+          isScreenSharing={session.isScreenSharing}
           counterpartCameraOn={session.counterpartCameraOn}
           counterpartMicOn={session.counterpartMicOn}
+          counterpartScreenSharing={session.counterpartScreenSharing}
+          connectedAt={session.connectedAt}
           onToggleCamera={session.toggleCamera}
           onToggleMic={session.toggleMic}
+          onToggleScreenShare={handleToggleScreenShare}
           onEnd={handleEndSession}
           onOpen={() => setActiveModule("live")}
           localStream={webRTC.localStream}
+          screenShareStream={webRTC.screenShareStream}
           remoteStream={webRTC.remoteStream}
           connectionState={webRTC.connectionState}
           mediaError={webRTC.error || webRTC.deviceStatus.message}
+          screenShareSupported={webRTC.screenShareSupported}
         />
       )}
 
@@ -1849,15 +1867,21 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
             status={session.status}
             isCameraOn={session.isCameraOn}
             isMicOn={session.isMicOn}
+            isScreenSharing={session.isScreenSharing}
             counterpartCameraOn={session.counterpartCameraOn}
             counterpartMicOn={session.counterpartMicOn}
+            counterpartScreenSharing={session.counterpartScreenSharing}
+            connectedAt={session.connectedAt}
             onToggleCamera={session.toggleCamera}
             onToggleMic={session.toggleMic}
+            onToggleScreenShare={handleToggleScreenShare}
             onEnd={handleEndSession}
             localStream={webRTC.localStream}
+            screenShareStream={webRTC.screenShareStream}
             remoteStream={webRTC.remoteStream}
             connectionState={webRTC.connectionState}
             mediaError={webRTC.error}
+            screenShareSupported={webRTC.screenShareSupported}
             devices={webRTC.devices}
             cameraDeviceId={webRTC.cameraDeviceId}
             microphoneDeviceId={webRTC.microphoneDeviceId}
