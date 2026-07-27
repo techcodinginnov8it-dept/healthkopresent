@@ -151,7 +151,7 @@ export default function AdminAuditReviewClient({ initialAudits }: { initialAudit
     try {
       const result = await rejectDoctorAudit(auditId, reason);
       if (!result.success) {
-        setError(result.error || "Failed to reject doctor credentials.");
+        setError(("error" in result ? result.error : undefined) ?? "Failed to reject doctor credentials.");
         return;
       }
 
