@@ -313,7 +313,7 @@ export default function DoctorAuditPage() {
 
       setLoading(false);
       if (res.success && "auditId" in res && res.auditId) {
-        setSuccessData({ auditId: res.auditId, linked: res.linked ?? false });
+        setSuccessData({ auditId: res.auditId, linked: res.linked });
       } else {
         setError("error" in res && res.error ? res.error : "Auditing submission failed. Please verify your PRC details.");
       }

@@ -811,6 +811,10 @@ export async function createDoctorAccountByAdmin(data: CreateDoctorAccountPayloa
       consultFee: Number(consultFee),
       isVerified: true,
       isActive: true,
+      bio: null,
+      image: null,
+      languages: ["English"],
+      isFeatured: false,
     });
 
     if (auditId) {

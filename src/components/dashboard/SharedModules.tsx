@@ -33,6 +33,18 @@ function PhoneDownIcon() {
   );
 }
 
+function ScreenShareIcon({ off = false }: { off?: boolean }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="5" width="18" height="12" rx="2" />
+      <path d="M8 21h8" />
+      <path d="M12 17v4" />
+      <path d="m9 9 3 3 3-3" />
+      {off && <path d="M4 4l16 16" />}
+    </svg>
+  );
+}
+
 function MaximizeIcon() {
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -42,6 +54,42 @@ function MaximizeIcon() {
       <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
     </svg>
   );
+}
+
+function formatCallDuration(startedAt?: number | null) {
+  if (!startedAt) {
+    return "00:00";
+  }
+
+  const totalSeconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function useCallDuration(startedAt?: number | null) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!startedAt) {
+      return;
+    }
+
+    setNow(Date.now());
+    const timer = window.setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [startedAt]);
+
+  return startedAt ? formatCallDuration(now - startedAt) : "00:00";
 }
 
 export function StatGrid({
@@ -648,17 +696,23 @@ export function LiveConsultationPanel({
   status,
   isCameraOn,
   isMicOn,
+  isScreenSharing = false,
   counterpartCameraOn = true,
   counterpartMicOn = true,
+  counterpartScreenSharing = false,
+  connectedAt = null,
   onToggleCamera,
   onToggleMic,
+  onToggleScreenShare,
   onEnd,
   chat,
   documentation,
   localStream = null,
+  screenShareStream = null,
   remoteStream = null,
   connectionState = "new",
   mediaError = null,
+  screenShareSupported = true,
   devices,
   cameraDeviceId,
   microphoneDeviceId,
@@ -673,17 +727,23 @@ export function LiveConsultationPanel({
   status: "idle" | "waiting" | "connected" | "ended";
   isCameraOn: boolean;
   isMicOn: boolean;
+  isScreenSharing?: boolean;
   counterpartCameraOn?: boolean;
   counterpartMicOn?: boolean;
+  counterpartScreenSharing?: boolean;
+  connectedAt?: number | null;
   onToggleCamera: () => void;
   onToggleMic: () => void;
+  onToggleScreenShare?: () => void;
   onEnd: () => void;
   chat: React.ReactNode;
   documentation?: React.ReactNode;
   localStream?: MediaStream | null;
+  screenShareStream?: MediaStream | null;
   remoteStream?: MediaStream | null;
   connectionState?: RTCPeerConnectionState;
   mediaError?: string | null;
+  screenShareSupported?: boolean;
   devices?: MediaDeviceInfo[];
   cameraDeviceId?: string;
   microphoneDeviceId?: string;
@@ -695,6 +755,7 @@ export function LiveConsultationPanel({
   const statusLabel = status === "connected" ? "Connected" : role === "doctor" ? "Waiting for Patient" : "Waiting room";
   const remoteVideoAvailable = Boolean(remoteStream?.getVideoTracks().length);
   const remoteVideoActive = remoteVideoAvailable && counterpartCameraOn;
+  const localPreviewStream = isScreenSharing && screenShareStream ? screenShareStream : localStream;
   const connectionLabel =
     connectionState === "connected"
       ? "Media connected"
@@ -703,6 +764,7 @@ export function LiveConsultationPanel({
         : connectionState === "failed"
           ? "Media connection failed"
           : "Media ready";
+  const callDuration = useCallDuration(connectedAt);
 
   return (
     <div className="grid gap-4 xl:grid-cols-12">
@@ -721,6 +783,16 @@ export function LiveConsultationPanel({
           <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${connectionState === "failed" ? "bg-red-500/15 text-red-200" : "bg-white/10 text-slate-200"}`}>
             {connectionLabel}
           </span>
+          {status === "connected" && (
+            <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-200">
+              {callDuration}
+            </span>
+          )}
+          {isScreenSharing && (
+            <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-cyan-200">
+              Presenting
+            </span>
+          )}
           {mediaError && (
             <span className="rounded-full bg-red-500/15 px-2.5 py-1 text-[10px] font-bold text-red-100">
               {mediaError}
@@ -742,10 +814,10 @@ export function LiveConsultationPanel({
           {/* Left: Your local camera preview */}
           <div className="relative min-h-[420px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
             <ConsultationVideoTile
-              stream={localStream}
-              label="Your stream"
-              detail={isCameraOn ? "Local preview" : "Camera disabled"}
-              active={isCameraOn}
+              stream={localPreviewStream}
+              label={isScreenSharing ? "Your presentation" : "Your stream"}
+              detail={isScreenSharing ? "Screen sharing" : isCameraOn ? "Local preview" : "Camera disabled"}
+              active={isScreenSharing ? Boolean(screenShareStream?.getVideoTracks().length) : isCameraOn}
               cameraOn={isCameraOn}
               micOn={isMicOn}
               muted={true}
@@ -760,11 +832,13 @@ export function LiveConsultationPanel({
               stream={remoteStream}
               label={counterpartName}
               detail={
-                counterpartCameraOn
-                  ? role === "doctor"
-                    ? "Patient stream"
-                    : "Doctor stream"
-                  : "Camera disabled"
+                counterpartScreenSharing
+                  ? "Screen sharing"
+                  : counterpartCameraOn
+                    ? role === "doctor"
+                      ? "Patient stream"
+                      : "Doctor stream"
+                    : "Camera disabled"
               }
               active={Boolean(counterpartCameraOn)}
               cameraOn={counterpartCameraOn}
@@ -777,32 +851,46 @@ export function LiveConsultationPanel({
         </div>
         <footer className="absolute bottom-5 left-1/2 flex -translate-x-1/2 flex-wrap items-center justify-center gap-4 rounded-full border border-white/10 bg-[rgba(24,24,27,0.7)] px-5 py-3 shadow-2xl shadow-black/30 backdrop-blur-[12px]">
           <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={onToggleCamera}
-            aria-label={isCameraOn ? "Turn camera off" : "Turn camera on"}
-            title={isCameraOn ? "Turn camera off" : "Turn camera on"}
-            className={`grid h-12 w-12 place-items-center rounded-full border transition focus:outline-none focus:ring-4 ${
-              isCameraOn
-                ? "border-white/15 bg-white/10 text-white hover:bg-white/15 focus:ring-white/20"
-                : "border-red-300/40 bg-red-500/15 text-red-200 hover:bg-red-500/25 focus:ring-red-300/30"
-            }`}
-          >
-            <VideoControlIcon off={!isCameraOn} />
-          </button>
-          <button
-            type="button"
-            onClick={onToggleMic}
-            aria-label={isMicOn ? "Mute microphone" : "Unmute microphone"}
-            title={isMicOn ? "Mute microphone" : "Unmute microphone"}
-            className={`grid h-12 w-12 place-items-center rounded-full border transition focus:outline-none focus:ring-4 ${
-              isMicOn
-                ? "border-white/15 bg-white/10 text-white hover:bg-white/15 focus:ring-white/20"
-                : "border-red-300/40 bg-red-500/15 text-red-200 hover:bg-red-500/25 focus:ring-red-300/30"
-            }`}
-          >
-            <MicControlIcon off={!isMicOn} />
-          </button>
+            <button
+              type="button"
+              onClick={onToggleCamera}
+              aria-label={isCameraOn ? "Turn camera off" : "Turn camera on"}
+              title={isCameraOn ? "Turn camera off" : "Turn camera on"}
+              className={`grid h-12 w-12 place-items-center rounded-full border transition focus:outline-none focus:ring-4 ${
+                isCameraOn
+                  ? "border-white/15 bg-white/10 text-white hover:bg-white/15 focus:ring-white/20"
+                  : "border-red-300/40 bg-red-500/15 text-red-200 hover:bg-red-500/25 focus:ring-red-300/30"
+              }`}
+            >
+              <VideoControlIcon off={!isCameraOn} />
+            </button>
+            <button
+              type="button"
+              onClick={onToggleMic}
+              aria-label={isMicOn ? "Mute microphone" : "Unmute microphone"}
+              title={isMicOn ? "Mute microphone" : "Unmute microphone"}
+              className={`grid h-12 w-12 place-items-center rounded-full border transition focus:outline-none focus:ring-4 ${
+                isMicOn
+                  ? "border-white/15 bg-white/10 text-white hover:bg-white/15 focus:ring-white/20"
+                  : "border-red-300/40 bg-red-500/15 text-red-200 hover:bg-red-500/25 focus:ring-red-300/30"
+              }`}
+            >
+              <MicControlIcon off={!isMicOn} />
+            </button>
+            <button
+              type="button"
+              onClick={onToggleScreenShare}
+              disabled={!screenShareSupported}
+              aria-label={isScreenSharing ? "Stop screen share" : "Start screen share"}
+              title={screenShareSupported ? (isScreenSharing ? "Stop screen share" : "Start screen share") : "Screen sharing not supported"}
+              className={`grid h-12 w-12 place-items-center rounded-full border transition focus:outline-none focus:ring-4 ${
+                isScreenSharing
+                  ? "border-cyan-300/30 bg-cyan-500/15 text-cyan-100 hover:bg-cyan-500/20 focus:ring-cyan-300/20"
+                  : "border-white/15 bg-white/10 text-white hover:bg-white/15 focus:ring-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+              }`}
+            >
+              <ScreenShareIcon off={!isScreenSharing} />
+            </button>
           </div>
           <button
             type="button"
@@ -829,15 +917,21 @@ export function FloatingConsultationCall({
   status,
   isCameraOn,
   isMicOn,
+  isScreenSharing = false,
   counterpartCameraOn = true,
   counterpartMicOn = true,
+  counterpartScreenSharing = false,
+  connectedAt = null,
   localStream = null,
+  screenShareStream = null,
   remoteStream = null,
   connectionState = "new",
   mediaError = null,
+  screenShareSupported = true,
   onOpen,
   onToggleCamera,
   onToggleMic,
+  onToggleScreenShare,
   onEnd,
 }: {
   role: DashboardRole;
@@ -845,20 +939,28 @@ export function FloatingConsultationCall({
   status: "waiting" | "connected";
   isCameraOn: boolean;
   isMicOn: boolean;
+  isScreenSharing?: boolean;
   counterpartCameraOn?: boolean;
   counterpartMicOn?: boolean;
+  counterpartScreenSharing?: boolean;
+  connectedAt?: number | null;
   localStream?: MediaStream | null;
+  screenShareStream?: MediaStream | null;
   remoteStream?: MediaStream | null;
   connectionState?: RTCPeerConnectionState;
   mediaError?: string | null;
+  screenShareSupported?: boolean;
   onOpen: () => void;
   onToggleCamera: () => void;
   onToggleMic: () => void;
+  onToggleScreenShare?: () => void;
   onEnd: () => void;
 }) {
   const remoteVideoActive = Boolean(remoteStream?.getVideoTracks().length && counterpartCameraOn);
-  const localVideoActive = Boolean(localStream?.getVideoTracks().length && isCameraOn);
+  const localPreviewStream = isScreenSharing && screenShareStream ? screenShareStream : localStream;
+  const localVideoActive = Boolean(localPreviewStream?.getVideoTracks().length && (isScreenSharing || isCameraOn));
   const stateText = connectionState === "connected" ? "Connected" : status === "waiting" ? "Waiting" : "Reconnecting";
+  const callDuration = useCallDuration(connectedAt);
   const [position, setPosition] = useState({ x: 16, y: 16 });
   const dragRef = useRef({
     active: false,
@@ -929,6 +1031,11 @@ export function FloatingConsultationCall({
           Drag
         </div>
         <div className="absolute right-3 top-3 z-10 flex gap-1">
+          {counterpartScreenSharing && (
+            <span className="rounded-full bg-cyan-500/80 p-1 text-white backdrop-blur" title="Screen sharing">
+              <ScreenShareIcon />
+            </span>
+          )}
           {!counterpartCameraOn && (
             <span className="rounded-full bg-rose-500/80 p-1 text-white backdrop-blur" title="Camera off">
               <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -949,7 +1056,7 @@ export function FloatingConsultationCall({
             </span>
           )}
         </div>
-        <VideoStream stream={remoteStream} active={counterpartCameraOn} />
+        <VideoStream stream={remoteStream} active={counterpartCameraOn || counterpartScreenSharing} />
         {!remoteVideoActive && (
           <div className="absolute inset-0 grid place-items-center bg-slate-900 p-4 text-center">
             <div>
@@ -959,7 +1066,7 @@ export function FloatingConsultationCall({
           </div>
         )}
         <div className="absolute bottom-3 right-3 h-20 w-28 overflow-hidden rounded-lg border border-white/15 bg-slate-800 shadow-xl">
-          <VideoStream stream={localStream} muted active={isCameraOn} />
+          <VideoStream stream={localPreviewStream} muted active={isScreenSharing || isCameraOn} />
           {!localVideoActive && <div className="grid h-full place-items-center text-[10px] font-black uppercase text-slate-300">You</div>}
         </div>
       </div>
@@ -970,6 +1077,7 @@ export function FloatingConsultationCall({
             <p className={`text-[11px] font-bold ${mediaError ? "text-amber-200" : "text-emerald-200"}`}>
               {mediaError || stateText}
             </p>
+            {status === "connected" && <p className="mt-0.5 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{callDuration}</p>}
           </div>
           <button type="button" onClick={onOpen} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10 text-white" aria-label="Open consultation">
             <MaximizeIcon />
@@ -981,6 +1089,18 @@ export function FloatingConsultationCall({
           </button>
           <button type="button" onClick={onToggleMic} className={`grid h-10 w-10 place-items-center rounded-full ${isMicOn ? "bg-white/10" : "bg-red-500/20 text-red-100"}`} aria-label={isMicOn ? "Mute microphone" : "Unmute microphone"}>
             <MicControlIcon off={!isMicOn} />
+          </button>
+          <button
+            type="button"
+            onClick={onToggleScreenShare}
+            disabled={!screenShareSupported}
+            className={`grid h-10 w-10 place-items-center rounded-full ${
+              isScreenSharing ? "bg-cyan-500/20 text-cyan-100" : "bg-white/10"
+            } disabled:cursor-not-allowed disabled:opacity-50`}
+            aria-label={isScreenSharing ? "Stop screen share" : "Start screen share"}
+            title={screenShareSupported ? (isScreenSharing ? "Stop screen share" : "Start screen share") : "Screen sharing not supported"}
+          >
+            <ScreenShareIcon off={!isScreenSharing} />
           </button>
           <button type="button" onClick={onEnd} className="grid h-11 w-11 place-items-center rounded-full bg-brand-red text-white" aria-label="End consultation">
             <PhoneDownIcon />

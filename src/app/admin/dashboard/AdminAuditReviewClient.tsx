@@ -477,18 +477,18 @@ export default function AdminAuditReviewClient({ initialAudits }: { initialAudit
                       <button
                         type="button"
                         onClick={() => handleApprove(audit)}
-                        disabled={workingId === audit.id || audit.status === "APPROVED"}
-                        className="flex-1 rounded-xl bg-emerald-500 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-600 disabled:opacity-40"
+                        disabled={workingId === audit.id || audit.status === "APPROVED" || audit.status === "REJECTED"}
+                        className="flex-1 rounded-xl bg-emerald-500 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         {audit.status === "APPROVED" ? "✓ Approved" : "Approve & Create Account"}
                       </button>
                       <button
                         type="button"
                         onClick={() => handleReject(audit.id)}
-                        disabled={workingId === audit.id || audit.status === "REJECTED"}
-                        className="flex-1 rounded-xl border border-brand-red/30 bg-brand-red/10 px-3 py-2.5 text-xs font-bold text-brand-red transition hover:bg-brand-red/20 disabled:opacity-40"
+                        disabled={workingId === audit.id || audit.status === "APPROVED" || audit.status === "REJECTED"}
+                        className="flex-1 rounded-xl border border-brand-red/30 bg-brand-red/10 px-3 py-2.5 text-xs font-bold text-brand-red transition hover:bg-brand-red/20 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
-                        {audit.status === "REJECTED" ? "Rejected" : "Reject"}
+                        {audit.status === "REJECTED" ? "✗ Rejected" : "Reject"}
                       </button>
                     </div>
                   </div>

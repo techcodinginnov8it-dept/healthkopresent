@@ -705,6 +705,18 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     },
   });
   const receiveRealtimeEvent = session.receiveRealtimeEvent;
+  const handleToggleScreenShare = useCallback(async () => {
+    if (webRTC.isScreenSharing) {
+      await webRTC.stopScreenShare();
+      session.setScreenSharing(false);
+      return;
+    }
+
+    const started = await webRTC.startScreenShare();
+    if (started) {
+      session.setScreenSharing(true);
+    }
+  }, [session, webRTC.isScreenSharing, webRTC.startScreenShare, webRTC.stopScreenShare]);
 
   useEffect(() => {
     receiveRealtimeEvent(realtime.lastEvent);
@@ -1146,7 +1158,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     }
 
     session.enterAuthorizedRoom(appointment, result.roomId, result.accessToken, "waiting");
-    realtime.joinVideoRoom(result.roomId);
+    realtime.joinVideoRoom(result.roomId, "doctor");
     realtime.publish({
       type: "session:started",
       appointmentId: appointment.id,
@@ -1285,16 +1297,22 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
           status={session.status}
           isCameraOn={session.isCameraOn}
           isMicOn={session.isMicOn}
+          isScreenSharing={session.isScreenSharing}
           counterpartCameraOn={session.counterpartCameraOn}
           counterpartMicOn={session.counterpartMicOn}
+          counterpartScreenSharing={session.counterpartScreenSharing}
+          connectedAt={session.connectedAt}
           onToggleCamera={session.toggleCamera}
           onToggleMic={session.toggleMic}
+          onToggleScreenShare={handleToggleScreenShare}
           onEnd={handleEndSession}
           onOpen={() => setActiveModule("live")}
           localStream={webRTC.localStream}
+          screenShareStream={webRTC.screenShareStream}
           remoteStream={webRTC.remoteStream}
           connectionState={webRTC.connectionState}
           mediaError={webRTC.error || webRTC.deviceStatus.message}
+          screenShareSupported={webRTC.screenShareSupported}
         />
       )}
 
@@ -1303,9 +1321,9 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
           <StatGrid
             tone="dark"
             stats={[
-              { label: "Pending", value: pendingAppointments.length, helper: "awaiting confirmation" },
-              { label: "Confirmed", value: confirmedAppointments.length, helper: "scheduled appointments" },
-              { label: "Patients", value: patients.length, helper: "total patients" },
+              { label: "Pending", value: pendingAppointments.length, helper: "Awaiting response" },
+              { label: "Confirmed", value: confirmedAppointments.length, helper: "Scheduled visits" },
+              { label: "Patients", value: patients.length, helper: "Total active" },
             ]}
           />
           <section className="rounded-xl border border-slate-850 bg-slate-900 p-5">
@@ -1381,15 +1399,21 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
             status={session.status}
             isCameraOn={session.isCameraOn}
             isMicOn={session.isMicOn}
+            isScreenSharing={session.isScreenSharing}
             counterpartCameraOn={session.counterpartCameraOn}
             counterpartMicOn={session.counterpartMicOn}
+            counterpartScreenSharing={session.counterpartScreenSharing}
+            connectedAt={session.connectedAt}
             onToggleCamera={session.toggleCamera}
             onToggleMic={session.toggleMic}
+            onToggleScreenShare={handleToggleScreenShare}
             onEnd={handleEndSession}
             localStream={webRTC.localStream}
+            screenShareStream={webRTC.screenShareStream}
             remoteStream={webRTC.remoteStream}
             connectionState={webRTC.connectionState}
             mediaError={webRTC.error}
+            screenShareSupported={webRTC.screenShareSupported}
             chat={<ChatPanel role="doctor" messages={session.messages} onSend={session.sendMessage} />}
             documentation={
               <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">

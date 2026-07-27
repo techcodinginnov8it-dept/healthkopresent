@@ -14,7 +14,7 @@ type DoctorAudit = {
   gradYear: number;
   yearsExp: number;
   status: string;
-  submittedAt: Date;
+  submittedAt: string;
   doctor: {
     id: string;
     name: string;

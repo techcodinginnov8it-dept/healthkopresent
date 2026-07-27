@@ -9,9 +9,12 @@ type SessionState<TAppointment> = {
   status: "idle" | "waiting" | "connected" | "ended";
   isCameraOn: boolean;
   isMicOn: boolean;
+  isScreenSharing: boolean;
   counterpartCameraOn: boolean;
   counterpartMicOn: boolean;
+  counterpartScreenSharing: boolean;
   isSpeakerReady: boolean;
+  connectedAt: number | null;
   roomId: string;
   accessToken: string;
   messages: ChatMessage[];
@@ -22,9 +25,12 @@ const idleState = {
   status: "idle",
   isCameraOn: true,
   isMicOn: true,
+  isScreenSharing: false,
   counterpartCameraOn: true,
   counterpartMicOn: true,
+  counterpartScreenSharing: false,
   isSpeakerReady: true,
+  connectedAt: null,
   roomId: "",
   accessToken: "",
   messages: [],
@@ -100,6 +106,9 @@ export function useConsultationSession<TAppointment extends { id: string }>({
         ...current,
         activeAppointment: appointment,
         status: "waiting",
+        connectedAt: null,
+        isScreenSharing: false,
+        counterpartScreenSharing: false,
         roomId: "",
         accessToken: "",
         messages: [
@@ -125,6 +134,9 @@ export function useConsultationSession<TAppointment extends { id: string }>({
         ...current,
         activeAppointment: appointment,
         status: nextStatus,
+        connectedAt: nextStatus === "connected" ? Date.now() : null,
+        isScreenSharing: false,
+        counterpartScreenSharing: false,
         roomId,
         accessToken,
         messages: [
@@ -153,28 +165,32 @@ export function useConsultationSession<TAppointment extends { id: string }>({
       });
     }
 
-    setState((current) => {
-      return {
-        ...current,
-        activeAppointment: null,
-        status: "ended",
-        roomId: "",
-        accessToken: "",
-      };
+      setState((current) => {
+        return {
+          ...current,
+          activeAppointment: null,
+          status: "ended",
+          connectedAt: null,
+          isScreenSharing: false,
+          counterpartScreenSharing: false,
+          roomId: "",
+          accessToken: "",
+        };
     });
   }, [publish, role, state.activeAppointment]);
 
   const toggleCamera = useCallback(() => {
     const isCameraOn = !state.isCameraOn;
     if (state.activeAppointment) {
-      publish({
-        type: "media:updated",
-        appointmentId: state.activeAppointment.id,
-        actorRole: role,
-        cameraOn: isCameraOn,
-        micOn: state.isMicOn,
-      });
-    }
+        publish({
+          type: "media:updated",
+          appointmentId: state.activeAppointment.id,
+          actorRole: role,
+          cameraOn: isCameraOn,
+          micOn: state.isMicOn,
+          screenSharing: state.isScreenSharing,
+        });
+      }
 
     setState((current) => {
       if (current.isCameraOn === isCameraOn) {
@@ -188,14 +204,15 @@ export function useConsultationSession<TAppointment extends { id: string }>({
   const toggleMic = useCallback(() => {
     const isMicOn = !state.isMicOn;
     if (state.activeAppointment) {
-      publish({
-        type: "media:updated",
-        appointmentId: state.activeAppointment.id,
-        actorRole: role,
-        cameraOn: state.isCameraOn,
-        micOn: isMicOn,
-      });
-    }
+        publish({
+          type: "media:updated",
+          appointmentId: state.activeAppointment.id,
+          actorRole: role,
+          cameraOn: state.isCameraOn,
+          micOn: isMicOn,
+          screenSharing: state.isScreenSharing,
+        });
+      }
 
     setState((current) => {
       if (current.isMicOn === isMicOn) {
@@ -205,6 +222,30 @@ export function useConsultationSession<TAppointment extends { id: string }>({
       return { ...current, isMicOn };
     });
   }, [publish, role, state.activeAppointment, state.isCameraOn, state.isMicOn]);
+
+  const setScreenSharing = useCallback(
+    (isScreenSharing: boolean) => {
+      if (state.activeAppointment) {
+        publish({
+          type: "media:updated",
+          appointmentId: state.activeAppointment.id,
+          actorRole: role,
+          cameraOn: state.isCameraOn,
+          micOn: state.isMicOn,
+          screenSharing: isScreenSharing,
+        });
+      }
+
+      setState((current) => {
+        if (current.isScreenSharing === isScreenSharing) {
+          return current;
+        }
+
+        return { ...current, isScreenSharing };
+      });
+    },
+    [publish, role, state.activeAppointment, state.isCameraOn, state.isMicOn]
+  );
 
   const toggleSpeaker = useCallback(() => {
     setState((current) => ({ ...current, isSpeakerReady: !current.isSpeakerReady }));
@@ -298,6 +339,7 @@ export function useConsultationSession<TAppointment extends { id: string }>({
           ...current,
           counterpartCameraOn: event.cameraOn,
           counterpartMicOn: event.micOn,
+          counterpartScreenSharing: event.screenSharing,
         };
       }
 
@@ -305,6 +347,7 @@ export function useConsultationSession<TAppointment extends { id: string }>({
         return {
           ...current,
           status: "connected",
+          connectedAt: Date.now(),
           messages: [
             ...current.messages,
             {
@@ -352,6 +395,7 @@ export function useConsultationSession<TAppointment extends { id: string }>({
     toggleCamera,
     toggleMic,
     toggleSpeaker,
+    setScreenSharing,
     sendMessage,
     receiveMessage: receiveRealtimeEvent,
     receiveRealtimeEvent,

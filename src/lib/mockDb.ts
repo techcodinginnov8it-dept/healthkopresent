@@ -79,6 +79,9 @@ export type MockConsultation = {
   notes: string | null;
   prescription: string | null;
   duration: number;
+  bloodPressure?: string | null;
+  heartRate?: string | null;
+  bodyTemperature?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -254,41 +257,36 @@ export const mockDb = {
     return db.doctors.find((d) => d.id === id) || null;
   },
 
-  createDoctor(
-    data: Pick<MockDoctor, "name" | "npi" | "email" | "password" | "specialty"> &
-      Partial<Omit<MockDoctor, "id" | "createdAt" | "updatedAt" | "rating" | "reviewCount" | "availability">>
-  ): MockDoctor {
+  createDoctor(data: Omit<MockDoctor, "id" | "createdAt" | "updatedAt" | "rating" | "reviewCount" | "availability"> & Partial<MockDoctor>): MockDoctor {
     const db = getDb();
-    const now = new Date().toISOString();
+    const {
+      bio = null,
+      image = null,
+      languages = ["English"],
+      consultFee = 500,
+      isActive = true,
+      isFeatured = false,
+      isVerified = true,
+      ...rest
+    } = data;
     const newDoctor: MockDoctor = {
       id: "doc-" + Math.random().toString(36).substr(2, 9),
-      name: data.name,
-      firstName: data.firstName ?? null,
-      middleName: data.middleName ?? null,
-      lastName: data.lastName ?? null,
-      suffix: data.suffix ?? null,
-      npi: data.npi,
-      email: data.email,
-      password: data.password,
-      specialty: data.specialty,
-      bio: data.bio ?? null,
-      image: data.image ?? null,
-      languages: data.languages ?? ["English"],
       rating: 5.0,
       reviewCount: 1,
       availability: "Available Today",
-      status: data.status ?? "ONLINE",
-      consultFee: data.consultFee ?? 500,
-      consultationDuration: data.consultationDuration ?? 30,
-      consultationDurationUnit: data.consultationDurationUnit ?? "minutes",
-      licenseNumber: data.licenseNumber ?? null,
-      licenseState: data.licenseState ?? null,
-      yearsExp: data.yearsExp ?? null,
-      isActive: data.isActive ?? true,
-      isFeatured: data.isFeatured ?? false,
-      isVerified: data.isVerified ?? true,
-      createdAt: now,
-      updatedAt: now,
+      status: "ONLINE",
+      consultationDuration: 30,
+      consultationDurationUnit: "minutes",
+      bio,
+      image,
+      languages,
+      consultFee,
+      isActive,
+      isFeatured,
+      isVerified,
+      ...rest,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
     db.doctors.push(newDoctor);
     saveDb(db);
@@ -642,6 +640,9 @@ export const mockDb = {
       notes: null,
       prescription: null,
       duration: data.duration,
+      bloodPressure: null,
+      heartRate: null,
+      bodyTemperature: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

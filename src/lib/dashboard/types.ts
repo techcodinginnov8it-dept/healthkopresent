@@ -157,6 +157,7 @@ export type RealtimeEvent =
       actorRole: DashboardRole;
       cameraOn: boolean;
       micOn: boolean;
+      screenSharing: boolean;
     }
   | {
       type: "notification:new";
