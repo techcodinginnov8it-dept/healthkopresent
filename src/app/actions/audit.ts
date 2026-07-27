@@ -669,9 +669,24 @@ export async function createDoctorAccountByAdmin(data: CreateDoctorAccountPayloa
     if (isPrismaConfigured()) {
       try {
         const createdAccount = await prisma.$transaction(async (tx) => {
+          const user = await tx.user.upsert({
+            where: { email: normalizedEmail },
+            create: {
+              email: normalizedEmail,
+              password: hashedPassword,
+              role: "DOCTOR",
+            },
+            update: {
+              password: hashedPassword,
+            },
+          });
+
           const doctor = await tx.doctor.upsert({
             where: { email: normalizedEmail },
             create: {
+              user: {
+                connect: { id: user.id },
+              },
               name: fullName || `Dr. ${lastName}`,
               npi: cleanNpi,
               email: normalizedEmail,
@@ -685,6 +700,9 @@ export async function createDoctorAccountByAdmin(data: CreateDoctorAccountPayloa
               isActive: true,
             },
             update: {
+              user: {
+                connect: { id: user.id },
+              },
               name: fullName || `Dr. ${lastName}`,
               npi: cleanNpi,
               password: hashedPassword,
@@ -783,6 +801,10 @@ export async function createDoctorAccountByAdmin(data: CreateDoctorAccountPayloa
       consultFee: Number(consultFee),
       isVerified: true,
       isActive: true,
+      image: null,
+      bio: null,
+      languages: ["English"],
+      isFeatured: false,
     });
 
     if (auditId) {
