@@ -61,7 +61,7 @@ export default function DoctorManagementPage() {
         setSuccess(`${result.message} The doctor can now log in and use their account.`);
         setAudits((prev) => prev.filter((a) => a.id !== auditId));
       } else {
-        setError(result.error || "Failed to approve doctor");
+        setError(("error" in result ? result.error : undefined) || "Failed to approve doctor");
       }
     } catch (err) {
       setError("An error occurred while approving the doctor");
@@ -83,7 +83,7 @@ export default function DoctorManagementPage() {
         setSuccess(result.message || "Doctor credentials rejected");
         setAudits((prev) => prev.filter((a) => a.id !== auditId));
       } else {
-        setError(result.error || "Failed to reject doctor");
+        setError(("error" in result ? result.error : undefined) || "Failed to reject doctor");
       }
     } catch (err) {
       setError("An error occurred while rejecting the doctor");
@@ -222,3 +222,4 @@ export default function DoctorManagementPage() {
     </div>
   );
 }
+

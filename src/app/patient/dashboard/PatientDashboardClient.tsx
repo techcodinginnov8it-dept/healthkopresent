@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Image from "next/image";
@@ -410,7 +410,7 @@ function PatientAppointmentMiniCalendar({
             className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-600"
             aria-label="Previous month"
           >
-            <span aria-hidden="true">‹</span>
+            <span aria-hidden="true">â€¹</span>
           </button>
           <button
             type="button"
@@ -418,7 +418,7 @@ function PatientAppointmentMiniCalendar({
             className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-600"
             aria-label="Next month"
           >
-            <span aria-hidden="true">›</span>
+            <span aria-hidden="true">â€º</span>
           </button>
         </div>
       </div>
@@ -592,7 +592,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     };
   }, [medicalIdUrl]);
 
-  // Ref holding the set of this patient's appointmentIds — used inside the
+  // Ref holding the set of this patient's appointmentIds â€” used inside the
   // socket event callback to guard against cross-patient broadcasts.
   const patientAppointmentIdsRef = React.useRef<Set<string>>(new Set());
 
@@ -613,7 +613,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       if (event.type === "session:started" && event.roomId) {
         // Only act if this appointment belongs to this patient.
         if (!patientAppointmentIdsRef.current.has(event.appointmentId)) {
-          console.log(`[PatientDashboard] session:started ignored — appointmentId ${event.appointmentId} not in this patient's bookings`);
+          console.log(`[PatientDashboard] session:started ignored â€” appointmentId ${event.appointmentId} not in this patient's bookings`);
           return;
         }
         console.log(`[PatientDashboard] session:started received for appointmentId=${event.appointmentId} roomId=${event.roomId}`);
@@ -697,11 +697,11 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
   }, [patient.bookings]);
   // Auto-pre-join: silently authorize + join WebRTC as soon as the doctor
   // starts the session (even before patient clicks "Join").
-  // The Join button then just reveals the video UI — no network call needed.
+  // The Join button then just reveals the video UI â€” no network call needed.
   const autoJoinedRef = React.useRef<Set<string>>(new Set());
   useEffect(() => {
     if (session.roomId) {
-      // Already in a session — nothing to auto-join
+      // Already in a session â€” nothing to auto-join
       return;
     }
     const pendingEntries = Object.entries(authorizedRooms);
@@ -722,11 +722,9 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
   const webRTC = useWebRTC({
     roomId: session.roomId,
     role: "patient",
-    getSocket: realtime.getSocket,
     isCameraOn: session.isCameraOn,
     isMicOn: session.isMicOn,
     isActive: isLiveConsultationActive,
-    signalingReady: realtime.socketReady,
     onRemoteSessionEnded: () => {
       session.endSession(false);
       setStartedAppointmentId("");
@@ -1156,7 +1154,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
         </svg>
       ),
       label: "DOB / Age",
-      value: patientAge ? `${patient.dob} • ${patientAge} years old` : patient.dob,
+      value: patientAge ? `${patient.dob} â€¢ ${patientAge} years old` : patient.dob,
     },
     {
       icon: (
@@ -2367,3 +2365,5 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     </DashboardShell>
   );
 }
+
+

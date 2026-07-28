@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -693,11 +693,9 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
   const webRTC = useWebRTC({
     roomId: session.roomId,
     role: "doctor",
-    getSocket: realtime.getSocket,
     isCameraOn: session.isCameraOn,
     isMicOn: session.isMicOn,
     isActive: isLiveConsultationActive,
-    signalingReady: realtime.socketReady,
     onRemoteSessionEnded: () => {
       session.endSession(false);
       showToast("error", "The other participant ended the consultation.");
@@ -1538,7 +1536,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                             {
                               label: "Body Temperature",
                               value: vitalsForm.bodyTemperature,
-                              placeholder: "36.8 °C",
+                              placeholder: "36.8 Â°C",
                               onChange: (value: string) => setVitalsForm((current) => ({ ...current, bodyTemperature: value })),
                             },
                           ].map((vital) => (
@@ -1861,4 +1859,6 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     </DashboardShell>
   );
 }
+
+
 
