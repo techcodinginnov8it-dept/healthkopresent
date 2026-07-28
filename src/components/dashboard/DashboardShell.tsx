@@ -86,6 +86,7 @@ function CollapseIcon({ collapsed }: { collapsed: boolean }) {
 
 export function DashboardShell<TModule extends ModuleId>({
   role,
+  theme,
   activeModule,
   navItems,
   title,
@@ -101,6 +102,7 @@ export function DashboardShell<TModule extends ModuleId>({
   children,
 }: {
   role: DashboardRole;
+  theme?: "light" | "dark";
   activeModule: TModule;
   navItems: DashboardNavItem<TModule>[];
   title: string;
@@ -121,12 +123,13 @@ export function DashboardShell<TModule extends ModuleId>({
   children: ReactNode;
 }) {
   const isDoctor = role === "doctor";
+  const shellTheme = theme ?? (isDoctor ? "dark" : "light");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const shellBg = isDoctor ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900";
-  const sidebarBg = isDoctor ? "bg-slate-950 border-slate-850" : "bg-white border-slate-200";
-  const muted = isDoctor ? "text-slate-400" : "text-slate-500";
+  const shellBg = shellTheme === "dark" ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900";
+  const sidebarBg = shellTheme === "dark" ? "bg-slate-950 border-slate-850" : "bg-white border-slate-200";
+  const muted = shellTheme === "dark" ? "text-slate-400" : "text-slate-500";
   const sidebarWidth = collapsed ? "md:w-24 lg:w-24" : "md:w-80 lg:w-80";
-  const navIdle = isDoctor
+  const navIdle = shellTheme === "dark"
     ? "text-slate-400 hover:bg-slate-900 hover:text-white"
     : "text-slate-500 hover:bg-slate-100 hover:text-slate-950";
 
@@ -160,18 +163,26 @@ export function DashboardShell<TModule extends ModuleId>({
       >
         <div className="space-y-6">
           <div className={`flex items-center gap-3 ${collapsed ? "justify-center" : "justify-between"}`}>
-            <span className={`flex select-none items-center gap-1 ${collapsed ? "justify-center" : ""}`}>
+            <button
+              type="button"
+              onClick={() => {
+                onNavigate("overview" as TModule);
+                setMobileNavOpen(false);
+              }}
+              className={`flex select-none items-center gap-1 text-left ${collapsed ? "justify-center" : ""}`}
+              aria-label="Go to dashboard overview"
+            >
               <span className="font-display text-xl tracking-tight">
-                <span className="text-brand-red font-black">H</span>
+                <span className="font-black text-brand-red">H</span>
                 {!collapsed && (
                   <>
-                    <span className={isDoctor ? "text-white font-extrabold" : "text-slate-950 font-extrabold"}>ealth</span>
-                    <span className="text-brand-teal font-black">K</span>
-                    <span className={isDoctor ? "text-white font-extrabold" : "text-slate-950 font-extrabold"}>o</span>
+                    <span className="font-extrabold text-slate-950">ealth</span>
+                    <span className="font-black text-brand-teal">K</span>
+                    <span className="font-extrabold text-slate-950">o</span>
                   </>
                 )}
               </span>
-            </span>
+            </button>
             <button
               type="button"
               onClick={onToggleCollapsed}
@@ -242,12 +253,12 @@ export function DashboardShell<TModule extends ModuleId>({
       </aside>
 
       <div className="flex min-h-screen flex-1 flex-col">
-        <header className={`sticky top-0 z-30 border-b ${isDoctor ? "border-slate-850 bg-slate-950/90" : "border-slate-200 bg-white/90"} px-4 py-3 backdrop-blur lg:px-8`}>
+        <header className={`sticky top-0 z-30 border-b ${shellTheme === "dark" ? "border-slate-850 bg-slate-950/90" : "border-slate-200 bg-white/90"} px-4 py-3 backdrop-blur lg:px-8`}>
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex items-start gap-3">
               <button
                 type="button"
-                className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl border md:hidden ${isDoctor ? "border-slate-800 text-slate-200" : "border-slate-200 text-slate-700"}`}
+                className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl border md:hidden ${shellTheme === "dark" ? "border-slate-800 text-slate-200" : "border-slate-200 text-slate-700"}`}
                 onClick={() => setMobileNavOpen(true)}
                 aria-label="Open mobile navigation"
               >
