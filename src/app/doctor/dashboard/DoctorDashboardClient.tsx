@@ -1158,7 +1158,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     }
 
     session.enterAuthorizedRoom(appointment, result.roomId, result.accessToken, "waiting");
-    realtime.joinVideoRoom(result.roomId, "doctor");
+
     realtime.publish({
       type: "session:started",
       appointmentId: appointment.id,

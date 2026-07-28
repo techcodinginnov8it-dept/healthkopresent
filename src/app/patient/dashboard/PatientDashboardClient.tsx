@@ -982,7 +982,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     setJoiningAppointmentId("");
     setBlockedAppointment(null);
     session.enterAuthorizedRoom(appointment, result.roomId, result.accessToken);
-    realtime.joinVideoRoom(result.roomId, "patient");
+
     setActiveModule("live");
     realtime.publish({
       type: "session:joined",
