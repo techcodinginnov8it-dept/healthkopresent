@@ -24,7 +24,7 @@ import { useDashboardModule } from "@/hooks/useDashboardModule";
 import { useDashboardNotifications } from "@/hooks/useDashboardNotifications";
 import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
 import { useWebRTC } from "@/hooks/useWebRTC";
-import { formatDateTime } from "@/lib/dashboard/format";
+import { formatDateTime, splitClinicalText } from "@/lib/dashboard/format";
 import { createDashboardNotification } from "@/lib/dashboard/notifications";
 import { DEFAULT_DURATION_MINUTES, getScheduleConflict, parseAvailability } from "@/lib/scheduling";
 import type {
@@ -640,7 +640,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
   const router = useRouter();
   const [activeModule, setActiveModule] = useDashboardModule<PatientModuleId>(initialModule, PATIENT_MODULES);
   const [collapsed, setCollapsed] = useState(false);
-  const [sidebarImage, setSidebarImage] = useState<string | null>(patient.image ?? null);
+  const [sidebarImageOverride, setSidebarImageOverride] = useState<string | null>(null);
   const [selectedDoctorId, setSelectedDoctorId] = useState((doctors.find((d) => d.isVerified) ?? doctors[0])?.id || "");
   const [appointmentDate, setAppointmentDate] = useState("");
   const [appointmentTime, setAppointmentTime] = useState("");
@@ -675,10 +675,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
   });
   const [toasts, setToasts] = useState<{ id: string; tone: "success" | "error"; message: string }[]>([]);
 
-  useEffect(() => {
-    setSidebarImage(patient.image ?? null);
-  }, [patient.image]);
-
+  const sidebarImage = sidebarImageOverride ?? patient.image ?? null;
   const showToast = useCallback((tone: "success" | "error", message: string) => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     setToasts((current) => [...current, { id, tone, message }]);
@@ -984,18 +981,8 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
           readAt: booking.status === "PENDING" ? null : booking.createdAt,
         })
       ),
-      ...prescriptions.slice(0, 2).map((booking) =>
-        createDashboardNotification({
-          id: `patient-prescription-${booking.id}`,
-          title: "Prescription available",
-          body: `${booking.prescription} from ${booking.doctor.name}`,
-          kind: "prescription",
-          createdAt: booking.createdAt,
-          readAt: null,
-        })
-      ),
     ],
-    [prescriptions, upcomingAppointments]
+    [upcomingAppointments]
   );
   const dashboardNotifications = useDashboardNotifications({
     role: "patient",
@@ -1632,7 +1619,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
               { label: "Upcoming Consultations", value: upcomingAppointments.length, helper: "scheduled appointments" },
               { label: "Recent Doctors", value: recentDoctorNames.length, helper: "doctors consulted" },
               { label: "Completed", value: completedAppointments.length, helper: "finished consultations" },
-              { label: "Pending Rx", value: prescriptions.length, helper: "prescriptions pending" },
+              { label: "Total Consultations", value: appointments.length, helper: "all recorded visits" },
             ]}
           />
 
@@ -1894,16 +1881,12 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                         {selectedAppointment.status === "COMPLETED" && "Completed. Clinical notes and prescriptions are available from Medical Access."}
                         {selectedAppointment.status === "CANCELLED" && "Cancelled. You can book another appointment from the doctor directory."}
                       </div>
-                      <dl className="space-y-3 text-sm">
+                      <div className="space-y-3 text-sm">
                         <div>
-                          <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">Visit reason</dt>
-                          <dd className="mt-1 font-semibold text-slate-700">{selectedAppointment.reason || "No reason provided"}</dd>
+                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Visit reason</p>
+                          <p className="mt-1 font-semibold text-slate-700">{selectedAppointment.reason || "No reason provided"}</p>
                         </div>
-                        <div>
-                          <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">Care continuity</dt>
-                          <dd className="mt-1 font-semibold text-slate-700">{selectedAppointment.prescription ? `Prescription: ${selectedAppointment.prescription}` : selectedAppointment.notes || "No notes yet"}</dd>
-                        </div>
-                      </dl>
+                      </div>
                       {selectedAppointment.status === "PENDING" && isDoctorFollowUp(selectedAppointment) && (
                         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
                           <p className="text-xs font-black text-amber-800">Doctor follow-up needs your response.</p>
@@ -2228,13 +2211,33 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                         {consultationHubTab === "prescriptions" && (
                           <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-4">
                             <p className="text-xs font-black uppercase tracking-wider text-slate-500">Prescription</p>
-                            <p className="mt-2 text-sm font-semibold text-slate-700">{selectedAppointment.prescription || "No prescription has been issued for this consultation yet."}</p>
+                            <div className="mt-3 space-y-3 text-sm font-semibold leading-7 text-slate-700">
+                              {(selectedAppointment.prescription || "No prescription has been issued for this consultation yet.")
+                                .split(/\n+/)
+                                .map((paragraph) => paragraph.trim())
+                                .filter(Boolean)
+                                .map((paragraph, index) => (
+                                  <p key={`rx-${index}`} className="whitespace-pre-line break-words">
+                                    {paragraph}
+                                  </p>
+                                ))}
+                            </div>
                           </div>
                         )}
                         {consultationHubTab === "notes" && (
                           <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-4">
                             <p className="text-xs font-black uppercase tracking-wider text-slate-500">Doctor&apos;s Notes</p>
-                            <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-700">{selectedAppointment.notes || "Doctor notes will appear here after clinical documentation is completed."}</p>
+                            <div className="mt-3 space-y-3 text-sm font-semibold leading-7 text-slate-700">
+                              {(selectedAppointment.notes || "Doctor notes will appear here after clinical documentation is completed.")
+                                .split(/\n+/)
+                                .map((paragraph) => paragraph.trim())
+                                .filter(Boolean)
+                                .map((paragraph, index) => (
+                                  <p key={`notes-${index}`} className="whitespace-pre-line break-words">
+                                    {paragraph}
+                                  </p>
+                                ))}
+                            </div>
                           </div>
                         )}
                         {consultationHubTab === "documents" && (
@@ -2321,11 +2324,30 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
               <div className="flex h-full flex-col">
                 <header className="border-b border-slate-200 p-5">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Encounter Detail</p>
-                      <h2 className="mt-1 text-2xl font-black text-slate-950">{selectedMedicalAppointment.doctor.name}</h2>
-                      <p className="mt-1 text-sm font-bold text-slate-500">{selectedMedicalAppointment.doctor.specialty}</p>
-                      <p className="mt-2 text-xs font-semibold text-slate-500">{formatDateTime(selectedMedicalAppointment.scheduledAt)}</p>
+                      <div className="mt-3 flex min-w-0 items-center gap-4">
+                        {isRenderableProfileImage(selectedAppointmentDoctor?.image || selectedMedicalAppointment.doctor.image) ? (
+                          <div className="relative mt-1 h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+                            <Image
+                              src={selectedAppointmentDoctor?.image || selectedMedicalAppointment.doctor.image!}
+                              alt={selectedAppointmentDoctor?.name || selectedMedicalAppointment.doctor.name}
+                              width={56}
+                              height={56}
+                              unoptimized
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="mt-1 grid h-14 w-14 shrink-0 place-items-center rounded-2xl border border-slate-200 bg-brand-teal/10 text-sm font-black text-brand-teal">
+                            {getInitials(selectedAppointmentDoctor?.name || selectedMedicalAppointment.doctor.name) || "DR"}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <h2 className="text-2xl font-black text-slate-950">{selectedAppointmentDoctor?.name || selectedMedicalAppointment.doctor.name}</h2>
+                          <p className="mt-1 text-sm font-bold text-slate-500">{selectedAppointmentDoctor?.specialty || selectedMedicalAppointment.doctor.specialty}</p>
+                        </div>
+                      </div>
                     </div>
                     <button
                       type="button"
@@ -2351,17 +2373,38 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
 
                 <div className="flex-1 space-y-5 overflow-y-auto p-5">
                   {medicalAccessTab === "summary" && (
-                    <section className="grid gap-3 md:grid-cols-4">
-                      {[
-                        { label: "Chief Complaint", value: selectedMedicalAppointment.reason || "No chief complaint recorded." },
-                        { label: "Duration", value: `${selectedMedicalAppointment.duration || DEFAULT_DURATION_MINUTES} minutes` },
-                        { label: "Status", value: selectedMedicalAppointment.status },
-                      ].map((item) => (
-                        <div key={item.label} className="rounded-[18px] border border-slate-200 bg-slate-50 p-4">
-                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{item.label}</p>
-                          <p className="mt-2 text-sm font-black leading-relaxed text-slate-800">{item.value}</p>
+                    <section className="space-y-4">
+                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-4">
+                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Date of Consultation</p>
+                          <p className="mt-2 text-sm font-black leading-relaxed text-slate-800">
+                            {formatDateTime(selectedMedicalAppointment.scheduledAt).split(", ")[0]}
+                          </p>
                         </div>
-                      ))}
+                        <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-4">
+                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Time of Consultation</p>
+                          <p className="mt-2 text-sm font-black leading-relaxed text-slate-800">
+                            {formatDateTime(selectedMedicalAppointment.scheduledAt).split(", ")[1] || "—"}
+                          </p>
+                        </div>
+                        <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-4">
+                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Duration</p>
+                          <p className="mt-2 text-sm font-black leading-relaxed text-slate-800">
+                            {selectedMedicalAppointment.duration || DEFAULT_DURATION_MINUTES} minutes
+                          </p>
+                        </div>
+                        <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-4">
+                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Status</p>
+                          <p className="mt-2 text-sm font-black leading-relaxed text-slate-800">{selectedMedicalAppointment.status}</p>
+                        </div>
+                      </div>
+
+                      <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-4">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Chief Complaint</p>
+                        <p className="mt-3 whitespace-pre-line break-words text-sm font-semibold leading-7 text-slate-700">
+                          {selectedMedicalAppointment.reason || "No chief complaint recorded."}
+                        </p>
+                      </div>
                     </section>
                   )}
 
@@ -2369,14 +2412,17 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                     <section className="space-y-4">
                       <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-5">
                         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Doctor Assessment And Plan</p>
-                        <ul className="mt-4 space-y-3">
-                          {(getMedicalBullets(selectedMedicalAppointment.notes).length ? getMedicalBullets(selectedMedicalAppointment.notes) : ["No doctor assessment has been documented for this encounter."]).map((item) => (
-                            <li key={item} className="flex gap-3 rounded-lg bg-white p-3 text-sm font-bold text-slate-800">
-                              <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-brand-teal" />
-                              <span>{item}</span>
-                            </li>
-                          ))}
-                        </ul>
+                        <div className="mt-4 space-y-3 text-sm font-semibold leading-7 text-slate-700">
+                          {(selectedMedicalAppointment.notes || "No doctor assessment has been documented for this encounter.")
+                            .split(/\n+/)
+                            .map((paragraph) => paragraph.trim())
+                            .filter(Boolean)
+                            .map((paragraph, index) => (
+                              <p key={`assessment-${index}`} className="whitespace-pre-line break-words rounded-lg bg-white p-3">
+                                {paragraph}
+                              </p>
+                            ))}
+                        </div>
                       </div>
                       <div className="rounded-xl border border-red-200 bg-red-50 p-4">
                         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-red">Emergency Precautions</p>
@@ -2390,20 +2436,36 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                   {medicalAccessTab === "prescriptions" && (
                     <section className="rounded-[18px] border border-slate-200 bg-slate-50 p-5">
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Prescriptions</p>
-                      <div className="mt-4 rounded-[18px] border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,92,122,.06)] p-4">
-                        <p className="text-base font-black text-slate-950">{selectedMedicalAppointment.prescription || "No prescription issued"}</p>
-                        <div className="mt-4 grid gap-3 md:grid-cols-2">
-                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1.15fr]">
+                        <div className="space-y-4">
+                          <div className="rounded-[18px] border border-slate-200 bg-white p-4 shadow-[0_2px_12px_rgba(15,92,122,.06)]">
                             <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Directions</p>
-                            <p className="mt-2 text-sm font-semibold text-slate-700">
-                              {selectedMedicalAppointment.prescription ? "Follow the prescribing doctor's instructions and confirm dosage before taking medication." : "No medication directions available."}
+                            <p className="mt-2 text-sm font-semibold leading-7 text-slate-700">
+                              {selectedMedicalAppointment.prescription
+                                ? "Follow the prescribing doctor's instructions carefully and confirm dosage before taking any medication."
+                                : "No medication directions available."}
                             </p>
                           </div>
-                          <div className="rounded-xl border border-red-200 bg-red-50 p-3">
+                          <div className="rounded-[18px] border border-red-200 bg-red-50 p-4">
                             <p className="text-[10px] font-black uppercase tracking-wider text-brand-red">Warnings</p>
-                            <p className="mt-2 text-sm font-semibold text-red-800">
+                            <p className="mt-2 text-sm font-semibold leading-7 text-red-800">
                               Report allergies, side effects, pregnancy, or medication conflicts to your care team before use.
                             </p>
+                          </div>
+                        </div>
+
+                        <div className="rounded-[18px] border border-slate-200 bg-white p-4 shadow-[0_2px_12px_rgba(15,92,122,.06)]">
+                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Prescription by Doctor</p>
+                          <div className="mt-3 space-y-3 text-sm font-semibold leading-7 text-slate-700">
+                            {(selectedMedicalAppointment.prescription || "No prescription issued for this consultation yet.")
+                              .split(/\n+/)
+                              .map((paragraph) => paragraph.trim())
+                              .filter(Boolean)
+                              .map((paragraph, index) => (
+                                <p key={`prescription-${selectedMedicalAppointment.id}-${index}`} className="whitespace-pre-line break-words">
+                                  {paragraph}
+                                </p>
+                              ))}
                           </div>
                         </div>
                       </div>
@@ -2479,7 +2541,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
               <p className="mt-1 text-xs font-semibold text-slate-500">{item.body}</p>
               <p className="mt-2 text-[10px] font-black uppercase tracking-wider text-slate-400">{item.kind || "system"} / {formatDateTime(item.createdAt)}</p>
             </article>
-          )) : <EmptyState title="No notifications" body="Appointment, consultation, and prescription alerts appear here." />}
+          )) : <EmptyState title="No notifications" body="Appointment and consultation alerts appear here." />}
         </section>
       )}
 
@@ -2493,10 +2555,11 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       {activeModule === "settings" && (
         <PatientSettingsModule
           patient={patient}
-          onProfileImageChange={(image) => setSidebarImage(image || null)}
+          onProfileImageChange={(image) => setSidebarImageOverride(image || null)}
           onToast={showToast}
         />
       )}
     </DashboardShell>
   );
 }
+

@@ -37,6 +37,14 @@ export type DashboardNotification = {
   readAt?: Date | string | null;
 };
 
+export type CarePlanSnapshot = {
+  nextVisit: string;
+  currentMedication: string;
+  doctorSummary: string;
+  followUpStatus: string;
+  canEdit: boolean;
+};
+
 export type DashboardDoctor = {
   id: string;
   name: string;

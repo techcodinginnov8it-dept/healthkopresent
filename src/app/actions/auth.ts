@@ -1188,9 +1188,6 @@ export async function logoutDoctor() {
   await clearDoctorSession();
   redirect("/doctor/signin");
 }
-
-const ADMIN_EMAIL = "admin@healthko.com";
-const ADMIN_PASSWORD_HASH = "$2a$10$A24WIxraPyqrS6dfZaps0OnP11alyc7ZO0E5CC2LdQgemuzwdvtwm";
 export async function loginAdmin(data: { email: string; password: string }) {
   const normalizedEmail = data.email?.trim().toLowerCase();
   const password = data.password ?? "";

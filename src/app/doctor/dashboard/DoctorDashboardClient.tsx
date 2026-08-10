@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { logoutDoctor } from "@/app/actions/auth";
-import { acceptAppointment, cancelAppointment, completeConsultation, referAppointment, rescheduleAppointment, scheduleFollowUpAppointment } from "@/app/actions/doctor";
+import { acceptAppointment, cancelAppointment, completeConsultation, referAppointment, rescheduleAppointment, scheduleFollowUpAppointment, updateConsultationDocumentation } from "@/app/actions/doctor";
 import { updateDoctorStatus } from "@/app/actions/settings";
 import { endVideoSession, startVideoSession } from "@/app/actions/video-session";
 import { AppointmentCalendar, type CalendarViewMode } from "@/components/dashboard/AppointmentCalendar";
 import { DashboardShell, type DashboardNavItem } from "@/components/dashboard/DashboardShell";
+import { CarePlanCard } from "@/components/dashboard/CarePlanCard";
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
 import { DoctorSettingsModule } from "@/components/dashboard/SettingsModule";
 import {
@@ -16,7 +17,6 @@ import {
   EmptyState,
   FloatingConsultationCall,
   LiveConsultationPanel,
-  PrescriptionList,
   StatGrid,
 } from "@/components/dashboard/SharedModules";
 import { useConsultationSession } from "@/hooks/useConsultationSession";
@@ -25,6 +25,7 @@ import { useDashboardNotifications } from "@/hooks/useDashboardNotifications";
 import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
 import { useWebRTC } from "@/hooks/useWebRTC";
 import { getTabButtonClassName } from "@/components/dashboard/tabStyles";
+import { buildCarePlanSnapshot } from "@/lib/dashboard/care-plan";
 import { formatDateTime } from "@/lib/dashboard/format";
 import { createDashboardNotification } from "@/lib/dashboard/notifications";
 import type {
@@ -68,7 +69,7 @@ type DoctorDashboardClientProps = {
 };
 
 type PatientStatusFilter = "all" | "active" | "pending" | "completed" | "prescriptions";
-type PatientRecordsTab = "records" | "history" | "prescriptions" | "session";
+type PatientRecordsTab = "records" | "history" | "session";
 type ConsultationQueueFilter = "all" | "active" | "completed";
 
 type PatientProfile = DoctorAppointment["patient"] & {
@@ -100,13 +101,11 @@ const PATIENT_STATUS_FILTERS: { id: PatientStatusFilter; label: string }[] = [
   { id: "active", label: "Active" },
   { id: "pending", label: "Pending" },
   { id: "completed", label: "Completed" },
-  { id: "prescriptions", label: "Rx" },
 ];
 
 const PATIENT_RECORD_TABS: { id: PatientRecordsTab; label: string }[] = [
   { id: "records", label: "Records" },
   { id: "history", label: "History" },
-  { id: "prescriptions", label: "Rx" },
   { id: "session", label: "Live" },
 ];
 
@@ -180,13 +179,14 @@ function PatientOperationsHub({
   allPatientCount,
   selectedPatient,
   selectedConsultation,
+  carePlan,
+  carePlanEditableContext,
   activeAppointment,
   activeSessionStatus,
   patientSearch,
   statusFilter,
   recordsTab,
   actionLoadingId,
-  messages,
   onSearchChange,
   onStatusFilterChange,
   onRecordsTabChange,
@@ -197,19 +197,24 @@ function PatientOperationsHub({
   onCancel,
   onStartLive,
   onOpenLive,
-  onSendMessage,
+  onSaveCarePlan,
 }: {
   patients: PatientProfile[];
   allPatientCount: number;
   selectedPatient: PatientProfile | null;
   selectedConsultation: DoctorAppointment | null;
+  carePlan: ReturnType<typeof buildCarePlanSnapshot>;
+  carePlanEditableContext: {
+    consultationId: string;
+    prescription: string;
+    consultation: string;
+  } | null;
   activeAppointment: DoctorAppointment | null;
   activeSessionStatus: "idle" | "waiting" | "connected" | "ended";
   patientSearch: string;
   statusFilter: PatientStatusFilter;
   recordsTab: PatientRecordsTab;
   actionLoadingId: string | null;
-  messages: ChatMessage[];
   onSearchChange: (value: string) => void;
   onStatusFilterChange: (value: PatientStatusFilter) => void;
   onRecordsTabChange: (value: PatientRecordsTab) => void;
@@ -220,12 +225,11 @@ function PatientOperationsHub({
   onCancel: (consultationId: string) => void;
   onStartLive: (appointment: DoctorAppointment) => void;
   onOpenLive: () => void;
-  onSendMessage: (text: string, attachment?: ChatAttachment) => void;
+  onSaveCarePlan: (consultationId: string, data: { prescription: string; consultation: string }) => Promise<{ success: boolean; error?: string | null }>;
 }) {
   const selectedPatientName = selectedPatient ? getPatientDisplayName(selectedPatient) : "";
   const selectedPatientActiveAppointment =
     activeAppointment && selectedPatient && activeAppointment.patient.id === selectedPatient.id ? activeAppointment : null;
-  const selectedPatientMessages = selectedPatientActiveAppointment ? messages : [];
   const selectedPatientLiveStatus = selectedPatientActiveAppointment
     ? activeSessionStatus === "connected"
       ? "Connected"
@@ -360,7 +364,7 @@ function PatientOperationsHub({
               </div>
             </section>
 
-            <section className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_340px]">
+            <section className="grid gap-4">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
@@ -376,15 +380,17 @@ function PatientOperationsHub({
                 {selectedConsultation ? (
                   <div className="space-y-4">
                       <div className="rounded-xl border border-slate-200 border-l-4 border-l-brand-red bg-white p-4">
-                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-red">Chief Complaint</p>
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-red">Chief Complaint</p>
+                          <p className="text-[10px] font-bold text-slate-500">{formatDateTime(selectedConsultation.scheduledAt)}</p>
+                        </div>
                         <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-700">
                           {selectedConsultation.reason || "No chief complaint captured."}
                         </p>
-                        <p className="mt-3 text-xs font-bold text-slate-500">{formatDateTime(selectedConsultation.scheduledAt)}</p>
                       </div>
                     <div className="grid gap-3 lg:grid-cols-2">
-                      <ClinicalTextBlock title="Active Care Notes" body={selectedConsultation.notes || "No signed clinical notes for this encounter."} />
-                      <ClinicalTextBlock title="Medication Plan" body={selectedConsultation.prescription || "No prescription issued for this encounter."} />
+                      <ClinicalTextBlock title="Consultation" body={selectedConsultation.notes || "No signed clinical notes for this encounter."} />
+                      <ClinicalTextBlock title="Prescription" body={selectedConsultation.prescription || "No prescription issued for this encounter."} />
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {selectedConsultation.status === "PENDING" && (
@@ -414,21 +420,6 @@ function PatientOperationsHub({
                 )}
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Realtime Communication</p>
-                <div className="mt-3">
-                  {selectedPatientActiveAppointment ? (
-                    <ChatPanel role="doctor" messages={selectedPatientMessages} onSend={onSendMessage} />
-                  ) : (
-                    <div className="rounded-xl border border-slate-200 bg-white p-5">
-                      <p className="text-sm font-black text-slate-950">No active consultation chat</p>
-                      <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-500">
-                        Start or open a live room for this patient to continue secure consultation messaging.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
             </section>
           </>
         ) : (
@@ -458,9 +449,7 @@ function PatientOperationsHub({
             <>
               {recordsTab === "records" && (
                 <div className="space-y-3">
-                  <ClinicalTextBlock title="Medical Record Summary" body={selectedPatient.lastEncounter?.notes || "No completed medical record summary is available yet."} />
-                  <ClinicalTextBlock title="Current Medication" body={selectedPatient.prescriptions.at(-1)?.prescription || "No active prescription on file."} />
-                  <ClinicalTextBlock title="Care Continuity" body={selectedPatient.nextAppointment ? `Next confirmed visit: ${formatDateTime(selectedPatient.nextAppointment.scheduledAt)}` : "No confirmed follow-up is scheduled."} />
+                  <CarePlanCard plan={carePlan} role="doctor" editableContext={carePlanEditableContext} onSave={onSaveCarePlan} />
                 </div>
               )}
 
@@ -470,26 +459,6 @@ function PatientOperationsHub({
                   selectedConsultationId={selectedConsultation?.id || ""}
                   onSelectConsultation={onSelectConsultation}
                 />
-              )}
-
-              {recordsTab === "prescriptions" && (
-                <div className="space-y-3">
-                  {selectedPatient.prescriptions.length ? (
-                    selectedPatient.prescriptions.map((appointment) => (
-                      <AppointmentCard
-                        key={appointment.id}
-                        tone="light"
-                        title={appointment.prescription || "Prescription"}
-                        subtitle={getPatientDisplayName(selectedPatient)}
-                        scheduledAt={appointment.scheduledAt}
-                        status={appointment.status}
-                        reason={appointment.reason}
-                      />
-                    ))
-                  ) : (
-                    <EmptyState title="No prescriptions" body="Medication plans issued during consultations appear here." />
-                  )}
-                </div>
               )}
 
               {recordsTab === "session" && (
@@ -517,15 +486,6 @@ function PatientOperationsHub({
         </div>
       </aside>
     </section>
-  );
-}
-
-function ClinicalTextBlock({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">{title}</p>
-      <p className="mt-2 whitespace-pre-wrap text-sm font-semibold leading-relaxed text-slate-700">{body}</p>
-    </div>
   );
 }
 
@@ -570,6 +530,31 @@ function RecordTimeline({
   );
 }
 
+function ClinicalTextBlock({ title, body }: { title: string; body: string }) {
+  const paragraphs = body
+    .trim()
+    .split(/\n+/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">{title}</p>
+      <div className="mt-3 space-y-3 text-sm font-semibold leading-7 text-slate-700">
+        {paragraphs.length ? (
+          paragraphs.map((paragraph, index) => (
+            <p key={`${title}-${index}`} className="whitespace-pre-line break-words">
+              {paragraph}
+            </p>
+          ))
+        ) : (
+          <p className="whitespace-pre-line break-words">No details available.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function DoctorDashboardClient({ doctor, doctors, initialModule = "overview" }: DoctorDashboardClientProps) {
   const router = useRouter();
   const [activeModule, setActiveModule] = useDashboardModule<DoctorModuleId>(initialModule, DOCTOR_MODULES);
@@ -578,7 +563,6 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [clinicalNotes, setClinicalNotes] = useState("");
   const [prescriptionDraft, setPrescriptionDraft] = useState("");
-  const [savedPrescriptionText, setSavedPrescriptionText] = useState("");
   const [diagnosisText, setDiagnosisText] = useState("");
   const [referralTargets, setReferralTargets] = useState<Record<string, string>>({});
   const [submitState, setSubmitState] = useState({ loading: false, error: "", success: "" });
@@ -890,6 +874,41 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
       null
     );
   }, [selectedConsultationId, selectedPatient]);
+  const carePlanSourceAppointment = selectedConsultation || selectedPatient?.lastEncounter || selectedPatient?.nextAppointment || null;
+  const carePlan = useMemo(
+    () =>
+      buildCarePlanSnapshot({
+        role: "doctor",
+        nextVisitAppointment: selectedPatient?.nextAppointment,
+        summaryAppointment: carePlanSourceAppointment,
+        currentMedication: carePlanSourceAppointment?.prescription || null,
+        doctorSummary: carePlanSourceAppointment?.notes || null,
+        followUpStatus: selectedPatient?.nextAppointment?.status || selectedConsultation?.status || null,
+      }),
+    [carePlanSourceAppointment, selectedConsultation, selectedPatient]
+  );
+
+  const handleCarePlanSave = useCallback(async (consultationId: string, data: { prescription: string; consultation: string }) => {
+    const result = await updateConsultationDocumentation({
+      consultationId,
+      prescription: data.prescription,
+      notes: data.consultation,
+    });
+
+    if (!result.success) {
+      return { success: false, error: result.error || "Could not update patient treatment plan." };
+    }
+
+    realtime.publish({
+      type: "appointment:updated",
+      appointmentId: consultationId,
+      actorRole: "doctor",
+      title: "Patient treatment plan updated",
+      body: "Consultation and prescription changes were saved.",
+    });
+    router.refresh();
+    return { success: true };
+  }, [realtime, router]);
 
   const notificationSeed = useMemo<DashboardNotification[]>(
     () => [
@@ -913,18 +932,8 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
           readAt: booking.createdAt,
         })
       ),
-      ...prescriptions.slice(0, 2).map((booking) =>
-        createDashboardNotification({
-          id: `doctor-prescription-${booking.id}`,
-          title: "Prescription issued",
-          body: `${booking.patient.firstName} ${booking.patient.lastName} has an active prescription record.`,
-          kind: "prescription",
-          createdAt: booking.createdAt,
-          readAt: booking.createdAt,
-        })
-      ),
     ],
-    [confirmedAppointments, pendingAppointments, prescriptions]
+    [confirmedAppointments, pendingAppointments]
   );
   const dashboardNotifications = useDashboardNotifications({
     role: "doctor",
@@ -1090,7 +1099,6 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
   const startLiveSession = async (appointment: DoctorAppointment) => {
     setClinicalNotes(appointment.notes || "");
     setPrescriptionDraft(appointment.prescription || "");
-    setSavedPrescriptionText(appointment.prescription || "");
     setDiagnosisText(appointment.reason || "");
     setActionLoadingId(appointment.id);
     const result = await startVideoSession(appointment.id);
@@ -1121,7 +1129,9 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
       return;
     }
 
-    if (!clinicalNotes.trim() || !savedPrescriptionText.trim()) {
+    const nextPrescription = prescriptionDraft.trim();
+
+    if (!clinicalNotes.trim() || !nextPrescription) {
       showToast("error", "Clinical notes and prescription are required.");
       setSubmitState({ loading: false, error: "", success: "" });
       return;
@@ -1131,7 +1141,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     const result = await completeConsultation({
       consultationId: session.activeAppointment.id,
       notes: clinicalNotes,
-      prescription: savedPrescriptionText,
+      prescription: nextPrescription,
       reason: diagnosisText || undefined,
     });
 
@@ -1149,18 +1159,6 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     }
     session.endSession();
     router.refresh();
-  };
-
-  const handleSavePrescription = () => {
-    const nextPrescription = prescriptionDraft.trim();
-
-    if (!nextPrescription) {
-      showToast("error", "Enter a prescription before saving it.");
-      return;
-    }
-
-    setSavedPrescriptionText(nextPrescription);
-    showToast("success", "Prescription draft saved.");
   };
 
   const handleEndSession = async () => {
@@ -1393,21 +1391,9 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                       placeholder="Type the prescription here. Press Enter to add a new line."
                       className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-brand-teal"
                     />
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-[10px] font-semibold text-slate-500">
-                        {savedPrescriptionText ? "Prescription ready to save with the consultation." : "Save the draft before completing the consultation."}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={handleSavePrescription}
-                        className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-black text-slate-950"
-                      >
-                        Save Prescription
-                      </button>
-                    </div>
                   </div>
                   <button type="submit" disabled={submitState.loading} className="w-full rounded-lg bg-brand-teal px-4 py-2.5 text-xs font-black text-slate-950 disabled:bg-slate-100">
-                    {submitState.loading ? "Saving..." : "Complete Consultation"}
+                    {submitState.loading ? "Saving..." : "Complete & Save Consultation"}
                   </button>
                 </form>
               </section>
@@ -1527,6 +1513,12 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
           allPatientCount={patientProfiles.length}
           selectedPatient={selectedPatient}
           selectedConsultation={selectedConsultation}
+          carePlan={carePlan}
+          carePlanEditableContext={carePlanSourceAppointment ? {
+            consultationId: carePlanSourceAppointment.id,
+            prescription: carePlanSourceAppointment.prescription || "",
+            consultation: carePlanSourceAppointment.notes || "",
+          } : null}
           activeAppointment={session.activeAppointment}
           activeSessionStatus={session.status}
           patientSearch={patientSearch}
@@ -1547,7 +1539,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
           onCancel={handleCancel}
           onStartLive={startLiveSession}
           onOpenLive={() => setActiveModule("live")}
-          onSendMessage={session.sendMessage}
+          onSaveCarePlan={handleCarePlanSave}
         />
       )}
 
@@ -1720,19 +1712,6 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
         </section>
       )}
 
-      {activeModule === "prescriptions" && (
-        <PrescriptionList
-          role="doctor"
-          items={doctor.bookings.map((booking) => ({
-            id: booking.id,
-            prescription: booking.prescription,
-            reason: booking.reason,
-            scheduledAt: booking.scheduledAt,
-            owner: `${booking.patient.firstName} ${booking.patient.lastName}`,
-          }))}
-        />
-      )}
-
       {activeModule === "messages" && <ChatPanel role="doctor" messages={session.messages} onSend={session.sendMessage} />}
 
       {activeModule === "notifications" && (
@@ -1743,7 +1722,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
               <p className="mt-1 text-xs font-semibold text-slate-500">{item.body}</p>
               <p className="mt-2 text-[10px] font-black uppercase tracking-wider text-slate-500">{item.kind || "system"} / {formatDateTime(item.createdAt)}</p>
             </article>
-          )) : <EmptyState title="No notifications" body="Appointment, message, and prescription alerts appear here." />}
+          )) : <EmptyState title="No notifications" body="Appointment, consultation, and message alerts appear here." />}
         </section>
       )}
 

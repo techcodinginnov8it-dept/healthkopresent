@@ -117,13 +117,13 @@ export default function DashboardPreview() {
         {/* Mockup Canvas */}
         <div className="w-full max-w-5xl mx-auto rounded-3xl bg-slate-900 p-3 shadow-2xl border border-slate-800 relative">
           {/* Mock Browser Header */}
-          <div className="flex items-center justify-between px-4 pb-3 border-b border-slate-800">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-4 pb-3 border-b border-slate-800">
             <div className="flex items-center space-x-2">
               <span className="w-3 h-3 rounded-full bg-[#D30026]" />
               <span className="w-3 h-3 rounded-full bg-yellow-400" />
               <span className="w-3 h-3 rounded-full bg-brand-teal" />
             </div>
-            <div className="px-4 py-1 rounded-full bg-slate-800 text-[10px] text-slate-400 font-mono tracking-wide w-64 text-center truncate">
+            <div className="px-4 py-1 rounded-full bg-slate-800 text-[10px] text-slate-400 font-mono tracking-wide w-full sm:w-64 text-center truncate">
               portal.healthko.com/{activeTab}
             </div>
             <span className="text-slate-500 font-bold text-xs">HTTPS Secure</span>
@@ -136,7 +136,7 @@ export default function DashboardPreview() {
             {activeTab === "patient" && (
               <div className="space-y-6 flex-1 flex flex-col justify-between">
                 {/* Header */}
-                <div className="flex justify-between items-center pb-4 border-b border-slate-900">
+                <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center pb-4 border-b border-slate-900">
                   <div>
                     <h4 className="text-lg font-black tracking-tight">Welcome back, Arthur</h4>
                     <p className="text-xs text-slate-400">Patient ID: HK-94821 • Insurance Status: Active</p>
@@ -266,7 +266,7 @@ export default function DashboardPreview() {
             {activeTab === "doctor" && (
               <div className="space-y-6 flex-1 flex flex-col justify-between">
                 {/* Header */}
-                <div className="flex justify-between items-center pb-4 border-b border-slate-900">
+                <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center pb-4 border-b border-slate-900">
                   <div>
                     <h4 className="text-lg font-black tracking-tight">Dr. Sarah Jenkins, MD</h4>
                     <p className="text-xs text-slate-400">Cardiology Specialist • Provider License: HK-DOC-028</p>
@@ -483,7 +483,7 @@ export default function DashboardPreview() {
             {activeTab === "records" && (
               <div className="space-y-6 flex-1 flex flex-col justify-between">
                 {/* Header */}
-                <div className="flex justify-between items-center pb-4 border-b border-slate-900">
+                <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center pb-4 border-b border-slate-900">
                   <div>
                     <h4 className="text-lg font-black tracking-tight">Electronic Health Vault</h4>
                     <p className="text-xs text-slate-400">HIPAA Compliant Vault • AES-256 Storage</p>

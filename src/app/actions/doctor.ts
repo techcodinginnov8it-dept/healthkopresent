@@ -186,6 +186,12 @@ type ReferAppointmentPayload = {
   note?: string;
 };
 
+type UpdateConsultationDocumentationPayload = {
+  consultationId: string;
+  notes: string;
+  prescription: string;
+};
+
 export async function completeConsultation(data: CompleteConsultationPayload) {
   try {
     const session = await requireDoctorSession();
@@ -234,6 +240,61 @@ export async function completeConsultation(data: CompleteConsultationPayload) {
   } catch (error: unknown) {
     console.error("Prisma completeConsultation failed:", error);
     return { success: false, error: "Failed to complete consultation in database." };
+  }
+}
+
+export async function updateConsultationDocumentation(data: UpdateConsultationDocumentationPayload) {
+  try {
+    const session = await requireDoctorSession();
+    const notes = data.notes.trim();
+    const prescription = data.prescription.trim();
+
+    if (!data.consultationId) {
+      return { success: false, error: "Consultation is required." };
+    }
+
+    if (!notes || !prescription) {
+      return { success: false, error: "Consultation and prescription are required." };
+    }
+
+    if (!isPrismaConfigured()) {
+      const existing = mockDb.getBookingsForDoctor(session.userId).find((c) => c.id === data.consultationId);
+      if (!existing) {
+        return { success: false, error: "Consultation not found or unauthorized access." };
+      }
+
+      const updated = mockDb.updateConsultation(data.consultationId, {
+        notes,
+        prescription,
+      });
+
+      revalidatePath("/doctor/dashboard");
+      revalidatePath("/patient/dashboard");
+      return { success: true, consultation: updated };
+    }
+
+    const consultation = await prisma.consultation.findUnique({
+      where: { id: data.consultationId },
+    });
+
+    if (!consultation || consultation.doctorId !== session.userId) {
+      return { success: false, error: "Consultation not found or unauthorized access." };
+    }
+
+    const updated = await prisma.consultation.update({
+      where: { id: data.consultationId },
+      data: {
+        notes,
+        prescription,
+      },
+    });
+
+    revalidatePath("/doctor/dashboard");
+    revalidatePath("/patient/dashboard");
+    return { success: true, consultation: updated };
+  } catch (error: unknown) {
+    console.error("Prisma updateConsultationDocumentation failed:", error);
+    return { success: false, error: "Failed to update consultation documentation." };
   }
 }
 

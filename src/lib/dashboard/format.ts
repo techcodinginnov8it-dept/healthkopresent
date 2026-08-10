@@ -32,3 +32,11 @@ export function formatTimeNow() {
     timeZone: safeTimeZone(),
   }).format(new Date());
 }
+
+export function splitClinicalText(text?: string | null) {
+  return (text || "")
+    .split(/\n|•|;/g)
+    .flatMap((segment) => segment.split(/\.\s+/g))
+    .map((segment) => segment.replace(/[.]\s*$/, "").trim())
+    .filter(Boolean);
+}
