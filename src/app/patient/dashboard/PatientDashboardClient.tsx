@@ -1750,8 +1750,8 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                         key={booking.id}
                         type="button"
                         onClick={() => setSelectedAppointmentId(booking.id)}
-                        className={`w-full rounded-[1.25rem] border p-3 text-left transition shadow-sm sm:p-4 ${
-                          isSelected ? "border-brand-teal bg-brand-teal/5 shadow-[0_0_0_1px_rgba(20,184,166,0.2)]" : "border-slate-200/80 bg-white hover:border-brand-teal/40"
+                        className={`w-full rounded-[1.4rem] border p-3 text-left transition shadow-sm sm:p-4 ${
+                          isSelected ? "border-brand-teal/80 bg-gradient-to-br from-brand-teal/10 via-white to-slate-50 shadow-[0_0_0_1px_rgba(20,184,166,0.16),0_12px_24px_rgba(15,23,42,0.06)]" : "border-slate-200/80 bg-white hover:border-brand-teal/40"
                         }`}
                       >
                         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -1761,16 +1761,16 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                               <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${getAppointmentStatusStyle(booking.status)}`}>
                                 {booking.status}
                               </span>
-                              {roomReady && <span className="rounded-full bg-brand-red px-2 py-0.5 text-[10px] font-black uppercase text-white">Room ready</span>}
+                              {roomReady && <span className="rounded-full bg-brand-red/90 px-2 py-0.5 text-[10px] font-black uppercase text-white shadow-sm">Room ready</span>}
                             </div>
-                            <p className="mt-1 text-xs font-bold text-brand-teal">{booking.doctor.specialty}</p>
+                            <p className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-brand-teal">{booking.doctor.specialty}</p>
                           </div>
                           <time
                             dateTime={new Date(booking.scheduledAt).toISOString()}
-                            className="shrink-0 text-right text-xs font-black text-slate-700"
+                            className="grid grid-cols-1 gap-1 rounded-2xl bg-slate-50 px-3 py-2 text-xs font-black text-slate-700 sm:min-w-32 sm:justify-items-end sm:text-right"
                           >
                             <span className="block">{formatAppointmentFeedDate(booking.scheduledAt)}</span>
-                            <span className="mt-0.5 block text-slate-500">{formatAppointmentFeedTime(booking.scheduledAt)}</span>
+                            <span className="block text-slate-500">{formatAppointmentFeedTime(booking.scheduledAt)}</span>
                           </time>
                         </div>
                       </button>
@@ -1788,18 +1788,18 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                         <h3 className="mt-1 text-lg font-black text-slate-950">{selectedAppointment.doctor.name}</h3>
                         <p className="mt-1 text-xs font-bold text-slate-500">{formatDateTime(selectedAppointment.scheduledAt)}</p>
                       </div>
-                      <div className={`rounded-xl border p-3 text-xs font-bold ${getAppointmentStatusStyle(selectedAppointment.status)}`}>
+                      <div className={`rounded-2xl border p-3 text-xs font-bold shadow-sm ${getAppointmentStatusStyle(selectedAppointment.status)}`}>
                         {selectedAppointment.status === "PENDING" && "Waiting for doctor approval. You will be notified when this consultation is confirmed."}
                         {selectedAppointment.status === "CONFIRMED" && "Confirmed. The doctor must start the secure room before you can join."}
                         {selectedAppointment.status === "COMPLETED" && "Completed. Clinical notes and prescriptions are available from Medical Access."}
                         {selectedAppointment.status === "CANCELLED" && "Cancelled. You can book another appointment from the doctor directory."}
                       </div>
-                      <dl className="space-y-3 text-sm">
-                        <div>
+                      <dl className="grid gap-3 text-sm">
+                        <div className="rounded-2xl border border-slate-200/70 bg-white p-3 shadow-sm">
                           <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">Visit reason</dt>
                           <dd className="mt-1 font-semibold text-slate-700">{selectedAppointment.reason || "No reason provided"}</dd>
                         </div>
-                        <div>
+                        <div className="rounded-2xl border border-slate-200/70 bg-white p-3 shadow-sm">
                           <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">Care continuity</dt>
                           <dd className="mt-1 font-semibold text-slate-700">{selectedAppointment.prescription ? `Prescription: ${selectedAppointment.prescription}` : selectedAppointment.notes || "No notes yet"}</dd>
                         </div>
