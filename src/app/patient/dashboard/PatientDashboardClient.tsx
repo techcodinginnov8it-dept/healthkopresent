@@ -397,7 +397,7 @@ function PatientAppointmentMiniCalendar({
   const monthLabel = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(anchorDate);
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
+    <section className="rounded-[1.75rem] border border-slate-200/80 bg-gradient-to-b from-white to-slate-50 p-3 shadow-sm sm:p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Mini Calendar</p>
@@ -407,7 +407,7 @@ function PatientAppointmentMiniCalendar({
           <button
             type="button"
             onClick={() => onAnchorDateChange(startOfMonth(addMonths(anchorDate, -1)))}
-            className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 text-slate-600"
+            className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200/80 bg-white text-slate-600 shadow-sm"
             aria-label="Previous month"
           >
             <span aria-hidden="true">â€¹</span>
@@ -415,7 +415,7 @@ function PatientAppointmentMiniCalendar({
           <button
             type="button"
             onClick={() => onAnchorDateChange(startOfMonth(addMonths(anchorDate, 1)))}
-            className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 text-slate-600"
+            className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200/80 bg-white text-slate-600 shadow-sm"
             aria-label="Next month"
           >
             <span aria-hidden="true">â€º</span>
@@ -437,7 +437,7 @@ function PatientAppointmentMiniCalendar({
               key={key}
               type="button"
               onClick={() => onDateSelect(key)}
-              className={`min-h-10 rounded-md border p-1 text-left transition sm:min-h-12 sm:rounded-lg ${
+              className={`min-h-10 rounded-[0.9rem] border p-1 text-left transition shadow-sm sm:min-h-12 sm:rounded-lg ${
                 selected
                   ? "border-brand-teal bg-brand-teal text-white"
                   : muted
@@ -1740,7 +1740,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                 </div>
               </header>
               <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
-                <div className="max-h-[720px] space-y-3 overflow-y-auto p-4">
+                <div className="order-2 max-h-[720px] space-y-3 overflow-y-auto p-3 sm:p-4 lg:order-none">
                   {appointmentFeed.length ? appointmentFeed.map((booking) => {
                     const isSelected = selectedAppointment?.id === booking.id;
                     const roomReady = Boolean(authorizedRooms[booking.id] || startedAppointmentId === booking.id);
@@ -1750,8 +1750,8 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                         key={booking.id}
                         type="button"
                         onClick={() => setSelectedAppointmentId(booking.id)}
-                        className={`w-full rounded-xl border p-4 text-left transition ${
-                          isSelected ? "border-brand-teal bg-brand-teal/5 shadow-[0_0_0_1px_rgba(20,184,166,0.2)]" : "border-slate-200 bg-white hover:border-brand-teal/40"
+                        className={`w-full rounded-[1.25rem] border p-3 text-left transition shadow-sm sm:p-4 ${
+                          isSelected ? "border-brand-teal bg-brand-teal/5 shadow-[0_0_0_1px_rgba(20,184,166,0.2)]" : "border-slate-200/80 bg-white hover:border-brand-teal/40"
                         }`}
                       >
                         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -1780,7 +1780,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                   )}
                 </div>
 
-                <aside className="border-t border-slate-200 bg-slate-50 p-4 lg:border-l lg:border-t-0">
+                <aside className="order-1 border-b border-slate-200/80 bg-slate-50 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] lg:order-none lg:border-l lg:border-b-0 lg:border-t-0">
                   {selectedAppointment ? (
                     <div className="space-y-4">
                       <div>
@@ -1844,7 +1844,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
               </div>
             </section>
 
-            <aside className="space-y-4">
+            <aside className="order-3 space-y-4 xl:order-none">
               <PatientAppointmentMiniCalendar
                 anchorDate={appointmentCalendarAnchor}
                 selectedDate={selectedCalendarDate}
@@ -1912,7 +1912,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
             </div>
 
             <div className="grid gap-5 xl:grid-cols-[35fr_65fr]">
-              <section className="rounded-xl border border-slate-200 bg-white">
+              <section className="order-2 rounded-[1.5rem] border border-slate-200/80 bg-white shadow-sm xl:order-none">
                 <header className="border-b border-slate-200 p-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">My Timeline</p>
                   <h3 className="mt-1 text-lg font-black text-slate-950">Consultation Access</h3>
@@ -1944,8 +1944,8 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                         key={booking.id}
                         type="button"
                         onClick={() => setSelectedAppointmentId(booking.id)}
-                        className={`w-full rounded-xl border p-4 text-left transition ${
-                          isSelected ? "border-brand-teal bg-brand-teal/5 shadow-[0_0_0_1px_rgba(20,184,166,0.2)]" : "border-slate-200 bg-white hover:border-brand-teal/40"
+                        className={`w-full rounded-[1.25rem] border p-3 text-left transition shadow-sm sm:p-4 ${
+                          isSelected ? "border-brand-teal bg-brand-teal/5 shadow-[0_0_0_1px_rgba(20,184,166,0.2)]" : "border-slate-200/80 bg-white hover:border-brand-teal/40"
                         }`}
                       >
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
@@ -1981,7 +1981,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                 </div>
               </section>
 
-              <section className="rounded-xl border border-slate-200 bg-white">
+              <section className="order-1 rounded-[1.5rem] border border-slate-200/80 bg-white shadow-sm xl:order-none">
                 {selectedAppointment ? (
                   <div className="space-y-5 p-5">
                     <div className="rounded-xl border border-slate-200 bg-slate-950 p-5 text-white">
@@ -2149,7 +2149,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
 
       {activeModule === "history" && (
         <section className="grid min-h-[calc(100vh-9rem)] gap-5 xl:grid-cols-[35fr_65fr]">
-          <aside className="min-h-0 rounded-xl border border-slate-200 bg-white">
+          <aside className="order-2 min-h-0 rounded-[1.5rem] border border-slate-200/80 bg-white shadow-sm xl:order-none">
             <header className="border-b border-slate-200 p-4">
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Medical Access</p>
               <h2 className="mt-1 text-lg font-black text-slate-950">Consultation Timeline</h2>
@@ -2188,10 +2188,10 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
             </div>
           </aside>
 
-          <section className="min-w-0 rounded-xl border border-slate-200 bg-white">
+          <section className="order-1 min-w-0 rounded-[1.5rem] border border-slate-200/80 bg-white shadow-sm xl:order-none">
             {selectedMedicalAppointment ? (
               <div className="flex h-full flex-col">
-                <header className="border-b border-slate-200 p-5">
+                <header className="border-b border-slate-200/80 p-4 sm:p-5">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Encounter Detail</p>
@@ -2223,7 +2223,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                   </div>
                 </header>
 
-                <div className="flex-1 space-y-5 overflow-y-auto p-5">
+                <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-5">
                   {medicalAccessTab === "summary" && (
                     <section className="grid gap-3 md:grid-cols-4">
                       {[
