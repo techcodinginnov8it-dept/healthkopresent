@@ -1892,8 +1892,8 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
           />
         ) : (
           <section className="space-y-5">
-            <div className="rounded-xl border border-slate-200 bg-white p-5">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Patient Consultation Dashboard</p>
                   <h2 className="mt-1 text-2xl font-black text-slate-950">Live Consultation Hub</h2>
@@ -1904,7 +1904,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                 <button
                   type="button"
                   onClick={() => setActiveModule("book")}
-                  className="rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-700"
+                  className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-700 sm:w-auto"
                 >
                   Manage Appointments
                 </button>
@@ -1916,7 +1916,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                 <header className="border-b border-slate-200 p-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">My Timeline</p>
                   <h3 className="mt-1 text-lg font-black text-slate-950">Consultation Access</h3>
-                  <div className="mt-4 grid grid-cols-3 gap-2 rounded-lg bg-slate-100 p-1">
+                  <div className="mt-4 grid grid-cols-3 gap-1.5 rounded-lg bg-slate-100 p-1 sm:gap-2">
                     {CONSULTATION_TIMELINE_FILTERS.map((filter) => (
                       <button
                         key={filter.id}
@@ -1985,10 +1985,10 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                 {selectedAppointment ? (
                   <div className="space-y-5 p-5">
                     <div className="rounded-xl border border-slate-200 bg-slate-950 p-5 text-white">
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                         <div className="min-w-0">
                           <p className="text-[10px] font-black uppercase tracking-[0.25em] text-brand-teal">Action Hub</p>
-                          <h3 className="mt-2 text-2xl font-black">{selectedAppointment.status === "CONFIRMED" && (authorizedRooms[selectedAppointment.id] || startedAppointmentId === selectedAppointment.id) ? "Live Consultation Ready" : selectedAppointment.status === "CONFIRMED" ? "Waiting for Doctor" : selectedAppointment.status === "PENDING" ? "Awaiting Confirmation" : `${selectedAppointment.status.charAt(0)}${selectedAppointment.status.slice(1).toLowerCase()} Consultation`}</h3>
+                          <h3 className="mt-2 text-xl font-black sm:text-2xl">{selectedAppointment.status === "CONFIRMED" && (authorizedRooms[selectedAppointment.id] || startedAppointmentId === selectedAppointment.id) ? "Live Consultation Ready" : selectedAppointment.status === "CONFIRMED" ? "Waiting for Doctor" : selectedAppointment.status === "PENDING" ? "Awaiting Confirmation" : `${selectedAppointment.status.charAt(0)}${selectedAppointment.status.slice(1).toLowerCase()} Consultation`}</h3>
                           <p className="mt-2 text-sm font-semibold text-slate-300">
                             {selectedAppointment.status === "PENDING" && "Your appointment is in the clinical queue for doctor review."}
                             {selectedAppointment.status === "CONFIRMED" && (authorizedRooms[selectedAppointment.id] || startedAppointmentId === selectedAppointment.id) && "The secure WebRTC room has been opened for this consultation."}
@@ -1997,14 +1997,14 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                             {selectedAppointment.status === "CANCELLED" && "This consultation was cancelled. You can book another appointment with your care team."}
                           </p>
                         </div>
-                        <div className="flex shrink-0 flex-col gap-2 sm:min-w-56">
+                        <div className="flex w-full shrink-0 flex-col gap-2 sm:min-w-56 sm:w-auto">
                           {selectedAppointment.status === "PENDING" && isDoctorFollowUp(selectedAppointment) ? (
                             <>
                               <button
                                 type="button"
                                 disabled={followUpActionId === selectedAppointment.id}
                                 onClick={() => void handleConfirmFollowUp(selectedAppointment)}
-                                className="rounded-lg bg-brand-teal px-4 py-3 text-xs font-black text-white disabled:bg-slate-600"
+                                className="w-full rounded-lg bg-brand-teal px-4 py-3 text-xs font-black text-white disabled:bg-slate-600"
                               >
                                 Confirm Follow-Up
                               </button>
@@ -2012,7 +2012,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                                 type="button"
                                 disabled={followUpActionId === selectedAppointment.id}
                                 onClick={() => openFollowUpReschedule(selectedAppointment)}
-                                className="rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-xs font-black text-white disabled:text-slate-400"
+                                className="w-full rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-xs font-black text-white disabled:text-slate-400"
                               >
                                 Request Reschedule
                               </button>
@@ -2021,7 +2021,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                             <button
                               type="button"
                               onClick={() => startLiveSession(selectedAppointment)}
-                              className={`rounded-lg px-4 py-3 text-xs font-black text-white ${authorizedRooms[selectedAppointment.id] || startedAppointmentId === selectedAppointment.id ? "bg-brand-red" : "bg-brand-teal"}`}
+                              className={`w-full rounded-lg px-4 py-3 text-xs font-black text-white ${authorizedRooms[selectedAppointment.id] || startedAppointmentId === selectedAppointment.id ? "bg-brand-red" : "bg-brand-teal"}`}
                             >
                               {joiningAppointmentId === selectedAppointment.id ? "Joining..." : authorizedRooms[selectedAppointment.id] || startedAppointmentId === selectedAppointment.id ? "Join Live Consultation" : "Waiting for Doctor"}
                             </button>
@@ -2029,7 +2029,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                             <button
                               type="button"
                               onClick={() => setActiveModule(selectedAppointment.status === "COMPLETED" ? "history" : "book")}
-                              className="rounded-lg bg-white px-4 py-3 text-xs font-black text-slate-950"
+                              className="w-full rounded-lg bg-white px-4 py-3 text-xs font-black text-slate-950"
                             >
                               {selectedAppointment.status === "COMPLETED" ? "View Medical Record" : "Manage Appointment"}
                             </button>
@@ -2081,13 +2081,13 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                     </div>
 
                     <div className="rounded-xl border border-slate-200 bg-white">
-                      <div className="flex gap-2 overflow-x-auto border-b border-slate-200 p-3">
+                      <div className="flex gap-2 overflow-x-auto border-b border-slate-200 p-2 sm:p-3">
                         {CONSULTATION_HUB_TABS.map((tab) => (
                           <button
                             key={tab.id}
                             type="button"
                             onClick={() => setConsultationHubTab(tab.id)}
-                            className={`shrink-0 rounded-lg px-3 py-2 text-[10px] font-black uppercase ${
+                            className={`shrink-0 rounded-lg px-2.5 py-2 text-[9px] font-black uppercase sm:px-3 sm:text-[10px] ${
                               consultationHubTab === tab.id ? "bg-brand-teal text-white" : "bg-slate-100 text-slate-500"
                             }`}
                           >

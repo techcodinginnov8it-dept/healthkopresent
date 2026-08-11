@@ -810,7 +810,7 @@ export function LiveConsultationPanel({
             onRefreshDevices={onRefreshDevices}
           />
         </div>
-        <div className="grid min-h-[320px] gap-3 p-3 pb-24 md:min-h-[480px] md:grid-cols-2 md:gap-4 md:p-4 md:pb-28">
+        <div className="grid gap-3 p-3 pb-4 sm:pb-5 md:min-h-[440px] md:grid-cols-2 md:gap-4 md:p-4 md:pb-28">
           {/* Left: Your local camera preview */}
           <div className="relative min-h-[260px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900 sm:min-h-[320px] md:min-h-[420px]">
             <ConsultationVideoTile
@@ -821,7 +821,7 @@ export function LiveConsultationPanel({
               cameraOn={isCameraOn}
               micOn={isMicOn}
               muted={true}
-              className="h-full min-h-[260px] sm:min-h-[320px] md:min-h-[420px]"
+              className="h-full min-h-[220px] sm:min-h-[280px] md:min-h-[420px]"
               tone="slate"
             />
           </div>
@@ -844,12 +844,12 @@ export function LiveConsultationPanel({
               cameraOn={counterpartCameraOn}
               micOn={counterpartMicOn}
               muted={false}
-              className="h-full min-h-[260px] sm:min-h-[320px] md:min-h-[420px]"
+              className="h-full min-h-[220px] sm:min-h-[280px] md:min-h-[420px]"
               tone="teal"
             />
           </div>
         </div>
-        <footer className="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-white/10 bg-[rgba(24,24,27,0.82)] px-3 py-3 shadow-2xl shadow-black/30 backdrop-blur-[12px] sm:left-1/2 sm:right-auto sm:bottom-5 sm:-translate-x-1/2 sm:gap-4 sm:rounded-full sm:px-5">
+        <footer className="relative z-10 mt-3 flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-white/10 bg-[rgba(24,24,27,0.82)] px-3 py-3 shadow-2xl shadow-black/30 backdrop-blur-[12px] sm:absolute sm:bottom-5 sm:left-1/2 sm:right-auto sm:mt-0 sm:-translate-x-1/2 sm:gap-4 sm:rounded-full sm:px-5">
           <div className="flex items-center gap-4">
             <button
               type="button"
@@ -975,8 +975,8 @@ export function FloatingConsultationCall({
       return { x: nextX, y: nextY };
     }
 
-    const width = Math.min(352, window.innerWidth - 32);
-    const height = 360;
+    const width = Math.min(320, window.innerWidth - 24);
+    const height = 336;
 
     return {
       x: Math.min(Math.max(8, nextX), Math.max(8, window.innerWidth - width - 8)),
@@ -1019,7 +1019,7 @@ export function FloatingConsultationCall({
 
   return (
     <aside
-      className="fixed z-[90] w-[min(21rem,calc(100vw-1rem))] max-h-[calc(100vh-1rem)] overflow-auto rounded-xl border border-slate-700 bg-slate-950 text-white shadow-2xl shadow-black/40 touch-auto sm:touch-none"
+      className="fixed z-[90] w-[min(19rem,calc(100vw-1rem))] max-h-[calc(100vh-1rem)] overflow-auto rounded-xl border border-slate-700 bg-slate-950 text-white shadow-2xl shadow-black/40 touch-auto sm:w-[min(21rem,calc(100vw-1rem))] sm:touch-none"
       style={{ left: position.x, top: position.y }}
       onPointerDown={handleDragStart}
       onPointerMove={handleDragMove}
