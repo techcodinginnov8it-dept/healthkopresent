@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -51,6 +51,7 @@ function getEmptyDeviceStatus(): DeviceStatus {
 export function useWebRTC({
   roomId,
   role,
+  getSocket,
   isCameraOn,
   isMicOn,
   isActive,
@@ -58,6 +59,7 @@ export function useWebRTC({
 }: {
   roomId: string;
   role: "doctor" | "patient";
+  getSocket?: () => unknown;
   isCameraOn: boolean;
   isMicOn: boolean;
   isActive: boolean;
