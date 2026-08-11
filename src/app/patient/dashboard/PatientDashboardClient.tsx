@@ -1914,8 +1914,11 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
             <div className="grid gap-5 xl:grid-cols-[35fr_65fr]">
               <section className="order-2 rounded-[1.5rem] border border-slate-200/80 bg-white shadow-sm xl:order-none">
                 <header className="border-b border-slate-200 p-4">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">My Timeline</p>
-                  <h3 className="mt-1 text-lg font-black text-slate-950">Consultation Access</h3>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center rounded-full bg-brand-teal/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">My Timeline</span>
+                    <span className="hidden text-[10px] font-semibold text-slate-400 sm:inline">Tap a visit to review status and room readiness</span>
+                  </div>
+                  <h3 className="mt-2 text-xl font-black text-slate-950 sm:text-lg">Consultation Access</h3>
                   <div className="mt-4 grid grid-cols-3 gap-1.5 rounded-lg bg-slate-100 p-1 sm:gap-2">
                     {CONSULTATION_TIMELINE_FILTERS.map((filter) => (
                       <button
@@ -1987,7 +1990,10 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                     <div className="rounded-xl border border-slate-200 bg-slate-950 p-5 text-white">
                       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                         <div className="min-w-0">
-                          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-brand-teal">Action Hub</p>
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center rounded-full bg-brand-teal/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Action Hub</span>
+                            <span className="hidden text-[10px] font-semibold text-slate-400 sm:inline">Your selected consultation and next steps</span>
+                          </div>
                           <h3 className="mt-2 text-xl font-black sm:text-2xl">{selectedAppointment.status === "CONFIRMED" && (authorizedRooms[selectedAppointment.id] || startedAppointmentId === selectedAppointment.id) ? "Live Consultation Ready" : selectedAppointment.status === "CONFIRMED" ? "Waiting for Doctor" : selectedAppointment.status === "PENDING" ? "Awaiting Confirmation" : `${selectedAppointment.status.charAt(0)}${selectedAppointment.status.slice(1).toLowerCase()} Consultation`}</h3>
                           <p className="mt-2 text-sm font-semibold text-slate-300">
                             {selectedAppointment.status === "PENDING" && "Your appointment is in the clinical queue for doctor review."}
@@ -2040,7 +2046,9 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
 
                     <div className="grid gap-4 lg:grid-cols-2">
                       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Appointment Information</p>
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center rounded-full bg-brand-teal/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Appointment Information</span>
+                        </div>
                         <dl className="mt-4 grid gap-3 text-sm">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <dt className="font-bold text-slate-500">Doctor</dt>
