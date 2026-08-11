@@ -956,7 +956,7 @@ export function FloatingConsultationCall({
   onToggleScreenShare?: () => void;
   onEnd: () => void;
 }) {
-  const remoteVideoActive = Boolean(remoteStream?.getVideoTracks().length && counterpartCameraOn);
+  const remoteVideoActive = Boolean(remoteStream?.getVideoTracks().length && (counterpartCameraOn || counterpartScreenSharing));
   const localPreviewStream = isScreenSharing && screenShareStream ? screenShareStream : localStream;
   const localVideoActive = Boolean(localPreviewStream?.getVideoTracks().length && (isScreenSharing || isCameraOn));
   const stateText = connectionState === "connected" ? "Connected" : status === "waiting" ? "Waiting" : "Reconnecting";
@@ -1056,7 +1056,7 @@ export function FloatingConsultationCall({
             </span>
           )}
         </div>
-        <VideoStream stream={remoteStream} active={counterpartCameraOn || counterpartScreenSharing} />
+        <VideoStream stream={remoteStream} active={remoteVideoActive} />
         {!remoteVideoActive && (
           <div className="absolute inset-0 grid place-items-center bg-slate-900 p-4 text-center">
             <div>
