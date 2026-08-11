@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -693,6 +693,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
   const webRTC = useWebRTC({
     roomId: session.roomId,
     role: "doctor",
+    getSocket: realtime.getSocket,
     isCameraOn: session.isCameraOn,
     isMicOn: session.isMicOn,
     isActive: isLiveConsultationActive,

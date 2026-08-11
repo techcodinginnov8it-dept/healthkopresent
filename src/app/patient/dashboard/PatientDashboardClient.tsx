@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Image from "next/image";
@@ -721,7 +721,8 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
 
   const webRTC = useWebRTC({
     roomId: session.roomId,
-    role: "patient",
+        role: "patient",
+    getSocket: realtime.getSocket,
     isCameraOn: session.isCameraOn,
     isMicOn: session.isMicOn,
     isActive: isLiveConsultationActive,
