@@ -769,7 +769,7 @@ export function LiveConsultationPanel({
   return (
     <div className="grid gap-4 xl:grid-cols-12">
       <section className="relative rounded-xl border border-slate-800 bg-slate-950 text-white xl:col-span-7">
-        <header className="flex flex-col gap-3 border-b border-slate-800 p-4 md:flex-row md:items-center md:justify-between">
+        <header className="flex flex-col gap-3 border-b border-slate-800 p-3 sm:p-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Live Consultation</p>
             <h2 className="mt-1 text-lg font-black">{counterpartName}</h2>
@@ -799,7 +799,7 @@ export function LiveConsultationPanel({
             </span>
           )}
         </div>
-        <div className="border-b border-slate-800 px-4 py-3">
+        <div className="border-b border-slate-800 px-3 py-3 sm:px-4">
           <MediaDeviceControls
             devices={devices}
             cameraDeviceId={cameraDeviceId}
@@ -810,9 +810,9 @@ export function LiveConsultationPanel({
             onRefreshDevices={onRefreshDevices}
           />
         </div>
-        <div className="grid min-h-[480px] gap-4 p-4 pb-28 md:grid-cols-2">
+        <div className="grid min-h-[320px] gap-3 p-3 pb-24 md:min-h-[480px] md:grid-cols-2 md:gap-4 md:p-4 md:pb-28">
           {/* Left: Your local camera preview */}
-          <div className="relative min-h-[420px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+          <div className="relative min-h-[260px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900 sm:min-h-[320px] md:min-h-[420px]">
             <ConsultationVideoTile
               stream={localPreviewStream}
               label={isScreenSharing ? "Your presentation" : "Your stream"}
@@ -821,13 +821,13 @@ export function LiveConsultationPanel({
               cameraOn={isCameraOn}
               micOn={isMicOn}
               muted={true}
-              className="h-full min-h-[420px]"
+              className="h-full min-h-[260px] sm:min-h-[320px] md:min-h-[420px]"
               tone="slate"
             />
           </div>
 
           {/* Right: Counterpart remote feed */}
-          <div className="relative min-h-[420px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+          <div className="relative min-h-[260px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900 sm:min-h-[320px] md:min-h-[420px]">
             <ConsultationVideoTile
               stream={remoteStream}
               label={counterpartName}
@@ -844,19 +844,19 @@ export function LiveConsultationPanel({
               cameraOn={counterpartCameraOn}
               micOn={counterpartMicOn}
               muted={false}
-              className="h-full min-h-[420px]"
+              className="h-full min-h-[260px] sm:min-h-[320px] md:min-h-[420px]"
               tone="teal"
             />
           </div>
         </div>
-        <footer className="absolute bottom-5 left-1/2 flex -translate-x-1/2 flex-wrap items-center justify-center gap-4 rounded-full border border-white/10 bg-[rgba(24,24,27,0.7)] px-5 py-3 shadow-2xl shadow-black/30 backdrop-blur-[12px]">
+        <footer className="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-white/10 bg-[rgba(24,24,27,0.82)] px-3 py-3 shadow-2xl shadow-black/30 backdrop-blur-[12px] sm:left-1/2 sm:right-auto sm:bottom-5 sm:-translate-x-1/2 sm:gap-4 sm:rounded-full sm:px-5">
           <div className="flex items-center gap-4">
             <button
               type="button"
               onClick={onToggleCamera}
               aria-label={isCameraOn ? "Turn camera off" : "Turn camera on"}
               title={isCameraOn ? "Turn camera off" : "Turn camera on"}
-              className={`grid h-12 w-12 place-items-center rounded-full border transition focus:outline-none focus:ring-4 ${
+              className={`grid h-10 w-10 place-items-center rounded-full border transition focus:outline-none focus:ring-4 sm:h-12 sm:w-12 ${
                 isCameraOn
                   ? "border-white/15 bg-white/10 text-white hover:bg-white/15 focus:ring-white/20"
                   : "border-red-300/40 bg-red-500/15 text-red-200 hover:bg-red-500/25 focus:ring-red-300/30"
@@ -869,7 +869,7 @@ export function LiveConsultationPanel({
               onClick={onToggleMic}
               aria-label={isMicOn ? "Mute microphone" : "Unmute microphone"}
               title={isMicOn ? "Mute microphone" : "Unmute microphone"}
-              className={`grid h-12 w-12 place-items-center rounded-full border transition focus:outline-none focus:ring-4 ${
+              className={`grid h-10 w-10 place-items-center rounded-full border transition focus:outline-none focus:ring-4 sm:h-12 sm:w-12 ${
                 isMicOn
                   ? "border-white/15 bg-white/10 text-white hover:bg-white/15 focus:ring-white/20"
                   : "border-red-300/40 bg-red-500/15 text-red-200 hover:bg-red-500/25 focus:ring-red-300/30"
@@ -883,7 +883,7 @@ export function LiveConsultationPanel({
               disabled={!screenShareSupported}
               aria-label={isScreenSharing ? "Stop screen share" : "Start screen share"}
               title={screenShareSupported ? (isScreenSharing ? "Stop screen share" : "Start screen share") : "Screen sharing not supported"}
-              className={`grid h-12 w-12 place-items-center rounded-full border transition focus:outline-none focus:ring-4 ${
+              className={`grid h-10 w-10 place-items-center rounded-full border transition focus:outline-none focus:ring-4 sm:h-12 sm:w-12 ${
                 isScreenSharing
                   ? "border-cyan-300/30 bg-cyan-500/15 text-cyan-100 hover:bg-cyan-500/20 focus:ring-cyan-300/20"
                   : "border-white/15 bg-white/10 text-white hover:bg-white/15 focus:ring-white/20 disabled:cursor-not-allowed disabled:opacity-50"
@@ -1019,14 +1019,14 @@ export function FloatingConsultationCall({
 
   return (
     <aside
-      className="fixed z-[90] w-[min(22rem,calc(100vw-2rem))] touch-none overflow-hidden rounded-xl border border-slate-700 bg-slate-950 text-white shadow-2xl shadow-black/40"
+      className="fixed z-[90] w-[min(21rem,calc(100vw-1rem))] max-h-[calc(100vh-1rem)] overflow-auto rounded-xl border border-slate-700 bg-slate-950 text-white shadow-2xl shadow-black/40 touch-auto sm:touch-none"
       style={{ left: position.x, top: position.y }}
       onPointerDown={handleDragStart}
       onPointerMove={handleDragMove}
       onPointerUp={handleDragEnd}
       onPointerCancel={handleDragEnd}
     >
-      <div className="relative h-44 bg-slate-900">
+      <div className="relative h-40 bg-slate-900 sm:h-44">
         <div className="absolute left-3 top-3 z-10 rounded-full border border-white/10 bg-slate-950/70 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-slate-300 backdrop-blur">
           Drag
         </div>
@@ -1065,7 +1065,7 @@ export function FloatingConsultationCall({
             </div>
           </div>
         )}
-        <div className="absolute bottom-3 right-3 h-20 w-28 overflow-hidden rounded-lg border border-white/15 bg-slate-800 shadow-xl">
+        <div className="absolute bottom-3 right-3 h-[4.5rem] w-24 overflow-hidden rounded-lg border border-white/15 bg-slate-800 shadow-xl sm:h-20 sm:w-28">
           <VideoStream stream={localPreviewStream} muted active={isScreenSharing || isCameraOn} />
           {!localVideoActive && <div className="grid h-full place-items-center text-[10px] font-black uppercase text-slate-300">You</div>}
         </div>
@@ -1084,17 +1084,17 @@ export function FloatingConsultationCall({
           </button>
         </div>
         <div className="flex items-center justify-between gap-2">
-          <button type="button" onClick={onToggleCamera} className={`grid h-10 w-10 place-items-center rounded-full ${isCameraOn ? "bg-white/10" : "bg-red-500/20 text-red-100"}`} aria-label={isCameraOn ? "Turn camera off" : "Turn camera on"}>
+          <button type="button" onClick={onToggleCamera} className={`grid h-9 w-9 place-items-center rounded-full sm:h-10 sm:w-10 ${isCameraOn ? "bg-white/10" : "bg-red-500/20 text-red-100"}`} aria-label={isCameraOn ? "Turn camera off" : "Turn camera on"}>
             <VideoControlIcon off={!isCameraOn} />
           </button>
-          <button type="button" onClick={onToggleMic} className={`grid h-10 w-10 place-items-center rounded-full ${isMicOn ? "bg-white/10" : "bg-red-500/20 text-red-100"}`} aria-label={isMicOn ? "Mute microphone" : "Unmute microphone"}>
+          <button type="button" onClick={onToggleMic} className={`grid h-9 w-9 place-items-center rounded-full sm:h-10 sm:w-10 ${isMicOn ? "bg-white/10" : "bg-red-500/20 text-red-100"}`} aria-label={isMicOn ? "Mute microphone" : "Unmute microphone"}>
             <MicControlIcon off={!isMicOn} />
           </button>
           <button
             type="button"
             onClick={onToggleScreenShare}
             disabled={!screenShareSupported}
-            className={`grid h-10 w-10 place-items-center rounded-full ${
+            className={`grid h-9 w-9 place-items-center rounded-full sm:h-10 sm:w-10 ${
               isScreenSharing ? "bg-cyan-500/20 text-cyan-100" : "bg-white/10"
             } disabled:cursor-not-allowed disabled:opacity-50`}
             aria-label={isScreenSharing ? "Stop screen share" : "Start screen share"}
@@ -1102,7 +1102,7 @@ export function FloatingConsultationCall({
           >
             <ScreenShareIcon off={!isScreenSharing} />
           </button>
-          <button type="button" onClick={onEnd} className="grid h-11 w-11 place-items-center rounded-full bg-brand-red text-white" aria-label="End consultation">
+          <button type="button" onClick={onEnd} className="grid h-10 w-10 place-items-center rounded-full bg-brand-red text-white sm:h-11 sm:w-11" aria-label="End consultation">
             <PhoneDownIcon />
           </button>
         </div>
