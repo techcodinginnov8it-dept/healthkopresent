@@ -158,7 +158,7 @@ export function DashboardShell<TModule extends ModuleId>({
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-[min(86vw,22rem)] -translate-x-full flex-col justify-between overflow-y-auto border-r p-5 transition-all duration-300 md:sticky md:top-0 md:z-auto md:h-screen md:translate-x-0 md:overflow-hidden ${sidebarWidth} ${mobileNavOpen ? "translate-x-0" : ""} ${sidebarBg}`}
+        className={`fixed bottom-0 left-0 top-[4.75rem] z-50 flex w-[min(86vw,22rem)] -translate-x-full flex-col justify-between overflow-y-auto border-r p-4 transition-all duration-300 md:sticky md:top-0 md:z-auto md:h-screen md:translate-x-0 md:overflow-hidden md:p-5 ${sidebarWidth} ${mobileNavOpen ? "translate-x-0" : ""} ${sidebarBg}`}
         aria-label={`${role} dashboard navigation`}
       >
         <div className="space-y-6">
@@ -253,12 +253,12 @@ export function DashboardShell<TModule extends ModuleId>({
       </aside>
 
       <div className="flex min-h-screen flex-1 flex-col">
-        <header className={`sticky top-0 z-30 border-b ${shellTheme === "dark" ? "border-slate-850 bg-slate-950/90" : "border-slate-200 bg-white/90"} px-4 py-3 backdrop-blur lg:px-8`}>
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-start gap-3">
+        <header className={`sticky top-0 z-30 border-b ${shellTheme === "dark" ? "border-slate-850 bg-slate-950/90" : "border-slate-200 bg-white/90"} px-3 py-3 backdrop-blur sm:px-4 lg:px-8`}>
+          <div className="grid grid-cols-[auto,minmax(0,1fr),auto] items-center gap-x-3 gap-y-2 md:flex md:items-center md:justify-between">
+            <div className="col-span-2 flex min-w-0 items-start gap-3 md:col-span-1">
               <button
                 type="button"
-                className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl border md:hidden ${shellTheme === "dark" ? "border-slate-800 text-slate-200" : "border-slate-200 text-slate-700"}`}
+                className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border md:hidden ${shellTheme === "dark" ? "border-slate-800 text-slate-200" : "border-slate-200 text-slate-700"}`}
                 onClick={() => setMobileNavOpen(true)}
                 aria-label="Open mobile navigation"
               >
@@ -269,13 +269,13 @@ export function DashboardShell<TModule extends ModuleId>({
                 </svg>
               </button>
               <div className="min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-brand-teal">
+                <p className="text-[9px] font-black uppercase tracking-[0.22em] text-brand-teal sm:text-[10px] sm:tracking-[0.25em]">
                   {subtitle}
                 </p>
-                <h1 className="mt-1 font-display text-2xl font-black tracking-tight">{title}</h1>
+                <h1 className="mt-1 truncate font-display text-[1.35rem] font-black tracking-tight sm:text-2xl">{title}</h1>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="col-start-3 row-start-1 flex items-center gap-2 md:col-auto">
               {statusIndicator}
               {notificationBell}
             </div>
@@ -312,3 +312,4 @@ export function DashboardShell<TModule extends ModuleId>({
     </div>
   );
 }
+
