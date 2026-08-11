@@ -2,12 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-
+import { unstable_rethrow } from "next/navigation";
 import { loginPatient } from "../actions/auth";
 
 export default function SignInPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -31,10 +29,12 @@ export default function SignInPage() {
         return;
       }
 
-      setInfo(res.message || "");
-      router.push("/patient/dashboard");
-      router.refresh();
-    } catch {
+      setInfo("Redirecting to your dashboard...");
+      // Use a full navigation so the freshly written session cookie is present
+      // on the dashboard request even if the SPA cache is stale.
+      window.location.href = "/patient/dashboard";
+    } catch (error) {
+      unstable_rethrow(error);
       setLoading(false);
       setError("A network error occurred. Please verify your connection.");
     }
@@ -197,7 +197,7 @@ export default function SignInPage() {
                 Sign in to Doctor Portal
               </Link>
             </div>
-            <div className="pt-1">
+            <div>
               <span>Need admin access? </span>
               <Link href="/admin/signin" className="text-slate-850 hover:text-brand-teal font-extrabold underline">
                 Sign in to Admin Portal
@@ -210,3 +210,4 @@ export default function SignInPage() {
     </div>
   );
 }
+

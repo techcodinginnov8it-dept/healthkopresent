@@ -187,6 +187,7 @@ function PatientOperationsHub({
   statusFilter,
   recordsTab,
   actionLoadingId,
+  messages,
   onSearchChange,
   onStatusFilterChange,
   onRecordsTabChange,
@@ -215,6 +216,7 @@ function PatientOperationsHub({
   statusFilter: PatientStatusFilter;
   recordsTab: PatientRecordsTab;
   actionLoadingId: string | null;
+  messages: ChatMessage[];
   onSearchChange: (value: string) => void;
   onStatusFilterChange: (value: PatientStatusFilter) => void;
   onRecordsTabChange: (value: PatientRecordsTab) => void;
