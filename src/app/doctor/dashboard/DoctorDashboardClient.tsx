@@ -1425,7 +1425,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                     </p>
                   </div>
                   <textarea value={clinicalNotes} onChange={(event) => setClinicalNotes(event.target.value)} rows={4} placeholder="Consultation notes" className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-brand-teal" />
-                  <input value={prescriptionText} onChange={(event) => setPrescriptionText(event.target.value)} placeholder="Prescription" className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-brand-teal" />
+                  <textarea value={prescriptionText} onChange={(event) => setPrescriptionText(event.target.value)} placeholder="Prescription" rows={5} className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-brand-teal resize-y" />
                   <button type="submit" disabled={submitState.loading} className="w-full rounded-lg bg-brand-teal px-4 py-2.5 text-xs font-black text-white disabled:bg-slate-800">
                     {submitState.loading ? "Saving..." : "Complete & Issue Prescription"}
                   </button>
@@ -1860,6 +1860,5 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     </DashboardShell>
   );
 }
-
 
 
