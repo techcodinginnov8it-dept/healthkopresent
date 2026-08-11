@@ -397,17 +397,17 @@ function PatientAppointmentMiniCalendar({
   const monthLabel = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(anchorDate);
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4">
-      <div className="flex items-center justify-between gap-3">
+    <section className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Mini Calendar</p>
           <h3 className="text-base font-black text-slate-950">{monthLabel}</h3>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={() => onAnchorDateChange(startOfMonth(addMonths(anchorDate, -1)))}
-            className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-600"
+            className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 text-slate-600"
             aria-label="Previous month"
           >
             <span aria-hidden="true">â€¹</span>
@@ -415,17 +415,17 @@ function PatientAppointmentMiniCalendar({
           <button
             type="button"
             onClick={() => onAnchorDateChange(startOfMonth(addMonths(anchorDate, 1)))}
-            className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-600"
+            className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 text-slate-600"
             aria-label="Next month"
           >
             <span aria-hidden="true">â€º</span>
           </button>
         </div>
       </div>
-      <div className="mt-4 grid grid-cols-7 gap-1 text-center text-[10px] font-black uppercase text-slate-400">
+      <div className="mt-3 grid grid-cols-7 gap-0.5 text-center text-[9px] font-black uppercase text-slate-400 sm:mt-4 sm:gap-1 sm:text-[10px]">
         {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => <span key={`${day}-${index}`}>{day}</span>)}
       </div>
-      <div className="mt-2 grid grid-cols-7 gap-1">
+      <div className="mt-2 grid grid-cols-7 gap-0.5 sm:gap-1">
         {days.map((day) => {
           const key = toDateKey(day);
           const count = appointmentCounts[key] || 0;
@@ -437,7 +437,7 @@ function PatientAppointmentMiniCalendar({
               key={key}
               type="button"
               onClick={() => onDateSelect(key)}
-              className={`min-h-12 rounded-lg border p-1 text-left transition ${
+              className={`min-h-10 rounded-md border p-1 text-left transition sm:min-h-12 sm:rounded-lg ${
                 selected
                   ? "border-brand-teal bg-brand-teal text-white"
                   : muted
@@ -445,7 +445,7 @@ function PatientAppointmentMiniCalendar({
                     : "border-slate-200 bg-white text-slate-700 hover:border-brand-teal/50"
               }`}
             >
-              <span className="text-xs font-black">{day.getDate()}</span>
+              <span className="text-[11px] font-black sm:text-xs">{day.getDate()}</span>
               {count ? (
                 <span className={`mt-1 block h-1.5 w-1.5 rounded-full ${selected ? "bg-white" : "bg-brand-red"}`} />
               ) : null}
@@ -1534,7 +1534,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
           <div className="grid gap-5 xl:grid-cols-12">
             <div className="flex flex-col gap-5 xl:col-span-7">
               <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="text-[10px] font-black uppercase tracking-[0.24em] text-brand-teal">Identity Profile</p>
                     <h2 className="mt-2 text-lg font-black text-slate-950">Basic patient details</h2>
@@ -1554,7 +1554,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
               </section>
 
               <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="text-[10px] font-black uppercase tracking-[0.24em] text-brand-teal">Vital Health Metrics</p>
                     <h2 className="mt-2 text-lg font-black text-slate-950">Clinical measurements</h2>
@@ -1575,7 +1575,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
               </section>
 
               <section className="overflow-hidden rounded-3xl border border-red-200 bg-gradient-to-b from-red-50 to-white p-5 shadow-sm">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="text-[10px] font-black uppercase tracking-[0.24em] text-red-600">Clinical Risk Alerts</p>
                     <h2 className="mt-2 text-lg font-black text-slate-950">High-priority medical info</h2>
@@ -1948,7 +1948,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                           isSelected ? "border-brand-teal bg-brand-teal/5 shadow-[0_0_0_1px_rgba(20,184,166,0.2)]" : "border-slate-200 bg-white hover:border-brand-teal/40"
                         }`}
                       >
-                        <div className="flex items-start gap-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
                           {doctorProfile?.image ? (
                             <Image src={doctorProfile.image} alt={booking.doctor.name} width={44} height={44} unoptimized className="h-11 w-11 shrink-0 rounded-xl object-cover" />
                           ) : (
@@ -1957,20 +1957,20 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                             </div>
                           )}
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-2">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                               <div className="min-w-0">
                                 <p className="truncate text-sm font-black text-slate-950">{booking.doctor.name}</p>
                                 <p className="mt-1 truncate text-xs font-bold text-brand-teal">{booking.doctor.specialty}</p>
                               </div>
-                              <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${getAppointmentStatusStyle(booking.status)}`}>
+                              <span className={`shrink-0 self-start rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${getAppointmentStatusStyle(booking.status)}`}>
                                 {booking.status}
                               </span>
                             </div>
-                            <time dateTime={new Date(booking.scheduledAt).toISOString()} className="mt-3 grid grid-cols-2 gap-2 text-xs font-black text-slate-700">
+                            <time dateTime={new Date(booking.scheduledAt).toISOString()} className="mt-3 grid grid-cols-1 gap-2 text-xs font-black text-slate-700 sm:grid-cols-2">
                               <span className="rounded-lg bg-slate-50 px-2 py-1">{formatAppointmentFeedDate(booking.scheduledAt)}</span>
-                              <span className="rounded-lg bg-slate-50 px-2 py-1 text-right">{formatAppointmentFeedTime(booking.scheduledAt)}</span>
+                              <span className="rounded-lg bg-slate-50 px-2 py-1 sm:text-right">{formatAppointmentFeedTime(booking.scheduledAt)}</span>
                             </time>
-                            {roomReady && <p className="mt-3 rounded-lg bg-brand-red px-2 py-1 text-[10px] font-black uppercase text-white">Join room available</p>}
+                            {roomReady && <p className="mt-3 w-fit rounded-lg bg-brand-red px-2 py-1 text-[10px] font-black uppercase text-white">Join room available</p>}
                           </div>
                         </div>
                       </button>
@@ -2042,19 +2042,19 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Appointment Information</p>
                         <dl className="mt-4 grid gap-3 text-sm">
-                          <div className="flex items-center justify-between gap-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <dt className="font-bold text-slate-500">Doctor</dt>
                             <dd className="text-right font-black text-slate-950">{selectedAppointment.doctor.name}</dd>
                           </div>
-                          <div className="flex items-center justify-between gap-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <dt className="font-bold text-slate-500">Specialization</dt>
                             <dd className="text-right font-black text-slate-950">{selectedAppointment.doctor.specialty}</dd>
                           </div>
-                          <div className="flex items-center justify-between gap-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <dt className="font-bold text-slate-500">Date</dt>
                             <dd className="text-right font-black text-slate-950">{formatAppointmentFeedDate(selectedAppointment.scheduledAt)}</dd>
                           </div>
-                          <div className="flex items-center justify-between gap-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <dt className="font-bold text-slate-500">Time</dt>
                             <dd className="text-right font-black text-slate-950">{formatAppointmentFeedTime(selectedAppointment.scheduledAt)}</dd>
                           </div>
@@ -2062,7 +2062,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                       </div>
 
                       <div className="rounded-xl border border-slate-200 bg-white p-4">
-                        <div className="flex items-start gap-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
                           {selectedAppointmentDoctor?.image ? (
                             <Image src={selectedAppointmentDoctor.image} alt={selectedAppointment.doctor.name} width={48} height={48} unoptimized className="h-12 w-12 shrink-0 rounded-xl object-cover" />
                           ) : (
