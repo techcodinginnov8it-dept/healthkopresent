@@ -1,20 +1,19 @@
-﻿"use client";
+"use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import type { RealtimeChannel } from "@supabase/supabase-js";
-import { createClient } from "@/utils/supabase/client";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { io, type Socket } from "socket.io-client";
 import type { RealtimeEvent } from "@/lib/dashboard/types";
 
-const DASHBOARD_CHANNEL = "healthko:dashboard";
+const SOCKET_PATH = "/api/socket";
 
-export type RealtimeConnectionState = "connected" | "reconnecting" | "offline";
+type ConnectionState = "connected" | "reconnecting" | "offline";
 
-function getConnectionSnapshot(): RealtimeConnectionState {
+function getConnectionSnapshot(): ConnectionState {
   return navigator.onLine ? "connected" : "offline";
 }
 
 export function useDashboardRealtime(onEvent?: (event: RealtimeEvent) => void) {
-  const connectionState = useSyncExternalStore<RealtimeConnectionState>(
+  const connectionState = useSyncExternalStore<ConnectionState>(
     (onStoreChange) => {
       window.addEventListener("online", onStoreChange);
       window.addEventListener("offline", onStoreChange);
@@ -27,13 +26,12 @@ export function useDashboardRealtime(onEvent?: (event: RealtimeEvent) => void) {
     getConnectionSnapshot,
     () => "connected"
   );
-  const [reconnectState, setReconnectState] = useState<RealtimeConnectionState | null>(null);
+  const [reconnectState, setReconnectState] = useState<ConnectionState | null>(null);
   const [lastEvent, setLastEvent] = useState<RealtimeEvent | null>(null);
   const [socketReady, setSocketReady] = useState(false);
-  const channelRef = useRef<RealtimeChannel | null>(null);
+  const socketRef = useRef<Socket | null>(null);
   const onEventRef = useRef(onEvent);
   const seenEventKeysRef = useRef(new Set<string>());
-  const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
     onEventRef.current = onEvent;
@@ -71,48 +69,56 @@ export function useDashboardRealtime(onEvent?: (event: RealtimeEvent) => void) {
   );
 
   useEffect(() => {
-    const channel = supabase.channel(DASHBOARD_CHANNEL, {
-      config: {
-        broadcast: { self: false },
-      },
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || undefined;
+    const socket = io(socketUrl, {
+      path: SOCKET_PATH,
+      // Force WebSocket from the start — polling causes ICE candidate loss/reordering
+      // which breaks WebRTC signaling. Upgrade negotiation is disabled intentionally.
+      transports: ["websocket"],
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
     });
-    channelRef.current = channel;
+    socketRef.current = socket;
 
-    const handleMessage = ({ payload }: { payload: RealtimeEvent }) => {
-      console.log("[Realtime] Received dashboard:event", payload.type, "actorRole:", payload.actorRole);
-      commitEvent(payload);
+    const handleMessage = (event: RealtimeEvent) => {
+      console.log("[Realtime] Received dashboard:event", event.type, "actorRole:", event.actorRole);
+      commitEvent(event);
     };
 
-    channel.on("broadcast", { event: "dashboard:event" }, handleMessage);
-    channel.subscribe((status) => {
-      if (status === "SUBSCRIBED") {
-        setReconnectState(null);
-        setSocketReady(true);
-        return;
-      }
-
-      if (status === "TIMED_OUT" || status === "CLOSED" || status === "CHANNEL_ERROR") {
-        setReconnectState("offline");
-        setSocketReady(false);
-      }
+    socket.on("dashboard:event", handleMessage);
+    socket.on("reconnect_attempt", () => {
+      console.log("[Realtime] Reconnect attempt...");
+      setReconnectState("reconnecting");
+    });
+    socket.on("connect", () => {
+      console.log("[Realtime] Socket connected id:", socket.id);
+      setReconnectState(null);
+      setSocketReady(true);
+    });
+    socket.on("connect_error", (err) => {
+      console.warn("[Realtime] connect_error:", err.message);
+      setReconnectState("offline");
+    });
+    socket.on("disconnect", (reason) => {
+      console.warn("[Realtime] Socket disconnected. Reason:", reason);
+      setReconnectState("offline");
+      setSocketReady(false);
     });
 
     return () => {
-      channel.unsubscribe();
-      channelRef.current = null;
+      socket.off("dashboard:event", handleMessage);
+      socket.disconnect();
+      socketRef.current = null;
       setSocketReady(false);
     };
-  }, [commitEvent, supabase]);
+  }, [commitEvent]);
 
   const publish = useCallback(
     (event: RealtimeEvent) => {
       console.log("[Realtime] Publishing dashboard:event", event.type, "actorRole:", event.actorRole);
       commitEvent(event);
-      void channelRef.current?.send({
-        type: "broadcast",
-        event: "dashboard:event",
-        payload: event,
-      });
+      socketRef.current?.emit("dashboard:event", event);
     },
     [commitEvent]
   );
@@ -122,23 +128,15 @@ export function useDashboardRealtime(onEvent?: (event: RealtimeEvent) => void) {
     window.setTimeout(() => setReconnectState(null), 900);
   }, []);
 
-  const joinVideoRoom = useCallback((_roomId: string, _role: "doctor" | "patient") => {
-    // Video signaling now joins through the Supabase room channel in useWebRTC.
+  const joinVideoRoom = useCallback((roomId: string, role: "doctor" | "patient") => {
+    socketRef.current?.emit("webrtc:join-room", { roomId, role });
   }, []);
 
   const endVideoRoom = useCallback((roomId: string) => {
-    const channel = supabase.channel(`healthko:webrtc:${roomId}`, {
-      config: {
-        broadcast: { self: false },
-      },
-    });
+    socketRef.current?.emit("webrtc:session-ended", { roomId });
+  }, []);
 
-    void channel.send({
-      type: "broadcast",
-      event: "webrtc:session-ended",
-      payload: { roomId },
-    });
-  }, [supabase]);
+  const getSocket = useCallback(() => socketRef.current, []);
 
   return {
     connectionState: reconnectState || connectionState,
@@ -147,8 +145,7 @@ export function useDashboardRealtime(onEvent?: (event: RealtimeEvent) => void) {
     publish,
     joinVideoRoom,
     endVideoRoom,
-    getSocket: () => null,
+    getSocket,
     simulateReconnect,
   };
 }
-

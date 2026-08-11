@@ -55,7 +55,7 @@ export default function WhyChooseUs() {
 
             {/* Comparison Matrix Table Mockup */}
             <div className="rounded-2xl border border-slate-100 bg-white shadow-xl overflow-hidden">
-              <div className="grid grid-cols-12 gap-4 p-4 border-b border-slate-100 bg-slate-50 text-[10px] uppercase font-black tracking-wider text-slate-400">
+              <div className="hidden grid-cols-12 gap-4 border-b border-slate-100 bg-slate-50 p-4 text-[10px] uppercase font-black tracking-wider text-slate-400 md:grid">
                 <div className="col-span-5">Healthcare Metric</div>
                 <div className="col-span-4 text-brand-teal">HealthKo</div>
                 <div className="col-span-3 text-slate-500">Traditional</div>
@@ -64,18 +64,18 @@ export default function WhyChooseUs() {
                 {comparisons.map((row, index) => (
                   <div
                     key={index}
-                    className={`grid grid-cols-12 gap-4 p-4 items-center text-xs transition-colors hover:bg-slate-50/50 ${
+                    className={`grid gap-3 p-4 text-xs transition-colors hover:bg-slate-50/50 md:grid-cols-12 md:items-center md:gap-4 ${
                       row.highlight ? "bg-brand-teal-tint/10" : ""
                     }`}
                   >
-                    <div className="col-span-5 font-extrabold text-slate-800">{row.metric}</div>
-                    <div className="col-span-4 font-black text-brand-teal flex items-center space-x-1.5">
-                      <svg className="w-4 h-4 text-brand-teal flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div className="font-extrabold text-slate-800 md:col-span-5">{row.metric}</div>
+                    <div className="flex items-center space-x-1.5 font-black text-brand-teal md:col-span-4">
+                      <svg className="h-4 w-4 flex-shrink-0 text-brand-teal" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4" />
                       </svg>
-                      <span>{row.healthko}</span>
+                      <span className="leading-snug">{row.healthko}</span>
                     </div>
-                    <div className="col-span-3 font-semibold text-slate-400">{row.traditional}</div>
+                    <div className="font-semibold text-slate-400 md:col-span-3">{row.traditional}</div>
                   </div>
                 ))}
               </div>

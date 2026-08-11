@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChatAttachment, ChatMessage, DashboardRole } from "@/lib/dashboard/types";
-import { formatDate, formatDateTime } from "@/lib/dashboard/format";
+import { formatDate, formatDateTime, splitClinicalText } from "@/lib/dashboard/format";
 
 function VideoControlIcon({ off = false }: { off?: boolean }) {
   return (
@@ -420,29 +420,27 @@ function ConsultationVideoTile({
   tone?: "teal" | "slate";
 }) {
   const ref = useRef<HTMLVideoElement>(null);
-
-  // Track count state: forces re-render when video/audio tracks are added or removed
-  // to the same MediaStream object (React won't re-render on mutable stream mutations).
-  const [streamTracks, setStreamTracks] = useState<MediaStreamTrack[]>(
-    () => stream?.getTracks() ?? []
-  );
+  const [, setTrackRevision] = useState(0);
 
   useEffect(() => {
     if (!stream) {
-      setStreamTracks([]);
       return;
     }
-    // Sync immediately in case tracks already exist
-    setStreamTracks(stream.getTracks());
 
-    const refresh = () => setStreamTracks(stream.getTracks());
-    stream.addEventListener("addtrack", refresh);
-    stream.addEventListener("removetrack", refresh);
+    const handleTrackChange = () => {
+      setTrackRevision((current) => current + 1);
+    };
+
+    stream.addEventListener("addtrack", handleTrackChange);
+    stream.addEventListener("removetrack", handleTrackChange);
+
     return () => {
-      stream.removeEventListener("addtrack", refresh);
-      stream.removeEventListener("removetrack", refresh);
+      stream.removeEventListener("addtrack", handleTrackChange);
+      stream.removeEventListener("removetrack", handleTrackChange);
     };
   }, [stream]);
+
+  const streamTracks = stream?.getTracks() ?? [];
 
   useEffect(() => {
     const video = ref.current;
@@ -753,8 +751,6 @@ export function LiveConsultationPanel({
   onRefreshDevices?: () => void;
 }) {
   const statusLabel = status === "connected" ? "Connected" : role === "doctor" ? "Waiting for Patient" : "Waiting room";
-  const remoteVideoAvailable = Boolean(remoteStream?.getVideoTracks().length);
-  const remoteVideoActive = remoteVideoAvailable && counterpartCameraOn;
   const localPreviewStream = isScreenSharing && screenShareStream ? screenShareStream : localStream;
   const connectionLabel =
     connectionState === "connected"
@@ -1125,9 +1121,24 @@ export function PrescriptionList({
       {active.map((item) => (
         <article key={item.id} className="rounded-xl border border-brand-red/20 bg-white p-4">
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-red">Prescription</p>
-          <h3 className="mt-2 text-sm font-black text-slate-950">{item.prescription}</h3>
+          <ul className="mt-2 space-y-1 pl-4 text-sm font-semibold leading-relaxed text-slate-700">
+            {splitClinicalText(item.prescription).map((line, index) => (
+              <li key={`${item.id}-${index}`} className="list-disc">
+                {line}
+              </li>
+            ))}
+          </ul>
           <p className="mt-1 text-xs font-semibold text-slate-500">{role === "doctor" ? "Patient" : "Doctor"}: {item.owner}</p>
-          <p className="mt-3 text-xs text-slate-500">{formatDate(item.scheduledAt)} · {item.reason || "Clinical encounter"}</p>
+          <dl className="mt-3 space-y-1 text-xs text-slate-500">
+            <div>
+              <dt className="font-black uppercase tracking-wider text-slate-400">Date</dt>
+              <dd className="mt-0.5 font-semibold text-slate-600">{formatDate(item.scheduledAt)}</dd>
+            </div>
+            <div>
+              <dt className="font-black uppercase tracking-wider text-slate-400">Context</dt>
+              <dd className="mt-0.5 font-semibold text-slate-600">{item.reason || "Clinical encounter"}</dd>
+            </div>
+          </dl>
           <button type="button" className="mt-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-black text-slate-700">
             Download PDF
           </button>
