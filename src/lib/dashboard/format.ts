@@ -8,7 +8,7 @@ function safeTimeZone() {
 
 export function formatDate(dateInput: Date | string) {
   return new Intl.DateTimeFormat("en-US", {
-    month: "short",
+    month: "long",
     day: "numeric",
     year: "numeric",
     timeZone: safeTimeZone(),
@@ -17,8 +17,9 @@ export function formatDate(dateInput: Date | string) {
 
 export function formatDateTime(dateInput: Date | string) {
   return new Intl.DateTimeFormat("en-US", {
-    month: "short",
+    month: "long",
     day: "numeric",
+    year: "numeric",
     hour: "numeric",
     minute: "2-digit",
     timeZone: safeTimeZone(),

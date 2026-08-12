@@ -729,11 +729,13 @@ export function DoctorSettingsModule({
   onProfileUpdated,
   onProfileImageChange,
   onToast,
+  onProfileSaved,
 }: {
   doctor: DoctorSettingsData;
   onProfileUpdated?: (profile: { availability: string; status: string }) => void;
   onProfileImageChange?: (image: string) => void;
   onToast?: (tone: "success" | "error", message: string) => void;
+  onProfileSaved?: (profile: { profileRole: "doctor"; userId: string; name: string; image: string | null }) => void;
 }) {
   const router = useRouter();
   const { toasts, showToast: showLocalToast } = useSettingsToasts();
@@ -804,10 +806,11 @@ export function DoctorSettingsModule({
 
       showToast("success", message);
       onProfileUpdated?.({ availability: form.availability, status: form.status });
+      onProfileSaved?.({ profileRole: "doctor", userId: doctor.id, name: form.name, image: form.image || null });
       clearSettingsDraft(draftKey);
       router.refresh();
     });
-  }, [draftKey, form, onProfileUpdated, router, showToast]);
+  }, [draftKey, doctor.id, form, onProfileSaved, onProfileUpdated, router, showToast]);
 
   const activeContent = useMemo(() => {
     if (activeSection === "professional") {
@@ -1015,10 +1018,12 @@ export function PatientSettingsModule({
   patient,
   onProfileImageChange,
   onToast,
+  onProfileSaved,
 }: {
   patient: PatientSettingsData;
   onProfileImageChange?: (image: string) => void;
   onToast?: (tone: "success" | "error", message: string) => void;
+  onProfileSaved?: (profile: { profileRole: "patient"; userId: string; name: string; image: string | null }) => void;
 }) {
   const router = useRouter();
   const { toasts, showToast: showLocalToast } = useSettingsToasts();
@@ -1101,6 +1106,12 @@ export function PatientSettingsModule({
                 }
 
                 showToast("success", "Patient profile updated.");
+                onProfileSaved?.({
+                  profileRole: "patient",
+                  userId: patient.id,
+                  name: `${form.firstName} ${form.lastName}`,
+                  image: form.image || null,
+                });
                 clearSettingsDraft(draftKey);
                 router.refresh();
               });
@@ -1172,6 +1183,12 @@ export function PatientSettingsModule({
                 }
 
                 showToast("success", "Medical profile updated.");
+                onProfileSaved?.({
+                  profileRole: "patient",
+                  userId: patient.id,
+                  name: `${form.firstName} ${form.lastName}`,
+                  image: form.image || null,
+                });
                 clearSettingsDraft(draftKey);
                 router.refresh();
               });

@@ -103,28 +103,8 @@ export function CarePlanCard({
           <dd className="mt-1 font-semibold text-slate-700">{plan.nextVisit}</dd>
         </div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">Prescription</dt>
-          {isEditing ? (
-            <textarea
-              value={draftPrescription}
-              onChange={(event) => setDraftPrescription(event.target.value)}
-              rows={5}
-              className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold leading-7 text-slate-700 outline-none focus:border-brand-teal"
-              placeholder="Edit prescription"
-            />
-          ) : (
-            <dd className="mt-2 space-y-3 text-sm font-semibold leading-7 text-slate-700">
-              {splitParagraphText(plan.currentMedication).length ? (
-                splitParagraphText(plan.currentMedication).map((paragraph, index) => (
-                  <p key={`med-${index}`} className="whitespace-pre-line break-words">
-                    {paragraph}
-                  </p>
-                ))
-              ) : (
-                <p className="whitespace-pre-line break-words">No details available.</p>
-              )}
-            </dd>
-          )}
+          <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">Clinical Status</dt>
+          <dd className="mt-1 font-semibold text-slate-700">{plan.followUpStatus}</dd>
         </div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
           <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">Consultation</dt>
@@ -151,8 +131,28 @@ export function CarePlanCard({
           )}
         </div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">Clinical Status</dt>
-          <dd className="mt-1 font-semibold text-slate-700">{plan.followUpStatus}</dd>
+          <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">Prescription</dt>
+          {isEditing ? (
+            <textarea
+              value={draftPrescription}
+              onChange={(event) => setDraftPrescription(event.target.value)}
+              rows={5}
+              className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold leading-7 text-slate-700 outline-none focus:border-brand-teal"
+              placeholder="Edit prescription"
+            />
+          ) : (
+            <dd className="mt-2 space-y-3 text-sm font-semibold leading-7 text-slate-700">
+              {splitParagraphText(plan.currentMedication).length ? (
+                splitParagraphText(plan.currentMedication).map((paragraph, index) => (
+                  <p key={`med-${index}`} className="whitespace-pre-line break-words">
+                    {paragraph}
+                  </p>
+                ))
+              ) : (
+                <p className="whitespace-pre-line break-words">No details available.</p>
+              )}
+            </dd>
+          )}
         </div>
       </dl>
 
@@ -184,9 +184,7 @@ export function CarePlanCard({
       {saveError && <p className="mt-3 text-xs font-semibold text-red-600">{saveError}</p>}
 
       <p className="mt-3 text-[11px] font-semibold leading-relaxed text-slate-500">
-        {role === "doctor"
-          ? "Update the underlying consultation, prescription, and follow-up records from the doctor workflow."
-          : "This is a read-only view of the shared care plan from your care team."}
+        {role === "doctor" ? "" : "This is a read-only view of the shared care plan from your care team."}
       </p>
     </section>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { logoutDoctor } from "@/app/actions/auth";
 import { acceptAppointment, cancelAppointment, completeConsultation, referAppointment, rescheduleAppointment, scheduleFollowUpAppointment, updateConsultationDocumentation } from "@/app/actions/doctor";
@@ -117,6 +118,26 @@ const CONSULTATION_QUEUE_FILTERS: { id: ConsultationQueueFilter; label: string }
 
 function getPatientDisplayName(patient: Pick<DoctorAppointment["patient"], "firstName" | "lastName">) {
   return `${patient.firstName} ${patient.lastName}`.trim();
+}
+
+function getPatientInitials(patient: Pick<DoctorAppointment["patient"], "firstName" | "lastName">) {
+  return [patient.firstName, patient.lastName]
+    .map((part) => part.trim().charAt(0))
+    .filter(Boolean)
+    .join("")
+    .toUpperCase();
+}
+
+function isRenderableProfileImage(src?: string | null) {
+  if (!src) {
+    return false;
+  }
+
+  return /^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(src) || /^https?:\/\//i.test(src) || src.startsWith("/");
+}
+
+function isDoctorRequestedFollowUp(booking: DoctorAppointment) {
+  return booking.status === "PENDING" && /follow-up requested by doctor/i.test(booking.notes || "");
 }
 
 function getPatientAge(dob: string) {
@@ -290,8 +311,20 @@ function PatientOperationsHub({
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-black text-slate-950">{getPatientDisplayName(patient)}</p>
+                    <div className="flex min-w-0 items-start gap-3">
+                      {isRenderableProfileImage(patient.image) ? (
+                        <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+                          <Image src={patient.image!} alt={getPatientDisplayName(patient)} width={40} height={40} unoptimized className="h-full w-full object-cover" />
+                        </div>
+                      ) : (
+                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-teal/10 text-[11px] font-black text-brand-teal">
+                          {getPatientInitials(patient) || "PT"}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-black text-slate-950">{getPatientDisplayName(patient)}</p>
+                        <p className="mt-1 text-[11px] font-semibold text-slate-500">{getPatientAge(patient.dob)}</p>
+                      </div>
                     </div>
                     {patient.activeAppointment && (
                       <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-200">
@@ -320,11 +353,25 @@ function PatientOperationsHub({
             <section className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-slate-950">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-2xl font-black">{selectedPatientName}</h2>
-                    <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase text-slate-600">
-                      {selectedPatient.emailVerified ? "Verified" : "Unverified"}
-                    </span>
+                  <div className="flex items-center gap-3">
+                    {isRenderableProfileImage(selectedPatient.image) ? (
+                      <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+                        <Image src={selectedPatient.image!} alt={selectedPatientName} width={56} height={56} unoptimized className="h-full w-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-brand-teal/10 text-sm font-black text-brand-teal">
+                        {getPatientInitials(selectedPatient) || "PT"}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-2xl font-black">{selectedPatientName}</h2>
+                        <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase text-slate-600">
+                          {selectedPatient.emailVerified ? "Verified" : "Unverified"}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm font-semibold text-slate-500">{getPatientAge(selectedPatient.dob)}</p>
+                    </div>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -381,12 +428,12 @@ function PatientOperationsHub({
                 </div>
                 {selectedConsultation ? (
                   <div className="space-y-4">
-                      <div className="rounded-xl border border-slate-200 border-l-4 border-l-brand-red bg-white p-4">
+                      <div className="h-auto self-start rounded-xl border border-slate-200 border-l-4 border-l-brand-red bg-white p-4">
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-red">Chief Complaint</p>
                           <p className="text-[10px] font-bold text-slate-500">{formatDateTime(selectedConsultation.scheduledAt)}</p>
                         </div>
-                        <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-700">
+                        <p className="mt-2 whitespace-pre-wrap break-words text-sm font-semibold leading-relaxed text-slate-700">
                           {selectedConsultation.reason || "No chief complaint captured."}
                         </p>
                       </div>
@@ -630,6 +677,10 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
       setDoctorStatus(normalizeDoctorStatus(event.status));
       router.refresh();
     }
+
+    if (event.type === "profile:updated") {
+      router.refresh();
+    }
   }, [doctor.id, router]);
 
   const realtime = useDashboardRealtime(onRealtimeEvent);
@@ -706,7 +757,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
   const pendingAppointments = useMemo(
     () =>
       doctor.bookings
-        .filter((booking) => booking.status === "PENDING")
+        .filter((booking) => booking.status === "PENDING" && !isDoctorRequestedFollowUp(booking))
         .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()),
     [doctor.bookings]
   );
@@ -785,7 +836,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
 
       profile.appointments.push(booking);
 
-      if (booking.status === "PENDING") {
+      if (booking.status === "PENDING" && !isDoctorRequestedFollowUp(booking)) {
         profile.pending.push(booking);
       }
 
@@ -918,7 +969,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
         createDashboardNotification({
           id: `doctor-request-${booking.id}`,
           title: "New appointment request",
-          body: `${booking.patient.firstName} ${booking.patient.lastName} / ${formatDateTime(booking.scheduledAt)}`,
+          body: `${booking.patient.firstName} ${booking.patient.lastName} requested an appointment for ${formatDateTime(booking.scheduledAt)}.`,
           kind: "appointment",
           createdAt: booking.createdAt,
           readAt: null,
@@ -928,7 +979,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
         createDashboardNotification({
           id: `doctor-consultation-${booking.id}`,
           title: "Consultation reminder",
-          body: `${booking.patient.firstName} ${booking.patient.lastName} is scheduled for ${formatDateTime(booking.scheduledAt)}`,
+          body: `${booking.patient.firstName} ${booking.patient.lastName} is scheduled for ${formatDateTime(booking.scheduledAt)}.`,
           kind: "consultation",
           createdAt: booking.createdAt,
           readAt: booking.createdAt,
@@ -1279,9 +1330,9 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
           <StatGrid
             tone="light"
             stats={[
-              { label: "Pending", value: pendingAppointments.length, helper: "Awaiting response" },
-              { label: "Confirmed", value: confirmedAppointments.length, helper: "Scheduled visits" },
-              { label: "Patients", value: patients.length, helper: "Total active" },
+              { label: "Pending", value: pendingAppointments.length },
+              { label: "Confirmed", value: confirmedAppointments.length },
+              { label: "Patients", value: patients.length },
             ]}
           />
           <section className="rounded-xl border border-slate-200 bg-slate-50 p-5">
@@ -1305,17 +1356,30 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                     >
                       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(220px,1fr)_auto] lg:items-center">
                         <div className="min-w-0 space-y-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="truncate text-sm font-black text-slate-950">
-                              {booking.patient.firstName} {booking.patient.lastName}
-                            </h3>
-                            <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${getStatusClasses(booking.status)}`}>
-                              {booking.status}
-                            </span>
+                          <div className="flex items-start gap-3">
+                            {isRenderableProfileImage(booking.patient.image) ? (
+                              <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+                                <Image src={booking.patient.image!} alt={`${booking.patient.firstName} ${booking.patient.lastName}`} width={44} height={44} unoptimized className="h-full w-full object-cover" />
+                              </div>
+                            ) : (
+                              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-teal/10 text-xs font-black text-brand-teal">
+                                {getPatientInitials(booking.patient) || "PT"}
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="truncate text-sm font-black text-slate-950">
+                                  {booking.patient.firstName} {booking.patient.lastName}
+                                </h3>
+                                <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${getStatusClasses(booking.status)}`}>
+                                  {booking.status}
+                                </span>
+                              </div>
+                              <p className="text-xs font-semibold text-slate-500">
+                                {patientInfo} | {patientGenderText}
+                              </p>
+                            </div>
                           </div>
-                          <p className="text-xs font-semibold text-slate-500">
-                            {patientInfo} | {patientGenderText}
-                          </p>
                           <p className="text-xs font-semibold leading-relaxed text-slate-600">
                             <span className="font-black uppercase tracking-[0.16em] text-slate-500">Reason for Consultation:</span>{" "}
                             {booking.reason || "No reason provided."}
@@ -1377,9 +1441,9 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
               <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-brand-teal">Clinical Documentation</p>
                 <form onSubmit={handleComplete} className="mt-4 space-y-3">
-                  <div className="rounded-xl border border-slate-200 border-l-4 border-l-brand-red bg-white p-4">
+                  <div className="h-auto self-start rounded-xl border border-slate-200 border-l-4 border-l-brand-red bg-white p-4">
                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-red">Chief Complaint</p>
-                    <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-700">
+                    <p className="mt-2 whitespace-pre-wrap break-words text-sm font-semibold leading-relaxed text-slate-700">
                       {diagnosisText || "No chief complaint was provided for this appointment."}
                     </p>
                   </div>
@@ -1434,9 +1498,21 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-black text-slate-950">{booking.patient.firstName} {booking.patient.lastName}</p>
-                          <p className="mt-1 text-xs font-semibold text-slate-500">{formatDateTime(booking.scheduledAt)}</p>
+                        <div className="flex min-w-0 items-start gap-3">
+                          {isRenderableProfileImage(booking.patient.image) ? (
+                            <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+                              <Image src={booking.patient.image!} alt={`${booking.patient.firstName} ${booking.patient.lastName}`} width={40} height={40} unoptimized className="h-full w-full object-cover" />
+                            </div>
+                          ) : (
+                            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-teal/10 text-[11px] font-black text-brand-teal">
+                              {getPatientInitials(booking.patient) || "PT"}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-black text-slate-950">{booking.patient.firstName} {booking.patient.lastName}</p>
+                            <p className="mt-1 text-[11px] font-semibold text-slate-500">Patient ID: {booking.patient.id}</p>
+                            <p className="mt-1 text-xs font-semibold text-slate-500">{formatDateTime(booking.scheduledAt)}</p>
+                          </div>
                         </div>
                         <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${getStatusClasses(booking.status)}`}>
                           {booking.status}
@@ -1456,15 +1532,28 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                   <header className="border-b border-slate-200 p-5">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h2 className="text-2xl font-black text-slate-950">
-                            {selectedLiveAppointment.patient.firstName} {selectedLiveAppointment.patient.lastName}
-                          </h2>
-                          <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase ${getStatusClasses(selectedLiveAppointment.status)}`}>
-                            {selectedLiveAppointment.status}
-                          </span>
+                        <div className="flex items-center gap-3">
+                          {isRenderableProfileImage(selectedLiveAppointment.patient.image) ? (
+                            <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+                              <Image src={selectedLiveAppointment.patient.image!} alt={`${selectedLiveAppointment.patient.firstName} ${selectedLiveAppointment.patient.lastName}`} width={56} height={56} unoptimized className="h-full w-full object-cover" />
+                            </div>
+                          ) : (
+                            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-brand-teal/10 text-sm font-black text-brand-teal">
+                              {getPatientInitials(selectedLiveAppointment.patient) || "PT"}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h2 className="text-2xl font-black text-slate-950">
+                                {selectedLiveAppointment.patient.firstName} {selectedLiveAppointment.patient.lastName}
+                              </h2>
+                              <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase ${getStatusClasses(selectedLiveAppointment.status)}`}>
+                                {selectedLiveAppointment.status}
+                              </span>
+                            </div>
+                            <p className="mt-2 text-xs font-semibold text-slate-500">Patient ID: {selectedLiveAppointment.patient.id}</p>
+                          </div>
                         </div>
-                        <p className="mt-2 text-xs font-semibold text-slate-500">Patient ID: {selectedLiveAppointment.patient.id}</p>
                       </div>
                       <button
                         type="button"
@@ -1477,16 +1566,16 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                     </div>
                   </header>
 
-                  <div className="grid flex-1 gap-4 p-5">
-                    <section className="rounded-xl border border-slate-200 border-l-4 border-l-brand-red bg-white p-4">
+                  <div className="grid flex-1 auto-rows-min content-start gap-3 p-5">
+                    <section className="h-auto self-start rounded-xl border border-slate-200 border-l-4 border-l-brand-red bg-white p-4">
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-red">Chief Complaint</p>
                       <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-700">
                         {selectedLiveAppointment.reason || "No chief complaint was provided for this appointment."}
                       </p>
                     </section>
-                    <section className="rounded-xl border border-slate-200 bg-white p-4">
+                    <section className="h-auto self-start rounded-xl border border-slate-200 bg-white p-4">
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Attached Documents</p>
-                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
                         <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4">
                           <p className="text-sm font-black text-slate-950">Lab results</p>
                           <p className="mt-1 text-xs font-semibold text-slate-500">No uploaded lab file is attached to this consultation.</p>
@@ -1721,8 +1810,10 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
           {dashboardNotifications.notifications.length ? dashboardNotifications.notifications.map((item) => (
             <article key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <p className="text-sm font-black text-slate-950">{item.title}</p>
-              <p className="mt-1 text-xs font-semibold text-slate-500">{item.body}</p>
-              <p className="mt-2 text-[10px] font-black uppercase tracking-wider text-slate-500">{item.kind || "system"} / {formatDateTime(item.createdAt)}</p>
+              <p className="mt-1 text-xs font-medium leading-relaxed text-slate-600">{item.body}</p>
+              <p className="mt-2 text-xs font-semibold text-slate-500">
+                {(item.kind ? `${item.kind.charAt(0).toUpperCase()}${item.kind.slice(1)} update` : "System update")} · {formatDateTime(item.createdAt)}
+              </p>
             </article>
           )) : <EmptyState title="No notifications" body="Appointment, consultation, and message alerts appear here." />}
         </section>
@@ -1746,10 +1837,21 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
           doctor={{ ...doctor, availability: doctorAvailability, status: doctorStatus }}
           onProfileImageChange={(image) => setSidebarImage(image || null)}
           onToast={showToast}
+          onProfileSaved={(profile) => {
+            realtime.publish({
+              type: "profile:updated",
+              actorRole: "doctor",
+              profileRole: profile.profileRole,
+              userId: profile.userId,
+              name: profile.name,
+              image: profile.image,
+              title: "Profile updated",
+              body: "Doctor profile changes were saved and synced across dashboards.",
+            });
+          }}
           onProfileUpdated={({ availability, status }) => {
             setDoctorAvailability(availability);
             setDoctorStatus(normalizeDoctorStatus(status));
-            showToast("success", "Availability updated and schedule calendar synchronized.");
             realtime.publish({
               type: "doctor:availability-updated",
               actorRole: "doctor",
@@ -1773,5 +1875,6 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     </DashboardShell>
   );
 }
+
 
 

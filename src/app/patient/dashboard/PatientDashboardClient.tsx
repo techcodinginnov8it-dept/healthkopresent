@@ -120,7 +120,7 @@ function toTimeValue(date: Date) {
 }
 
 function formatAppointmentFeedDate(value: Date | string) {
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+  return new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(new Date(value));
 }
 
 function formatAppointmentFeedTime(value: Date | string) {
@@ -247,39 +247,203 @@ function escapePdfText(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
 }
 
-function downloadMedicalReport(appointment: PatientAppointment) {
-  const vitals = formatRecordedVitals(appointment);
-  const reportLines = [
-    "Healthko Medical Report",
-    "",
-    `Doctor: ${appointment.doctor.name}`,
-    `Specialization: ${appointment.doctor.specialty}`,
-    `Consultation Date: ${formatDateTime(appointment.scheduledAt)}`,
-    `Status: ${appointment.status}`,
-    `Blood Pressure: ${vitals.bloodPressure}`,
-    `Heart Rate: ${vitals.heartRate}`,
-    `Body Temperature: ${vitals.bodyTemperature}`,
-    "",
-    "Chief Complaint",
-    appointment.reason || "No chief complaint recorded.",
-    "",
-    "Doctor Assessment and Plan",
-    appointment.notes || "No doctor assessment recorded.",
-    "",
-    "Prescription",
-    appointment.prescription || "No prescription issued.",
-  ];
-  const textStream = reportLines
-    .slice(0, 34)
-    .map((line, index) => `BT /F1 11 Tf 54 ${760 - index * 18} Td (${escapePdfText(line)}) Tj ET`)
-    .join("\n");
+function measurePdfTextWidth(value: string, fontSize: number, isBold = false) {
+  return value.length * fontSize * (isBold ? 0.58 : 0.5);
+}
+
+function wrapPdfText(value: string, maxWidth: number, fontSize: number, isBold = false) {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+
+  if (!words.length) {
+    return [""];
+  }
+
+  const lines: string[] = [];
+  let currentLine = words[0];
+
+  for (const word of words.slice(1)) {
+    const candidate = `${currentLine} ${word}`;
+    if (measurePdfTextWidth(candidate, fontSize, isBold) <= maxWidth) {
+      currentLine = candidate;
+    } else {
+      lines.push(currentLine);
+      currentLine = word;
+    }
+  }
+
+  lines.push(currentLine);
+  return lines;
+}
+
+function normalizePdfParagraphs(value?: string | null) {
+  return (value || "")
+    .split(/\n+/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
+
+function normalizePrescriptionItems(value?: string | null) {
+  return normalizePdfParagraphs(value).map((segment) => segment.replace(/^[\d.\-\u2022\s]+/, "").trim()).filter(Boolean);
+}
+
+function extractFollowUpText(notes?: string | null, prescription?: string | null) {
+  const sources = [notes, prescription];
+
+  for (const source of sources) {
+    for (const paragraph of normalizePdfParagraphs(source)) {
+      const match = paragraph.match(/^follow[- ]?up[:\-]?\s*(.+)$/i);
+      if (match?.[1]) {
+        return match[1].trim();
+      }
+
+      if (/follow[- ]?up/i.test(paragraph)) {
+        return paragraph.replace(/^follow[- ]?up[:\-]?\s*/i, "").trim() || paragraph;
+      }
+    }
+  }
+
+  return "";
+}
+
+function downloadMedicalReport(patient: Patient, appointment: PatientAppointment, doctorProfile?: DashboardDoctor | null) {
+  const patientName = `${patient.firstName} ${patient.lastName}`;
+  const patientAddress = [patient.address, patient.city, patient.state, patient.zipCode, patient.country].filter(Boolean).join(", ") || "Not provided";
+  const patientAge = getAgeFromDob(patient.dob);
+  const patientSex = patient.gender || "Not provided";
+  const doctorName = doctorProfile?.name || appointment.doctor.name;
+  const doctorDisplayName = /^dr\./i.test(doctorName) ? doctorName : `Dr. ${doctorName}`;
+  const doctorSpecialty = doctorProfile?.specialty || appointment.doctor.specialty;
+  const doctorLicense = doctorProfile?.licenseNumber
+    ? `License # ${doctorProfile.licenseNumber}${doctorProfile.licenseState ? ` / ${doctorProfile.licenseState}` : ""}`
+    : "License # Not provided";
+  const clinicName = "HEALTHKO";
+  const clinicHours = doctorProfile?.availability || "Mon to Fri 8:00 am to 5:00 pm";
+  const clinicContact = doctorProfile?.email || "support@healthko.com";
+  const visitDate = new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(appointment.scheduledAt));
+  const assessmentText = appointment.notes?.trim() || "No doctor assessment recorded.";
+  const prescriptionItems = normalizePrescriptionItems(appointment.prescription);
+  const followUpText = extractFollowUpText(appointment.notes, appointment.prescription);
+
+  const lines: string[] = [];
+  const push = (command: string) => lines.push(command);
+  const writeText = (x: number, y: number, font: "F1" | "F2" | "F3" | "F4", size: number, text: string) => {
+    push(`BT /${font} ${size} Tf 1 0 0 1 ${x} ${y} Tm (${escapePdfText(text)}) Tj ET`);
+  };
+  const writeCenteredText = (y: number, font: "F1" | "F2" | "F3" | "F4", size: number, text: string) => {
+    writeText(Math.max(24, Math.round((612 - measurePdfTextWidth(text, size, font === "F2" || font === "F4")) / 2)), y, font, size, text);
+  };
+  const writeWrappedParagraph = (
+    text: string,
+    x: number,
+    y: number,
+    maxWidth: number,
+    font: "F1" | "F2" | "F3" | "F4",
+    size: number,
+    lineHeight: number,
+    maxLines = 999
+  ) => {
+    let nextY = y;
+    for (const paragraph of normalizePdfParagraphs(text).length ? normalizePdfParagraphs(text) : [text]) {
+      const wrapped = wrapPdfText(paragraph, maxWidth, size, font === "F2" || font === "F4");
+      for (const line of wrapped.slice(0, maxLines)) {
+        writeText(x, nextY, font, size, line);
+        nextY -= lineHeight;
+      }
+      nextY -= Math.max(2, Math.round(lineHeight * 0.2));
+    }
+    return nextY;
+  };
+
+  writeCenteredText(742, "F2", 28, clinicName);
+
+  writeText(32, 708, "F2", 14, doctorDisplayName);
+  writeText(32, 686, "F1", 12, doctorSpecialty);
+  writeText(32, 664, "F1", 11, doctorLicense);
+
+  writeText(372, 708, "F1", 11, clinicHours);
+  writeText(372, 686, "F1", 11, clinicContact);
+
+  push("0.75 w 0.1 0.1 0.1 RG");
+  push("32 642 m 580 642 l S");
+
+  writeText(32, 614, "F2", 12, "PATIENT INFORMATION");
+  writeText(32, 590, "F2", 11, "Name:");
+  writeText(126, 590, "F1", 11, patientName);
+  writeText(32, 568, "F2", 11, "Age:");
+  writeText(126, 568, "F1", 11, patientAge === null ? "N/A" : String(patientAge));
+  writeText(32, 546, "F2", 11, "Sex:");
+  writeText(126, 546, "F1", 11, patientSex);
+  writeText(32, 524, "F2", 11, "Patient ID:");
+  writeText(126, 524, "F1", 11, patient.id);
+  writeText(32, 502, "F2", 11, "Address:");
+  const addressBottomY = writeWrappedParagraph(patientAddress, 126, 502, 448, "F1", 11, 15);
+
+  const rxY = Math.min(468, addressBottomY - 12);
+  writeText(36, rxY, "F3", 42, "Rx");
+  writeText(486, rxY + 2, "F3", 14, visitDate);
+
+  const chiefComplaintTopY = rxY - 42;
+  writeText(32, chiefComplaintTopY, "F2", 12, "CHIEF COMPLAINT");
+  const chiefComplaintBottomY = writeWrappedParagraph(appointment.reason?.trim() || "No chief complaint recorded.", 32, chiefComplaintTopY - 20, 540, "F1", 11, 15);
+
+  writeText(32, chiefComplaintBottomY - 18, "F2", 12, "DOCTOR'S ASSESSMENT");
+  const assessmentLines = normalizePdfParagraphs(assessmentText);
+  let assessmentY = chiefComplaintBottomY - 40;
+  if (!assessmentLines.length) {
+    assessmentY = writeWrappedParagraph(assessmentText, 32, assessmentY, 540, "F1", 11, 15);
+  } else {
+    for (const paragraph of assessmentLines) {
+      assessmentY = writeWrappedParagraph(paragraph, 32, assessmentY, 540, "F1", 11, 15);
+      assessmentY -= 4;
+    }
+  }
+
+  writeText(32, assessmentY - 22, "F2", 12, "PRESCRIPTION");
+  let prescriptionY = assessmentY - 44;
+  if (prescriptionItems.length) {
+    prescriptionItems.forEach((item, index) => {
+      prescriptionY = writeWrappedParagraph(`${index + 1}. ${item}`, 38, prescriptionY, 520, "F1", 11, 15);
+      prescriptionY -= 2;
+    });
+  } else {
+    prescriptionY = writeWrappedParagraph(appointment.prescription?.trim() || "No prescription issued.", 38, prescriptionY, 520, "F1", 11, 15);
+  }
+
+  if (followUpText) {
+    writeText(32, prescriptionY - 14, "F2", 11, "Follow-up:");
+    writeWrappedParagraph(followUpText, 100, prescriptionY - 14, 458, "F1", 11, 15);
+    prescriptionY -= 34;
+  }
+
+  const signatureY = Math.max(132, prescriptionY - 36);
+  push("0.75 w 0.1 0.1 0.1 RG");
+  push(`404 ${signatureY} m 564 ${signatureY} l S`);
+  writeText(444, signatureY - 20, "F2", 12, doctorDisplayName);
+  writeText(444, signatureY - 40, "F1", 11, doctorSpecialty);
+  writeText(444, signatureY - 56, "F1", 10, doctorLicense);
+
+  push("0.72 w 0.72 0.72 0.72 RG");
+  push("32 46 m 580 46 l S");
+  writeCenteredText(28, "F1", 8, "This document was generated by HealthKo.");
+  writeCenteredText(16, "F1", 8, `For verification or inquiries, please contact us at ${clinicContact}.`);
+
+  const textStream = lines.join("\n");
+  const contentLength = new TextEncoder().encode(textStream).length;
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
     "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R /F2 5 0 R /F3 6 0 R /F4 7 0 R >> >> /Contents 8 0 R >>",
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    `<< /Length ${textStream.length} >>\nstream\n${textStream}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Times-BoldItalic >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-BoldOblique >>",
+    `<< /Length ${contentLength} >>\nstream\n${textStream}\nendstream`,
   ];
+
   let pdf = "%PDF-1.4\n";
   const offsets = [0];
   objects.forEach((object, index) => {
@@ -768,6 +932,10 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       }
       router.refresh();
     }
+
+    if (event.type === "profile:updated") {
+      router.refresh();
+    }
   }, [dismissedStartedId, router]);
 
   const realtime = useDashboardRealtime(onRealtimeEvent);
@@ -947,6 +1115,10 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       null,
     [medicalAccessAppointments, selectedMedicalAppointmentId]
   );
+  const selectedMedicalAppointmentDoctor = useMemo(
+    () => (selectedMedicalAppointment ? doctors.find((doctor) => doctor.id === selectedMedicalAppointment.doctor.id) : undefined),
+    [doctors, selectedMedicalAppointment]
+  );
   const selectedDoctor = useMemo(
     () => doctors.find((doctor) => doctor.id === selectedDoctorId),
     [doctors, selectedDoctorId]
@@ -972,8 +1144,8 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       ...upcomingAppointments.slice(0, 3).map((booking) =>
         createDashboardNotification({
           id: `patient-appointment-${booking.id}`,
-          title: `${booking.status.toLowerCase()} appointment`,
-          body: `${booking.doctor.name} / ${formatDateTime(booking.scheduledAt)}`,
+          title: booking.status === "CONFIRMED" ? "Consultation scheduled" : booking.status === "PENDING" ? "Appointment requested" : "Appointment update",
+          body: `${booking.doctor.name} is scheduled for ${formatDateTime(booking.scheduledAt)}.`,
           kind: booking.status === "CONFIRMED" ? "consultation" : "appointment",
           createdAt: booking.createdAt,
           readAt: booking.status === "PENDING" ? null : booking.createdAt,
@@ -2225,7 +2397,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                         )}
                         {consultationHubTab === "documents" && (
                           <div className="grid gap-3 md:grid-cols-2">
-                            <button type="button" onClick={() => downloadMedicalReport(selectedAppointment)} className="rounded-[18px] border border-slate-200 bg-slate-50 p-4 text-left text-sm font-black text-slate-950">
+                            <button type="button" onClick={() => downloadMedicalReport(patient, selectedAppointment, selectedMedicalAppointmentDoctor)} className="rounded-[18px] border border-slate-200 bg-slate-50 p-4 text-left text-sm font-black text-slate-950">
                               Download Medical Report
                             </button>
                             <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-4">
@@ -2310,11 +2482,11 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                     <div className="min-w-0">
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Encounter Detail</p>
                       <div className="mt-3 flex min-w-0 items-center gap-4">
-                        {isRenderableProfileImage(selectedAppointmentDoctor?.image || selectedMedicalAppointment.doctor.image) ? (
+                        {isRenderableProfileImage(selectedMedicalAppointmentDoctor?.image || selectedMedicalAppointment.doctor.image) ? (
                           <div className="relative mt-1 h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
                             <Image
-                              src={selectedAppointmentDoctor?.image || selectedMedicalAppointment.doctor.image!}
-                              alt={selectedAppointmentDoctor?.name || selectedMedicalAppointment.doctor.name}
+                              src={selectedMedicalAppointmentDoctor?.image || selectedMedicalAppointment.doctor.image!}
+                              alt={selectedMedicalAppointmentDoctor?.name || selectedMedicalAppointment.doctor.name}
                               width={56}
                               height={56}
                               unoptimized
@@ -2323,18 +2495,18 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                           </div>
                         ) : (
                           <div className="mt-1 grid h-14 w-14 shrink-0 place-items-center rounded-2xl border border-slate-200 bg-brand-teal/10 text-sm font-black text-brand-teal">
-                            {getInitials(selectedAppointmentDoctor?.name || selectedMedicalAppointment.doctor.name) || "DR"}
+                            {getInitials(selectedMedicalAppointmentDoctor?.name || selectedMedicalAppointment.doctor.name) || "DR"}
                           </div>
                         )}
                         <div className="min-w-0">
-                          <h2 className="text-2xl font-black text-slate-950">{selectedAppointmentDoctor?.name || selectedMedicalAppointment.doctor.name}</h2>
-                          <p className="mt-1 text-sm font-bold text-slate-500">{selectedAppointmentDoctor?.specialty || selectedMedicalAppointment.doctor.specialty}</p>
+                          <h2 className="text-2xl font-black text-slate-950">{selectedMedicalAppointmentDoctor?.name || selectedMedicalAppointment.doctor.name}</h2>
+                          <p className="mt-1 text-sm font-bold text-slate-500">{selectedMedicalAppointmentDoctor?.specialty || selectedMedicalAppointment.doctor.specialty}</p>
                         </div>
                       </div>
                     </div>
                     <button
                       type="button"
-                      onClick={() => downloadMedicalReport(selectedMedicalAppointment)}
+                      onClick={() => downloadMedicalReport(patient, selectedMedicalAppointment, selectedMedicalAppointmentDoctor)}
                       className="rounded-xl bg-brand-teal px-4 py-3 text-xs font-semibold text-white transition hover:bg-brand-teal-hover"
                     >
                       Download Medical Report
@@ -2361,13 +2533,13 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                         <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-4">
                           <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Date of Consultation</p>
                           <p className="mt-2 text-sm font-black leading-relaxed text-slate-800">
-                            {formatDateTime(selectedMedicalAppointment.scheduledAt).split(", ")[0]}
+                            {formatAppointmentFeedDate(selectedMedicalAppointment.scheduledAt)}
                           </p>
                         </div>
                         <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-4">
                           <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Time of Consultation</p>
                           <p className="mt-2 text-sm font-black leading-relaxed text-slate-800">
-                            {formatDateTime(selectedMedicalAppointment.scheduledAt).split(", ")[1] || "—"}
+                            {formatAppointmentFeedTime(selectedMedicalAppointment.scheduledAt)}
                           </p>
                         </div>
                         <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-4">
@@ -2483,9 +2655,32 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
           {doctors.map((doctor) => (
             <article key={doctor.id} className="rounded-[18px] border border-slate-200 bg-white p-5 shadow-[0_2px_12px_rgba(15,92,122,.06)]">
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-black text-slate-950">{doctor.name}</p>
-                  <p className="mt-1 text-xs font-bold text-brand-teal">{doctor.specialty}</p>
+                <div className="flex min-w-0 items-start gap-3">
+                  {isRenderableProfileImage(doctor.image) ? (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openProfilePreview(doctor.image!, doctor.name)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          openProfilePreview(doctor.image!, doctor.name);
+                        }
+                      }}
+                      className="group relative h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-slate-200 shadow-sm transition hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-brand-teal focus:ring-offset-2"
+                      aria-label={`View enlarged profile image for ${doctor.name}`}
+                    >
+                      <Image src={doctor.image!} alt={doctor.name} width={44} height={44} unoptimized className="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
+                    </span>
+                  ) : (
+                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-teal/10 text-xs font-black text-brand-teal">
+                      {getInitials(doctor.name) || "DR"}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black text-slate-950">{doctor.name}</p>
+                    <p className="mt-1 truncate text-xs font-bold text-brand-teal">{doctor.specialty}</p>
+                  </div>
                 </div>
                 <div className="flex flex-col items-end gap-2">
                   <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${getDoctorStatusStyle(doctor.status)}`}>
@@ -2521,8 +2716,10 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
           {dashboardNotifications.notifications.length ? dashboardNotifications.notifications.map((item) => (
             <article key={item.id} className="rounded-[18px] border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,92,122,.06)] p-4">
               <p className="text-sm font-black text-slate-950">{item.title}</p>
-              <p className="mt-1 text-xs font-semibold text-slate-500">{item.body}</p>
-              <p className="mt-2 text-[10px] font-black uppercase tracking-wider text-slate-400">{item.kind || "system"} / {formatDateTime(item.createdAt)}</p>
+              <p className="mt-1 text-xs font-medium leading-relaxed text-slate-600">{item.body}</p>
+              <p className="mt-2 text-xs font-semibold text-slate-400">
+                {(item.kind ? `${item.kind.charAt(0).toUpperCase()}${item.kind.slice(1)} update` : "System update")} · {formatDateTime(item.createdAt)}
+              </p>
             </article>
           )) : <EmptyState title="No notifications" body="Appointment and consultation alerts appear here." />}
         </section>
@@ -2540,6 +2737,18 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
           patient={patient}
           onProfileImageChange={(image) => setSidebarImageOverride(image || null)}
           onToast={showToast}
+          onProfileSaved={(profile) => {
+            realtime.publish({
+              type: "profile:updated",
+              actorRole: "patient",
+              profileRole: profile.profileRole,
+              userId: profile.userId,
+              name: profile.name,
+              image: profile.image,
+              title: "Profile updated",
+              body: "Patient profile changes were saved and synced across dashboards.",
+            });
+          }}
         />
       )}
     </DashboardShell>

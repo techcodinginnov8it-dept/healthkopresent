@@ -1,13 +1,12 @@
 import "server-only";
 
-import { cache } from "react";
 import { redirect } from "next/navigation";
 
 import { isPrismaConfigured, prisma } from "@/lib/prisma";
 import { requireDoctorSession } from "@/lib/auth/doctor-session";
 import { mockDb } from "@/lib/mockDb";
 
-export const getDoctorDashboardData = cache(async () => {
+export async function getDoctorDashboardData() {
   const session = await requireDoctorSession();
 
   if (!isPrismaConfigured()) {
@@ -114,7 +113,7 @@ export const getDoctorDashboardData = cache(async () => {
     session,
     doctor,
   };
-});
+}
 
 function getMockDoctorDashboardData(session: { userId: string; email: string }) {
   try {

@@ -1,6 +1,5 @@
 import "server-only";
 
-import { cache } from "react";
 import { redirect } from "next/navigation";
 
 import { isPrismaConfigured, prisma } from "@/lib/prisma";
@@ -68,7 +67,7 @@ const PATIENT_PROFILE_SELECT = {
   bookings: PATIENT_BOOKINGS_SELECT,
 };
 
-export const getPatientDashboardData = cache(async () => {
+export async function getPatientDashboardData() {
   const session = await requirePatientSession();
 
   if (!isPrismaConfigured()) {
@@ -98,7 +97,7 @@ export const getPatientDashboardData = cache(async () => {
     session,
     patient,
   };
-});
+}
 
 function getMockPatientDashboardData(session: { userId: string; email: string }) {
   try {

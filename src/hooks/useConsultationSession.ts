@@ -305,6 +305,10 @@ export function useConsultationSession<TAppointment extends { id: string }>({
       return;
     }
 
+    if (event.type === "profile:updated") {
+      return;
+    }
+
     setState((current) => {
       if (!current.activeAppointment || current.activeAppointment.id !== event.appointmentId) {
         return current;

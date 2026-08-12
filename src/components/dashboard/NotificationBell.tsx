@@ -16,15 +16,15 @@ function BellIcon() {
 function getKindLabel(kind: DashboardNotification["kind"]) {
   switch (kind) {
     case "appointment":
-      return "Appointment";
+      return "Appointment update";
     case "consultation":
-      return "Consultation";
+      return "Consultation update";
     case "message":
-      return "Message";
+      return "Message update";
     case "prescription":
-      return "Prescription";
+      return "Prescription update";
     default:
-      return "System";
+      return "System update";
   }
 }
 
@@ -121,8 +121,8 @@ export function NotificationBell({
                     <p className="text-sm font-black">{item.title}</p>
                     {!item.readAt && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-brand-red" aria-label="Unread" />}
                   </div>
-                  <p className={`mt-1 line-clamp-2 text-xs font-semibold ${isDoctor ? "text-slate-400" : "text-slate-500"}`}>{item.body}</p>
-                  <div className={`mt-2 flex items-center justify-between gap-3 text-[10px] font-black uppercase ${isDoctor ? "text-slate-500" : "text-slate-400"}`}>
+                  <p className={`mt-1 line-clamp-2 text-xs font-medium leading-relaxed ${isDoctor ? "text-slate-300" : "text-slate-600"}`}>{item.body}</p>
+                  <div className={`mt-2 flex items-center justify-between gap-3 text-[11px] font-semibold ${isDoctor ? "text-slate-500" : "text-slate-400"}`}>
                     <span>{getKindLabel(item.kind)}</span>
                     <time dateTime={new Date(item.createdAt).toISOString()}>{formatDateTime(item.createdAt)}</time>
                   </div>

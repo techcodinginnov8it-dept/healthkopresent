@@ -169,6 +169,7 @@ export async function updateDoctorProfile(data: DoctorProfilePayload): Promise<A
     });
 
     revalidatePath("/doctor/dashboard");
+    revalidatePath("/patient/dashboard");
     return { success: true };
   } catch (error: unknown) {
     console.warn("Prisma updateDoctorProfile failed, falling back to mock JSON database:", error);
@@ -207,6 +208,7 @@ export async function updateDoctorProfile(data: DoctorProfilePayload): Promise<A
       });
 
       revalidatePath("/doctor/dashboard");
+      revalidatePath("/patient/dashboard");
       return { success: true };
     } catch (mockErr) {
       console.error("Doctor profile mock fallback failed:", mockErr);
@@ -313,6 +315,7 @@ export async function updatePatientProfile(data: PatientProfilePayload): Promise
     });
 
     revalidatePath("/patient/dashboard");
+    revalidatePath("/doctor/dashboard");
     return { success: true };
   } catch (error: unknown) {
     console.warn("Prisma updatePatientProfile failed, falling back to mock JSON database:", error);
@@ -360,6 +363,7 @@ export async function updatePatientProfile(data: PatientProfilePayload): Promise
       });
 
       revalidatePath("/patient/dashboard");
+      revalidatePath("/doctor/dashboard");
       return { success: true };
     } catch (mockErr) {
       console.error("Patient profile mock fallback failed:", mockErr);

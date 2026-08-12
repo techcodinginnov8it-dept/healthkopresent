@@ -190,6 +190,16 @@ export type RealtimeEvent =
       status: string;
       title?: string;
       body?: string;
+    }
+  | {
+      type: "profile:updated";
+      actorRole: DashboardRole;
+      profileRole: "doctor" | "patient";
+      userId: string;
+      name?: string;
+      image?: string | null;
+      title?: string;
+      body?: string;
     };
 
 export type ChatMessage = {
