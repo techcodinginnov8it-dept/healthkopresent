@@ -910,14 +910,12 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     return [...dateFiltered].sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
   }, [appointmentFilter, appointments, selectedCalendarDate]);
   const selectedAppointment = useMemo(() => {
-    return (
-      appointments.find((booking) => booking.id === selectedAppointmentId) ||
-      appointmentFeed[0] ||
-      upcomingAppointments[0] ||
-      appointments[0] ||
-      null
-    );
-  }, [appointmentFeed, appointments, selectedAppointmentId, upcomingAppointments]);
+    if (!selectedAppointmentId) {
+      return null;
+    }
+
+    return appointmentFeed.find((booking) => booking.id === selectedAppointmentId) || null;
+  }, [appointmentFeed, selectedAppointmentId]);
   const consultationTimeline = useMemo(() => {
     const filtered = appointments.filter((booking) => {
       if (consultationFilter === "upcoming") {
@@ -1242,6 +1240,8 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       label: "DOB / Age",
       value: patientAge ? `${patient.dob} • ${patientAge} years old` : patient.dob,
     },
+  ];
+  const contactFields = [
     {
       icon: (
         <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1262,17 +1262,17 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       label: "Phone",
       value: `${patient.countryCode || ""} ${patient.phone}`.trim(),
     },
-    {
-      icon: (
-        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 21s6-4.8 6-10a6 6 0 1 0-12 0c0 5.2 6 10 6 10Z" />
-          <circle cx="12" cy="11" r="2.5" />
-        </svg>
-      ),
-      label: "Address",
-      value: patientAddress || "No address on file",
-    },
   ];
+  const addressField = {
+    icon: (
+      <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 21s6-4.8 6-10a6 6 0 1 0-12 0c0 5.2 6 10 6 10Z" />
+        <circle cx="12" cy="11" r="2.5" />
+      </svg>
+    ),
+    label: "Address",
+    value: patientAddress || "No address on file",
+  };
   const vitalFields = [
     {
       icon: (
@@ -1616,10 +1616,10 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
         <div className="space-y-6">
           <StatGrid
             stats={[
-              { label: "Upcoming Consultations", value: upcomingAppointments.length, helper: "scheduled appointments" },
-              { label: "Recent Doctors", value: recentDoctorNames.length, helper: "doctors consulted" },
-              { label: "Completed", value: completedAppointments.length, helper: "finished consultations" },
-              { label: "Total Consultations", value: appointments.length, helper: "all recorded visits" },
+              { label: "Upcoming Consultations", value: upcomingAppointments.length },
+              { label: "Recent Doctors", value: recentDoctorNames.length },
+              { label: "Completed", value: completedAppointments.length },
+              { label: "Total Consultations", value: appointments.length },
             ]}
           />
 
@@ -1642,6 +1642,16 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                   {identityFields.map((field) => (
                     <MedicalInfoField key={field.label} icon={field.icon} label={field.label} value={field.value} />
                   ))}
+                </dl>
+                <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {contactFields.map((field) => (
+                    <MedicalInfoField key={field.label} icon={field.icon} label={field.label} value={field.value} />
+                  ))}
+                </dl>
+                <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <MedicalInfoField icon={addressField.icon} label={addressField.label} value={addressField.value} />
+                  </div>
                 </dl>
               </section>
 
@@ -1786,8 +1796,8 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                 { label: "Prescriptions", value: prescriptions.length },
               ].map((stat) => (
                 <div key={stat.label} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <p className="text-2xl font-black text-slate-950">{stat.value}</p>
-                  <p className="mt-1 text-[10px] font-black uppercase tracking-wider text-slate-500">{stat.label}</p>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{stat.label}</p>
+                  <p className="mt-1 text-2xl font-black text-slate-950">{stat.value}</p>
                 </div>
               ))}
             </div>
@@ -1803,22 +1813,41 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                       {selectedCalendarDate ? `Selected Date: ${selectedCalendarDate}` : "All Appointment States"}
                     </h3>
                   </div>
-                  <div className="flex gap-2 overflow-x-auto pb-1">
-                    {APPOINTMENT_FILTERS.map((filter) => (
-                      <button
-                        key={filter.id}
-                        type="button"
-                        onClick={() => setAppointmentFilter(filter.id)}
-                        className={getTabButtonClassName({ active: appointmentFilter === filter.id, tone: "light" })}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="sr-only" htmlFor="appointment-filter">
+                      Appointment status filter
+                    </label>
+                    <div className="relative">
+                      <select
+                        id="appointment-filter"
+                        value={appointmentFilter}
+                        onChange={(event) => setAppointmentFilter(event.target.value as AppointmentFeedFilter)}
+                        className="min-w-56 appearance-none rounded-full border border-brand-teal/20 bg-gradient-to-r from-brand-teal/10 via-white to-sky-50 py-2.5 pl-4 pr-16 text-xs font-black uppercase tracking-[0.18em] text-brand-teal shadow-[0_2px_12px_rgba(15,92,122,.08)] outline-none transition hover:border-brand-teal/40 hover:shadow-[0_6px_20px_rgba(15,92,122,.12)] focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/20"
                       >
-                        {filter.label}
-                      </button>
-                    ))}
+                        {APPOINTMENT_FILTERS.map((filter) => (
+                          <option key={filter.id} value={filter.id}>
+                            {filter.label}
+                          </option>
+                        ))}
+                      </select>
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 20 20"
+                        className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-white/90 p-0.5 text-brand-teal shadow-sm"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="m5 7 5 5 5-5" />
+                      </svg>
+                    </div>
                     {selectedCalendarDate && (
                       <button
                         type="button"
                         onClick={() => setSelectedCalendarDate("")}
-                        className="shrink-0 rounded-full bg-slate-900 px-3 py-1.5 text-[10px] font-black uppercase text-white"
+                        className="shrink-0 rounded-full border border-slate-200 bg-slate-900 px-3.5 py-2 text-[10px] font-black uppercase tracking-wider text-white shadow-sm transition hover:bg-slate-800"
                       >
                         Clear Date
                       </button>
@@ -1826,31 +1855,68 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                   </div>
                 </div>
               </header>
-              <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="grid gap-0">
                 <div className="max-h-[720px] space-y-3 overflow-y-auto p-4">
                   {appointmentFeed.length ? appointmentFeed.map((booking) => {
                     const isSelected = selectedAppointment?.id === booking.id;
                     const roomReady = Boolean(authorizedRooms[booking.id] || startedAppointmentId === booking.id);
+                    const doctorProfile = doctors.find((doctor) => doctor.id === booking.doctor.id);
+                    const doctorImage = doctorProfile?.image || booking.doctor.image || null;
+                    const doctorName = doctorProfile?.name || booking.doctor.name;
+                    const doctorSpecialty = doctorProfile?.specialty || booking.doctor.specialty;
+                    const bookingDate = new Date(booking.scheduledAt);
+                    const bookingDateKey = toDateKey(bookingDate);
 
                     return (
                       <button
                         key={booking.id}
                         type="button"
-                        onClick={() => setSelectedAppointmentId(booking.id)}
+                        onClick={() => {
+                          setSelectedAppointmentId(booking.id);
+                          setSelectedCalendarDate(bookingDateKey);
+                          setAppointmentCalendarAnchor(startOfMonth(bookingDate));
+                        }}
                         className={`w-full rounded-xl border p-4 text-left transition ${
                           isSelected ? "border-brand-teal bg-brand-teal/5 shadow-[0_0_0_1px_rgba(20,184,166,0.2)]" : "border-slate-200 bg-white hover:border-brand-teal/40"
                         }`}
                       >
                         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="text-sm font-black text-slate-950">{booking.doctor.name}</p>
-                              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${getAppointmentStatusStyle(booking.status)}`}>
-                                {booking.status}
+                          <div className="flex min-w-0 items-start gap-3">
+                            {isRenderableProfileImage(doctorImage) ? (
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openProfilePreview(doctorImage!, doctorName);
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter" || event.key === " ") {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    openProfilePreview(doctorImage!, doctorName);
+                                  }
+                                }}
+                                className="group relative h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-slate-200 shadow-sm transition hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-brand-teal focus:ring-offset-2"
+                                aria-label={`View enlarged profile image for ${doctorName}`}
+                              >
+                                <Image src={doctorImage!} alt={doctorName} width={44} height={44} unoptimized className="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
                               </span>
-                              {roomReady && <span className="rounded-full bg-brand-red px-2 py-0.5 text-[10px] font-black uppercase text-white">Room ready</span>}
+                            ) : (
+                              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-teal/10 text-xs font-black text-brand-teal">
+                                {getInitials(doctorName) || "DR"}
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="truncate text-sm font-black text-slate-950">{doctorName}</p>
+                                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${getAppointmentStatusStyle(booking.status)}`}>
+                                  {booking.status}
+                                </span>
+                                {roomReady && <span className="rounded-full bg-brand-red px-2 py-0.5 text-[10px] font-black uppercase text-white">Room ready</span>}
+                              </div>
+                              <p className="mt-1 truncate text-xs font-bold text-brand-teal">{doctorSpecialty}</p>
                             </div>
-                            <p className="mt-1 text-xs font-bold text-brand-teal">{booking.doctor.specialty}</p>
                           </div>
                           <time
                             dateTime={new Date(booking.scheduledAt).toISOString()}
@@ -1866,64 +1932,6 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                     <EmptyState title="No appointments match this view" body="Change filters or book a new consultation request." />
                   )}
                 </div>
-
-                <aside className="border-t border-slate-200 bg-slate-50 p-4 lg:border-l lg:border-t-0">
-                  {selectedAppointment ? (
-                    <div className="space-y-4">
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Selected Consultation</p>
-                        <h3 className="mt-1 text-lg font-black text-slate-950">{selectedAppointment.doctor.name}</h3>
-                        <p className="mt-1 text-xs font-bold text-slate-500">{formatDateTime(selectedAppointment.scheduledAt)}</p>
-                      </div>
-                      <div className={`rounded-xl border p-3 text-xs font-bold ${getAppointmentStatusStyle(selectedAppointment.status)}`}>
-                        {selectedAppointment.status === "PENDING" && "Waiting for doctor approval. You will be notified when this consultation is confirmed."}
-                        {selectedAppointment.status === "CONFIRMED" && "Confirmed. The doctor must start the secure room before you can join."}
-                        {selectedAppointment.status === "COMPLETED" && "Completed. Clinical notes and prescriptions are available from Medical Access."}
-                        {selectedAppointment.status === "CANCELLED" && "Cancelled. You can book another appointment from the doctor directory."}
-                      </div>
-                      <div className="space-y-3 text-sm">
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Visit reason</p>
-                          <p className="mt-1 font-semibold text-slate-700">{selectedAppointment.reason || "No reason provided"}</p>
-                        </div>
-                      </div>
-                      {selectedAppointment.status === "PENDING" && isDoctorFollowUp(selectedAppointment) && (
-                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                          <p className="text-xs font-black text-amber-800">Doctor follow-up needs your response.</p>
-                          <div className="mt-3 flex flex-col gap-2">
-                            <button
-                              type="button"
-                              disabled={followUpActionId === selectedAppointment.id}
-                              onClick={() => void handleConfirmFollowUp(selectedAppointment)}
-                              className="rounded-xl bg-brand-teal px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-brand-teal-hover disabled:bg-slate-300"
-                            >
-                              Confirm Follow-Up
-                            </button>
-                            <button
-                              type="button"
-                              disabled={followUpActionId === selectedAppointment.id}
-                              onClick={() => openFollowUpReschedule(selectedAppointment)}
-                              className="rounded-lg border border-amber-300 bg-white px-4 py-2.5 text-xs font-black text-amber-800 disabled:text-slate-400"
-                            >
-                              Request Reschedule
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                      {selectedAppointment.status === "CONFIRMED" && (
-                        <button
-                          type="button"
-                          onClick={() => startLiveSession(selectedAppointment)}
-                          className="w-full rounded-xl bg-brand-red px-4 py-3 text-xs font-semibold text-white transition hover:bg-brand-red-hover"
-                        >
-                          {authorizedRooms[selectedAppointment.id] ? "Join Consultation" : "Check Live Room"}
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <EmptyState title="No appointment selected" body="Choose an appointment to see its workflow status." />
-                  )}
-                </aside>
               </div>
             </section>
 
@@ -2159,31 +2167,6 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
 
                       <div className="rounded-[18px] border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,92,122,.06)] p-4">
                         <div className="flex items-start gap-3">
-                          {isRenderableProfileImage(selectedAppointmentDoctor?.image) ? (
-                            <span
-                              role="button"
-                              tabIndex={0}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openProfilePreview(selectedAppointmentDoctor!.image!, selectedAppointment.doctor.name);
-                              }}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter" || event.key === " ") {
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  openProfilePreview(selectedAppointmentDoctor!.image!, selectedAppointment.doctor.name);
-                                }
-                              }}
-                              className="group relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-slate-200 shadow-sm transition hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-brand-teal focus:ring-offset-2"
-                              aria-label={`View enlarged profile image for ${selectedAppointment.doctor.name}`}
-                            >
-                              <Image src={selectedAppointmentDoctor!.image!} alt={selectedAppointment.doctor.name} width={48} height={48} unoptimized className="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
-                            </span>
-                          ) : (
-                            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-brand-teal/10 text-sm font-black text-brand-teal">
-                              {getInitials(selectedAppointment.doctor.name) || "DR"}
-                            </div>
-                          )}
                           <div className="min-w-0">
                             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Reason for Visit</p>
                             <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-700">
