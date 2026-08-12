@@ -669,7 +669,7 @@ export async function createDoctorAccountByAdmin(data: CreateDoctorAccountPayloa
     // Step 1: Attempt creation in Prisma if configured
     if (isPrismaConfigured()) {
       try {
-        const createdAccount = await prisma.$transaction(async (tx) => {
+        const createdAccount = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
           const user = await tx.user.upsert({
             where: { email: normalizedEmail },
             create: {
