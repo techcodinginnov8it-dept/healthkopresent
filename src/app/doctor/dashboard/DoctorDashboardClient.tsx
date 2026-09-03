@@ -2566,42 +2566,44 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                           </p>
                           <span className="text-[9px] text-brand-teal font-black uppercase">Official Rx Record</span>
                         </div>
-                        {rxItems.map((item, index) => (
-                          <div
-                            key={item.id}
-                            className={`rounded-xl border p-3 space-y-1 relative ${
-                              isDark ? "border-emerald-900/60 bg-emerald-950/30" : "border-emerald-200 bg-emerald-50/60"
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex items-center gap-1.5">
-                                <span className={`grid h-5 w-5 shrink-0 place-items-center rounded text-[9px] font-black ${isDark ? "bg-brand-teal/20 text-brand-teal" : "bg-brand-teal text-white"}`}>
-                                  {index + 1}
-                                </span>
-                                <p className={`text-xs font-black truncate ${isDark ? "text-white" : "text-slate-900"}`}>
-                                  {[item.genericName, item.brandName].filter(Boolean).join(" / ")}
-                                  {item.dosage ? ` — ${item.dosage}` : ""}
-                                </p>
+                        <div className={rxItems.length > 2 ? "max-h-[260px] overflow-y-auto space-y-2 pr-1.5" : "space-y-2"}>
+                          {rxItems.map((item, index) => (
+                            <div
+                              key={item.id}
+                              className={`rounded-xl border p-3 space-y-1 relative ${
+                                isDark ? "border-emerald-900/60 bg-emerald-950/30" : "border-emerald-200 bg-emerald-50/60"
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`grid h-5 w-5 shrink-0 place-items-center rounded text-[9px] font-black ${isDark ? "bg-brand-teal/20 text-brand-teal" : "bg-brand-teal text-white"}`}>
+                                    {index + 1}
+                                  </span>
+                                  <p className={`text-xs font-black truncate ${isDark ? "text-white" : "text-slate-900"}`}>
+                                    {[item.genericName, item.brandName].filter(Boolean).join(" / ")}
+                                    {item.dosage ? ` — ${item.dosage}` : ""}
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => removeRxItem(item.id)}
+                                  className={`shrink-0 rounded p-0.5 text-[10px] font-black transition ${
+                                    isDark ? "text-rose-400 hover:bg-rose-500/15" : "text-rose-500 hover:bg-rose-50"
+                                  }`}
+                                  title="Remove medicine"
+                                  aria-label="Remove medicine"
+                                >
+                                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                                  </svg>
+                                </button>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => removeRxItem(item.id)}
-                                className={`shrink-0 rounded p-0.5 text-[10px] font-black transition ${
-                                  isDark ? "text-rose-400 hover:bg-rose-500/15" : "text-rose-500 hover:bg-rose-50"
-                                }`}
-                                title="Remove medicine"
-                                aria-label="Remove medicine"
-                              >
-                                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                                </svg>
-                              </button>
+                              <pre className={`text-[10px] font-mono leading-relaxed whitespace-pre-wrap pl-6.5 ${isDark ? "text-emerald-200/80" : "text-emerald-900/80"}`}>
+                                {item.formatted}
+                              </pre>
                             </div>
-                            <pre className={`text-[10px] font-mono leading-relaxed whitespace-pre-wrap pl-6.5 ${isDark ? "text-emerald-200/80" : "text-emerald-900/80"}`}>
-                              {item.formatted}
-                            </pre>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>

@@ -2309,11 +2309,25 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
 
                   {activePrescription ? (
                     <div className="space-y-2.5">
-                      <div className="rounded-lg border border-teal-100 bg-white p-3 shadow-2xs">
-                        <pre className="text-xs font-mono font-medium text-slate-900 whitespace-pre-wrap leading-relaxed">
-                          {activePrescription}
-                        </pre>
-                      </div>
+                      {(() => {
+                        const hasMarkers = activePrescription.includes("--- Medicine ");
+                        const blocks = hasMarkers
+                          ? activePrescription.split(/(?=--- Medicine \d+ ---)/g).map((s) => s.trim()).filter(Boolean)
+                          : [activePrescription];
+                        const exceedsTwo = blocks.length > 2;
+
+                        return (
+                          <div className={exceedsTwo ? "max-h-[260px] overflow-y-auto space-y-2 pr-1.5" : "space-y-2"}>
+                            {blocks.map((block, i) => (
+                              <div key={i} className="rounded-lg border border-teal-100 bg-white p-3 shadow-2xs">
+                                <pre className="text-xs font-mono font-medium text-slate-900 whitespace-pre-wrap leading-relaxed">
+                                  {block}
+                                </pre>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-1">
                         <p className="text-[10px] text-teal-800 font-medium">
                           ⚠️ Please follow all directions and confirm dosage with your pharmacist before taking medication.
@@ -2553,7 +2567,9 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                         {consultationHubTab === "prescriptions" && (
                           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                             <p className="text-xs font-black uppercase tracking-wider text-slate-500">Prescription</p>
-                            <p className="mt-2 text-sm font-semibold text-slate-700">{selectedAppointment.prescription || "No prescription has been issued for this consultation yet."}</p>
+                            <div className={selectedAppointment.prescription && (selectedAppointment.prescription.match(/--- Medicine \d+ ---/g)?.length || 0) > 2 ? "mt-2 max-h-52 overflow-y-auto pr-1.5" : "mt-2"}>
+                              <p className="text-sm font-semibold text-slate-700 whitespace-pre-line leading-relaxed">{selectedAppointment.prescription || "No prescription has been issued for this consultation yet."}</p>
+                            </div>
                           </div>
                         )}
                         {consultationHubTab === "notes" && (
