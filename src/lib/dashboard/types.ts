@@ -122,6 +122,13 @@ export type DoctorAppointment = {
   duration: number | null;
   createdAt: Date | string;
   patient: DashboardPatient;
+  videoSession?: {
+    id?: string;
+    roomId?: string;
+    status: string;
+    startedAt?: Date | string | null;
+    endedAt?: Date | string | null;
+  } | null;
 };
 
 export type RealtimeEvent =

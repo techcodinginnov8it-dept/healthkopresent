@@ -228,6 +228,7 @@ function AppointmentActionPopup({
   anchorRect,
   onClose,
   onConfirmAppointment,
+  onCompleteConsultation,
   onStartConsultation,
   onFollowUpConsultation,
   tone = "light",
@@ -236,6 +237,7 @@ function AppointmentActionPopup({
   anchorRect: DOMRect;
   onClose: () => void;
   onConfirmAppointment?: (appointment: CalendarAppointment) => void;
+  onCompleteConsultation?: (appointment: CalendarAppointment) => void;
   onStartConsultation?: (appointment: CalendarAppointment) => void;
   onFollowUpConsultation?: (appointment: CalendarAppointment) => void;
   tone?: "light" | "dark";
@@ -387,28 +389,54 @@ function AppointmentActionPopup({
           )}
 
           {confirmed && (
-            <button
-              type="button"
-              className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-semibold transition ${
-                dark
-                  ? "text-slate-200 hover:bg-brand-teal/20 hover:text-white"
-                  : "text-slate-700 hover:bg-brand-teal/10 hover:text-slate-950"
-              }`}
-              onClick={() => {
-                onClose();
-                onStartConsultation?.(appointment);
-              }}
-            >
-              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-teal/20 text-brand-teal">
-                <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M5 3l14 9-14 9V3z" />
-                </svg>
-              </span>
-              <span>
-                <span className="block font-black">Start Consultation</span>
-                <span className={`block text-[10px] font-medium ${dark ? "text-slate-400" : "text-slate-500"}`}>Open live session</span>
-              </span>
-            </button>
+            <>
+              <button
+                type="button"
+                className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-semibold transition ${
+                  dark
+                    ? "text-slate-200 hover:bg-brand-teal/20 hover:text-white"
+                    : "text-slate-700 hover:bg-brand-teal/10 hover:text-slate-950"
+                }`}
+                onClick={() => {
+                  onClose();
+                  onStartConsultation?.(appointment);
+                }}
+              >
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-teal/20 text-brand-teal">
+                  <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 3l14 9-14 9V3z" />
+                  </svg>
+                </span>
+                <span>
+                  <span className="block font-black">Start Consultation</span>
+                  <span className={`block text-[10px] font-medium ${dark ? "text-slate-400" : "text-slate-500"}`}>Open live session</span>
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-semibold transition ${
+                  dark
+                    ? "text-emerald-200 hover:bg-emerald-500/20 hover:text-white"
+                    : "text-emerald-800 hover:bg-emerald-50 hover:text-emerald-950"
+                }`}
+                onClick={() => {
+                  onClose();
+                  onCompleteConsultation?.(appointment);
+                }}
+              >
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-500/20 text-emerald-400">
+                  <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                    <polyline points="22 4 12 14.01 9 11.01" />
+                  </svg>
+                </span>
+                <span>
+                  <span className="block font-black">Complete Consultation</span>
+                  <span className={`block text-[10px] font-medium ${dark ? "text-slate-400" : "text-slate-500"}`}>Mark visit as completed</span>
+                </span>
+              </button>
+            </>
           )}
 
           {completed && (
@@ -447,6 +475,7 @@ export function AppointmentCalendar({
   editable = false,
   onReschedule,
   onConfirmAppointment,
+  onCompleteConsultation,
   onStartConsultation,
   onFollowUpConsultation,
   variant = "standard",
@@ -461,6 +490,7 @@ export function AppointmentCalendar({
   editable?: boolean;
   onReschedule?: (appointmentId: string, scheduledAt: string) => void;
   onConfirmAppointment?: (appointment: CalendarAppointment) => void;
+  onCompleteConsultation?: (appointment: CalendarAppointment) => void;
   onStartConsultation?: (appointment: CalendarAppointment) => void;
   onFollowUpConsultation?: (appointment: CalendarAppointment) => void;
   variant?: "standard" | "stage";
@@ -747,6 +777,7 @@ export function AppointmentCalendar({
           anchorRect={selectedEntry.rect}
           onClose={() => setSelectedEntry(null)}
           onConfirmAppointment={onConfirmAppointment}
+          onCompleteConsultation={onCompleteConsultation}
           onStartConsultation={onStartConsultation}
           onFollowUpConsultation={onFollowUpConsultation}
           tone={tone}

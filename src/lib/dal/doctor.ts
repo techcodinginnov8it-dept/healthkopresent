@@ -46,6 +46,15 @@ export const getDoctorDashboardData = cache(async () => {
           bodyTemperature: true,
           duration: true,
           createdAt: true,
+          videoSession: {
+            select: {
+              id: true,
+              status: true,
+              roomId: true,
+              startedAt: true,
+              endedAt: true,
+            },
+          },
           patient: {
             select: {
               id: true,

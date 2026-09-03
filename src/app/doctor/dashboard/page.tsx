@@ -43,6 +43,11 @@ export default async function DoctorDashboardPage({
         ...booking,
         scheduledAt: new Date(booking.scheduledAt),
         createdAt: new Date(booking.createdAt),
+        videoSession: booking.videoSession ? {
+          ...booking.videoSession,
+          startedAt: booking.videoSession.startedAt ? new Date(booking.videoSession.startedAt) : null,
+          endedAt: booking.videoSession.endedAt ? new Date(booking.videoSession.endedAt) : null,
+        } : null,
         patient: {
           id: booking.patient!.id,
           firstName: booking.patient!.firstName,

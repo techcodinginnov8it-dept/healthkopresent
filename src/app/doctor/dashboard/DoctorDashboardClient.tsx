@@ -1791,6 +1791,32 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     }
   };
 
+  /** Called to directly mark a consultation as completed (from calendar popover or queue) */
+  const handleCompleteConsultationDirect = async (consultationId: string) => {
+    const booking = doctor.bookings.find((b) => b.id === consultationId);
+    setActionLoadingId(consultationId);
+    const result = await completeConsultation({
+      consultationId,
+      notes: booking?.notes || undefined,
+      prescription: booking?.prescription || undefined,
+      reason: booking?.reason || undefined,
+    });
+    setActionLoadingId(null);
+    if (result.success) {
+      showToast("success", "Consultation marked as completed.");
+      realtime.publish({
+        type: "appointment:updated",
+        appointmentId: consultationId,
+        actorRole: "doctor",
+        title: "Consultation completed",
+        body: `Your consultation with Dr. ${doctor.name} has been completed.`,
+      });
+      router.refresh();
+    } else {
+      showToast("error", ("error" in result && result.error) || "Could not complete consultation.");
+    }
+  };
+
   const handleReferral = async (consultationId: string) => {
     const targetDoctorId = referralTargets[consultationId];
     if (!targetDoctorId) {
@@ -2694,6 +2720,46 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                         >
                           No Show
                         </button>
+                        {(() => {
+                          const activeApptId = (session.activeAppointment as DoctorAppointment | null)?.id;
+                          const isCallMade = Boolean(
+                            selectedLiveAppointment.videoSession?.startedAt ||
+                            selectedLiveAppointment.videoSession?.status === "STARTED" ||
+                            selectedLiveAppointment.videoSession?.status === "ENDED" ||
+                            (activeApptId && activeApptId === selectedLiveAppointment.id)
+                          );
+                          const isCompleted = selectedLiveAppointment.status === "COMPLETED";
+
+                          return (
+                            <button
+                              type="button"
+                              disabled={!isCallMade || isCompleted || actionLoadingId === selectedLiveAppointment.id}
+                              onClick={() => handleCompleteConsultationDirect(selectedLiveAppointment.id)}
+                              className={`rounded-lg border px-4 py-3 text-xs font-black transition ${
+                                isCallMade && !isCompleted
+                                  ? isDark
+                                    ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25"
+                                    : "border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100"
+                                  : isDark
+                                    ? "border-slate-800 bg-slate-900/40 text-slate-600 opacity-50 cursor-not-allowed"
+                                    : "border-slate-200 bg-slate-100 text-slate-400 opacity-60 cursor-not-allowed"
+                              } disabled:cursor-not-allowed`}
+                              title={
+                                isCompleted
+                                  ? "Consultation already completed"
+                                  : isCallMade
+                                  ? "Mark consultation as completed"
+                                  : "Call must be made before completing consultation"
+                              }
+                            >
+                              {actionLoadingId === selectedLiveAppointment.id
+                                ? "Completing..."
+                                : isCompleted
+                                ? "Completed"
+                                : "Complete Consultation"}
+                            </button>
+                          );
+                        })()}
                         <button
                           type="button"
                           disabled={selectedLiveAppointment.status !== "CONFIRMED" || actionLoadingId === selectedLiveAppointment.id}
@@ -2849,6 +2915,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
             onAnchorDateChange={setCalendarAnchorDate}
             availability={doctorAvailability}
             onConfirmAppointment={(appointment) => handleAccept(appointment.id)}
+            onCompleteConsultation={(appointment) => handleCompleteConsultationDirect(appointment.id)}
             onStartConsultation={handleStartConsultationFromCalendar}
             onFollowUpConsultation={handleFollowUpFromCalendar}
             appointments={visibleScheduleAppointments.map((booking) => ({

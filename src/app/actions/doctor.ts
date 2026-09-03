@@ -97,8 +97,8 @@ export async function cancelAppointment(consultationId: string, cancellationNote
 
 type CompleteConsultationPayload = {
   consultationId: string;
-  notes: string;
-  prescription: string;
+  notes?: string;
+  prescription?: string;
   reason?: string; // Diagnosis
 };
 
@@ -143,8 +143,8 @@ export async function completeConsultation(data: CompleteConsultationPayload) {
       where: { id: consultationId },
       data: {
         status: "COMPLETED",
-        notes,
-        prescription,
+        notes: notes !== undefined ? notes : consultation.notes,
+        prescription: prescription !== undefined ? prescription : consultation.prescription,
         reason: reason || consultation.reason,
       },
     });
