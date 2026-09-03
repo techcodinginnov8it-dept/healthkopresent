@@ -205,6 +205,37 @@ function isDoctorFollowUp(appointment: PatientAppointment) {
   return appointment.reason?.toLowerCase().startsWith("follow-up") || appointment.notes?.includes("Follow-up requested by doctor");
 }
 
+function extractComplaintAndNotes(rawReason?: string | null) {
+  if (!rawReason) {
+    return {
+      complaint: "",
+      notes: "",
+    };
+  }
+
+  const separator = /\n\n(?:Patient Notes|Notes|Suspected Causes|Patient's Notes):\s*/i;
+  const match = rawReason.split(separator);
+  if (match.length > 1) {
+    return {
+      complaint: match[0].trim(),
+      notes: match.slice(1).join("\n\n").trim(),
+    };
+  }
+
+  if (rawReason.includes(" | Patient Notes: ")) {
+    const [c, ...rest] = rawReason.split(" | Patient Notes: ");
+    return {
+      complaint: c.trim(),
+      notes: rest.join(" | Patient Notes: ").trim(),
+    };
+  }
+
+  return {
+    complaint: rawReason.trim(),
+    notes: "",
+  };
+}
+
 function downloadMedicalReport(appointment: PatientAppointment, patient?: DashboardPatient) {
   const patientName = patient ? `${patient.firstName} ${patient.lastName}`.trim() : "Patient";
   const patientAge = patient?.dob
@@ -543,6 +574,9 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     success: "",
   });
   const [toasts, setToasts] = useState<{ id: string; tone: "success" | "error"; message: string }[]>([]);
+  const [liveConsultationNotes, setLiveConsultationNotes] = useState<string | null>(null);
+  const [livePrescription, setLivePrescription] = useState<string | null>(null);
+  const [callExtendedMinutes, setCallExtendedMinutes] = useState(0);
 
   const showToast = useCallback((tone: "success" | "error", message: string) => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -595,9 +629,33 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
         event.type === "appointment:referred" ||
         event.type === "session:started" ||
         event.type === "session:ended" ||
+        event.type === "session:extended" ||
         event.type === "notification:new"
       )
     ) {
+      if (event.type === "appointment:updated") {
+        if (!patientAppointmentIdsRef.current.has(event.appointmentId)) {
+          return;
+        }
+        if (event.notes !== undefined) {
+          setLiveConsultationNotes(event.notes);
+        }
+        if (event.prescription !== undefined) {
+          setLivePrescription(event.prescription);
+        }
+        if (event.notes || event.prescription) {
+          showToast("success", "Your doctor updated your consultation notes and prescription.");
+        }
+      }
+
+      if (event.type === "session:extended") {
+        if (!patientAppointmentIdsRef.current.has(event.appointmentId)) {
+          return;
+        }
+        setCallExtendedMinutes((prev) => prev + (event.extendedMinutes || 0));
+        showToast("success", event.body || `Consultation extended by ${event.extendedMinutes || 30} minutes.`);
+      }
+
       if (event.type === "appointment:cancelled") {
         if (!patientAppointmentIdsRef.current.has(event.appointmentId)) {
           return;
@@ -620,7 +678,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       if (event.type === "session:started" && event.roomId) {
         // Only act if this appointment belongs to this patient.
         if (!patientAppointmentIdsRef.current.has(event.appointmentId)) {
-          console.log(`[PatientDashboard] session:started ignored â€” appointmentId ${event.appointmentId} not in this patient's bookings`);
+          console.log(`[PatientDashboard] session:started ignored — appointmentId ${event.appointmentId} not in this patient's bookings`);
           return;
         }
         console.log(`[PatientDashboard] session:started received for appointmentId=${event.appointmentId} roomId=${event.roomId}`);
@@ -635,6 +693,9 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
           return;
         }
         console.log(`[PatientDashboard] session:ended received for appointmentId=${event.appointmentId}`);
+        setLiveConsultationNotes(null);
+        setLivePrescription(null);
+        setCallExtendedMinutes(0);
         setStartedAppointmentId((current) => current === event.appointmentId ? "" : current);
         setJoiningAppointmentId((current) => current === event.appointmentId ? "" : current);
         setDismissedStartedId((current) => current === event.appointmentId ? "" : current);
@@ -651,7 +712,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       }
       router.refresh();
     }
-  }, [dismissedStartedId, router]);
+  }, [dismissedStartedId, router, showToast]);
 
   const realtime = useDashboardRealtime(onRealtimeEvent);
   const session = useConsultationSession<PatientAppointment>({
@@ -785,6 +846,53 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     if (!session.activeAppointment) return null;
     return appointments.find((b) => b.id === session.activeAppointment?.id) || session.activeAppointment;
   }, [appointments, session.activeAppointment]);
+
+  useEffect(() => {
+    if (session.activeAppointment) {
+      const match = patient.bookings.find((b) => b.id === session.activeAppointment?.id);
+      if (session.activeAppointment.notes || match?.notes) {
+        setLiveConsultationNotes(session.activeAppointment.notes || match?.notes || null);
+      }
+      if (session.activeAppointment.prescription || match?.prescription) {
+        setLivePrescription(session.activeAppointment.prescription || match?.prescription || null);
+      }
+    } else {
+      setLiveConsultationNotes(null);
+      setLivePrescription(null);
+      setCallExtendedMinutes(0);
+    }
+  }, [session.activeAppointment?.id, session.activeAppointment?.notes, session.activeAppointment?.prescription, patient.bookings]);
+
+  const activeConsultationNotes = liveConsultationNotes ?? currentLiveBooking?.notes ?? session.activeAppointment?.notes ?? null;
+  const activePrescription = livePrescription ?? currentLiveBooking?.prescription ?? session.activeAppointment?.prescription ?? null;
+
+  const handleExtendCall = useCallback((additionalMinutes: number, newTotalMinutes: number) => {
+    setCallExtendedMinutes((prev) => prev + additionalMinutes);
+    if (session.activeAppointment) {
+      realtime.publish({
+        type: "session:extended",
+        appointmentId: session.activeAppointment.id,
+        actorRole: "patient",
+        extendedMinutes: additionalMinutes,
+        newTotalDuration: newTotalMinutes,
+        title: "Consultation extended",
+        body: `The patient requested to extend the consultation by ${additionalMinutes} minutes.`,
+      });
+      showToast("success", `Consultation extended by ${additionalMinutes} minutes (New total: ${newTotalMinutes} mins).`);
+    }
+  }, [realtime, session.activeAppointment, showToast]);
+
+  const handleDownloadLiveRxPdf = useCallback(() => {
+    if (!currentLiveBooking) return;
+    downloadMedicalReport(
+      {
+        ...currentLiveBooking,
+        notes: activeConsultationNotes,
+        prescription: activePrescription,
+      },
+      patient
+    );
+  }, [currentLiveBooking, activeConsultationNotes, activePrescription, patient]);
   const appointmentFeed = useMemo(() => {
     const filtered = appointmentFilter === "all"
       ? appointments
@@ -2077,6 +2185,9 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
             connectionState={webRTC.connectionState}
             mediaError={webRTC.error}
             screenShareSupported={webRTC.screenShareSupported}
+            scheduledDurationMinutes={session.activeAppointment.duration || 30}
+            onExtendCall={handleExtendCall}
+            externalExtendedMinutes={callExtendedMinutes}
             devices={webRTC.devices}
             cameraDeviceId={webRTC.cameraDeviceId}
             microphoneDeviceId={webRTC.microphoneDeviceId}
@@ -2087,82 +2198,149 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
             chat={<ChatPanel role="patient" messages={session.messages} onSend={session.sendMessage} />}
             documentation={
               <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs max-h-[calc(100vh-14rem)] overflow-y-auto space-y-4">
+                {/* Header */}
                 <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
                   <div className="flex items-center gap-2">
                     <span className="grid h-7 w-7 place-items-center rounded-lg bg-brand-teal/15 text-brand-teal text-xs font-black">
-                      Rx
-                    </span>
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Clinical Documentation</p>
-                      <h3 className="text-sm font-black text-slate-900">Prescription &amp; Doctor Notes</h3>
-                    </div>
-                  </div>
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-slate-600 border border-slate-200">
-                    Read-Only
-                  </span>
-                </div>
-
-                {!currentLiveBooking?.notes && !currentLiveBooking?.prescription ? (
-                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 p-4 text-center">
-                    <div className="mx-auto grid h-9 w-9 place-items-center rounded-full bg-brand-teal/10 text-brand-teal">
-                      <svg className="h-4 w-4 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                         <polyline points="14 2 14 8 20 8" />
                         <line x1="16" y1="13" x2="8" y2="13" />
                         <line x1="16" y1="17" x2="8" y2="17" />
                         <polyline points="10 9 9 9 8 9" />
                       </svg>
+                    </span>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Live Clinical Record</p>
+                      <h3 className="text-sm font-black text-slate-900">Consultation Notes &amp; Rx</h3>
                     </div>
-                    <p className="mt-2 text-xs font-bold text-slate-700">Awaiting Doctor Documentation</p>
-                    <p className="mt-1 text-[11px] font-medium text-slate-500 leading-relaxed">
-                      Dr. {session.activeAppointment.doctor.name} will record your consultation notes and prescription during the call. They will appear here in real time as soon as they are saved.
-                    </p>
                   </div>
-                ) : (
-                  <div className="space-y-3.5">
-                    {currentLiveBooking?.notes && (
-                      <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 space-y-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <svg className="h-3.5 w-3.5 text-brand-teal shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                          </svg>
-                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Doctor&apos;s Consultation Notes</p>
-                        </div>
-                        <p className="text-xs font-semibold text-slate-800 whitespace-pre-line leading-relaxed pl-3.5 border-l-2 border-brand-teal/40">
-                          {currentLiveBooking.notes}
+                  <div className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-emerald-700 border border-emerald-200">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Live Sync
+                  </div>
+                </div>
+
+                {/* Section 1: Patient's Reported Reason & Complaint */}
+                {(() => {
+                  const parsed = extractComplaintAndNotes(currentLiveBooking?.reason || session.activeAppointment?.reason);
+                  if (!parsed.complaint && !parsed.notes) return null;
+                  return (
+                    <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 p-3 space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                        <p className="text-[10px] font-black uppercase tracking-wider text-amber-800">
+                          Reported Reason for Visit
                         </p>
                       </div>
-                    )}
+                      <p className="text-xs font-semibold text-amber-950 leading-relaxed pl-3 border-l-2 border-amber-300">
+                        {parsed.complaint}
+                      </p>
+                      {parsed.notes && (
+                        <p className="text-[11px] text-amber-900/85 leading-relaxed pl-3 pt-0.5 border-l-2 border-amber-300 italic">
+                          Patient notes: {parsed.notes}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
 
-                    {currentLiveBooking?.prescription ? (
-                      <div className="rounded-xl border border-teal-200 bg-teal-50/40 p-3.5 space-y-2">
-                        <div className="flex items-center justify-between gap-2 border-b border-teal-200/60 pb-2">
-                          <div className="flex items-center gap-1.5">
-                            <span className="grid h-5 w-5 place-items-center rounded bg-brand-teal text-white text-[10px] font-black">
-                              Rx
-                            </span>
-                            <p className="text-xs font-black uppercase tracking-wide text-teal-950">Official E-Prescription</p>
-                          </div>
-                          <span className="text-[9px] font-bold text-teal-700 bg-teal-100/70 border border-teal-200 px-2 py-0.5 rounded-full">
-                            Dr. {session.activeAppointment.doctor.name}
-                          </span>
-                        </div>
-                        <div className="rounded-lg border border-teal-100 bg-white p-3 shadow-2xs">
-                          <pre className="text-xs font-mono font-medium text-slate-900 whitespace-pre-wrap leading-relaxed">
-                            {currentLiveBooking.prescription}
-                          </pre>
-                        </div>
+                {/* Section 2: Doctor's Consultation Notes */}
+                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-2">
+                  <div className="flex items-center justify-between gap-2 border-b border-slate-200/70 pb-2">
+                    <div className="flex items-center gap-1.5">
+                      <svg className="h-4 w-4 text-brand-teal shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                      </svg>
+                      <p className="text-xs font-black uppercase tracking-wider text-slate-800">Doctor&apos;s Consultation Notes</p>
+                    </div>
+                    <span className="text-[9px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-md">
+                      Dr. {session.activeAppointment.doctor.name}
+                    </span>
+                  </div>
+
+                  {activeConsultationNotes ? (
+                    <div className="space-y-2">
+                      <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-2xs">
+                        <p className="text-xs font-semibold text-slate-800 whitespace-pre-line leading-relaxed">
+                          {activeConsultationNotes}
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 font-medium px-1">
+                        <span>Clinical Observations &amp; Advice</span>
+                        <span className="inline-flex items-center gap-1 text-emerald-600 font-bold">
+                          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                          Saved by Doctor
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-slate-200 bg-white/70 p-3.5 text-center space-y-1">
+                      <div className="mx-auto grid h-7 w-7 place-items-center rounded-full bg-brand-teal/10 text-brand-teal">
+                        <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeDashoffset="12" />
+                        </svg>
+                      </div>
+                      <p className="text-xs font-bold text-slate-700">Doctor is documenting consultation notes</p>
+                      <p className="text-[11px] font-medium text-slate-500 leading-relaxed max-w-sm mx-auto">
+                        Clinical observations, diagnosis, and care instructions entered by Dr. {session.activeAppointment.doctor.name} will display here in real time.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Section 3: Official E-Prescription (Rx) */}
+                <div className="rounded-xl border border-teal-200 bg-teal-50/40 p-3.5 space-y-2">
+                  <div className="flex items-center justify-between gap-2 border-b border-teal-200/60 pb-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="grid h-5 w-5 place-items-center rounded bg-brand-teal text-white text-[10px] font-black">
+                        Rx
+                      </span>
+                      <p className="text-xs font-black uppercase tracking-wide text-teal-950">Official E-Prescription</p>
+                    </div>
+                    {activePrescription && (
+                      <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100/70 border border-emerald-200 px-2 py-0.5 rounded-full">
+                        Prescribed
+                      </span>
+                    )}
+                  </div>
+
+                  {activePrescription ? (
+                    <div className="space-y-2.5">
+                      <div className="rounded-lg border border-teal-100 bg-white p-3 shadow-2xs">
+                        <pre className="text-xs font-mono font-medium text-slate-900 whitespace-pre-wrap leading-relaxed">
+                          {activePrescription}
+                        </pre>
+                      </div>
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-1">
                         <p className="text-[10px] text-teal-800 font-medium">
                           ⚠️ Please follow all directions and confirm dosage with your pharmacist before taking medication.
                         </p>
+                        <button
+                          type="button"
+                          onClick={handleDownloadLiveRxPdf}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-brand-teal px-3 py-1.5 text-xs font-black text-white shadow-xs hover:bg-brand-teal/90 transition active:scale-[0.98] shrink-0 cursor-pointer"
+                        >
+                          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                          </svg>
+                          Download Rx PDF (E-Signed)
+                        </button>
                       </div>
-                    ) : (
-                      <div className="rounded-lg border border-dashed border-slate-200 p-2.5 text-center">
-                        <p className="text-[11px] font-semibold text-slate-500">No prescription was prescribed for this visit.</p>
-                      </div>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-teal-200 bg-white/60 p-3 text-center">
+                      <p className="text-xs font-bold text-teal-900">No Prescriptions Added Yet</p>
+                      <p className="mt-0.5 text-[11px] font-medium text-teal-700/80">
+                        When the doctor issues medication, the e-prescription and official downloadable PDF will appear here.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </section>
             }
           />

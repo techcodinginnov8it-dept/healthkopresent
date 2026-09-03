@@ -1268,6 +1268,8 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     }, 5000);
   }, []);
 
+  const [callExtendedMinutes, setCallExtendedMinutes] = useState(0);
+
   const onRealtimeEvent = useCallback((event: RealtimeEvent) => {
     const targetsAnotherDoctor = "targetDoctorId" in event && event.targetDoctorId && event.targetDoctorId !== doctor.id;
     if (targetsAnotherDoctor) {
@@ -1286,6 +1288,11 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
       router.refresh();
     }
 
+    if (event.type === "session:extended") {
+      setCallExtendedMinutes((prev) => prev + (event.extendedMinutes || 0));
+      showToast("success", event.body || `Consultation extended by ${event.extendedMinutes || 30} minutes.`);
+    }
+
     if (event.type === "doctor:availability-updated" && event.doctorId === doctor.id) {
       setDoctorAvailability(event.availability);
       if (event.status) {
@@ -1298,7 +1305,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
       setDoctorStatus(normalizeDoctorStatus(event.status));
       router.refresh();
     }
-  }, [doctor.id, router]);
+  }, [doctor.id, router, showToast]);
 
   const realtime = useDashboardRealtime(onRealtimeEvent);
   const doctorScopedRealtimeEvent = useMemo(() => {
@@ -1364,6 +1371,22 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
       session.setScreenSharing(true);
     }
   }, [session, webRTC.isScreenSharing, webRTC.startScreenShare, webRTC.stopScreenShare]);
+
+  const handleExtendCall = useCallback((additionalMinutes: number, newTotalMinutes: number) => {
+    setCallExtendedMinutes((prev) => prev + additionalMinutes);
+    if (session.activeAppointment) {
+      realtime.publish({
+        type: "session:extended",
+        appointmentId: session.activeAppointment.id,
+        actorRole: "doctor",
+        extendedMinutes: additionalMinutes,
+        newTotalDuration: newTotalMinutes,
+        title: "Consultation extended",
+        body: `Dr. ${doctor.name} extended the consultation by ${additionalMinutes} minutes.`,
+      });
+      showToast("success", `Consultation extended by ${additionalMinutes} minutes (New total: ${newTotalMinutes} mins).`);
+    }
+  }, [doctor.name, realtime, session.activeAppointment, showToast]);
 
   useEffect(() => {
     receiveRealtimeEvent(realtime.lastEvent);
@@ -2004,7 +2027,15 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
       }
     }
 
-    realtime.publish({ type: "appointment:updated", appointmentId: session.activeAppointment.id, actorRole: "doctor" });
+    realtime.publish({
+      type: "appointment:updated",
+      appointmentId: session.activeAppointment.id,
+      actorRole: "doctor",
+      notes: clinicalNotes,
+      prescription: prescriptionText,
+      title: "Consultation notes updated",
+      body: "Your doctor updated your consultation notes and prescription.",
+    });
     showToast("success", "Consultation notes and prescription saved. Live call remains active.");
     setSubmitState({ loading: false, error: "", success: "Prescription and notes saved." });
 
@@ -2303,6 +2334,9 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
             connectionState={webRTC.connectionState}
             mediaError={webRTC.error}
             screenShareSupported={webRTC.screenShareSupported}
+            scheduledDurationMinutes={session.activeAppointment.duration || doctor.consultationDuration || 30}
+            onExtendCall={handleExtendCall}
+            externalExtendedMinutes={callExtendedMinutes}
             chat={<ChatPanel role="doctor" messages={session.messages} onSend={session.sendMessage} tone={tone} />}
             documentation={
               <section className={`rounded-xl border p-4 transition-colors max-h-[calc(100vh-14rem)] overflow-y-auto ${

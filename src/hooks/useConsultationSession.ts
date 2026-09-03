@@ -34,7 +34,7 @@ const idleState = {
   roomId: "",
   accessToken: "",
   messages: [],
-} satisfies SessionState<{ id: string }>;
+} satisfies SessionState<{ id: string; notes?: string | null; prescription?: string | null }>;
 
 function getInitialState<TAppointment>(persistKey?: string): SessionState<TAppointment> {
   if (!persistKey || typeof window === "undefined") {
@@ -56,14 +56,13 @@ function getInitialState<TAppointment>(persistKey?: string): SessionState<TAppoi
       ...(idleState as SessionState<TAppointment>),
       ...parsed,
       status: parsed.status,
-      messages: parsed.messages || [],
     };
   } catch {
     return idleState as SessionState<TAppointment>;
   }
 }
 
-export function useConsultationSession<TAppointment extends { id: string }>({
+export function useConsultationSession<TAppointment extends { id: string; notes?: string | null; prescription?: string | null }>({
   role,
   publish,
   persistKey,
@@ -358,6 +357,19 @@ export function useConsultationSession<TAppointment extends { id: string }>({
               time: formatTimeNow(),
             },
           ],
+        };
+      }
+
+      if (event.type === "appointment:updated") {
+        return {
+          ...current,
+          activeAppointment: current.activeAppointment
+            ? {
+                ...current.activeAppointment,
+                notes: event.notes !== undefined ? event.notes : current.activeAppointment.notes,
+                prescription: event.prescription !== undefined ? event.prescription : current.activeAppointment.prescription,
+              }
+            : null,
         };
       }
 

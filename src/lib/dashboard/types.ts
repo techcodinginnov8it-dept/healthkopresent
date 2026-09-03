@@ -144,14 +144,18 @@ export type RealtimeEvent =
       scheduledAt?: string;
       title?: string;
       body?: string;
+      notes?: string | null;
+      prescription?: string | null;
     }
   | {
-      type: "session:joined" | "session:started" | "session:ended" | "session:reconnected";
+      type: "session:joined" | "session:started" | "session:ended" | "session:reconnected" | "session:extended";
       appointmentId: string;
       actorRole: DashboardRole;
       roomId?: string;
       title?: string;
       body?: string;
+      extendedMinutes?: number;
+      newTotalDuration?: number;
     }
   | {
       type: "message:new";

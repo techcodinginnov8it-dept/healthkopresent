@@ -760,6 +760,9 @@ export function LiveConsultationPanel({
   onCameraDeviceChange,
   onMicrophoneDeviceChange,
   onRefreshDevices,
+  scheduledDurationMinutes = 30,
+  onExtendCall,
+  externalExtendedMinutes = 0,
   tone = "light",
 }: {
   role: DashboardRole;
@@ -792,6 +795,9 @@ export function LiveConsultationPanel({
   onCameraDeviceChange?: (deviceId: string) => void;
   onMicrophoneDeviceChange?: (deviceId: string) => void;
   onRefreshDevices?: () => void;
+  scheduledDurationMinutes?: number;
+  onExtendCall?: (additionalMinutes: number, newTotalMinutes: number) => void;
+  externalExtendedMinutes?: number;
   tone?: "light" | "dark";
 }) {
   const isDark = tone === "dark";
@@ -807,6 +813,46 @@ export function LiveConsultationPanel({
           ? "Media connection failed"
           : "Media ready";
   const callDuration = useCallDuration(connectedAt);
+
+  const [internalExtendedMinutes, setInternalExtendedMinutes] = useState(0);
+  const extendedMinutes = internalExtendedMinutes + (externalExtendedMinutes || 0);
+  const totalDurationMinutes = (scheduledDurationMinutes || 30) + extendedMinutes;
+
+  const [selectedExtensionMins, setSelectedExtensionMins] = useState(30);
+  const [showExtendModal, setShowExtendModal] = useState(false);
+  const [dismissedThreshold, setDismissedThreshold] = useState<number | null>(null);
+
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!connectedAt || status !== "connected") return;
+    const interval = window.setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [connectedAt, status]);
+
+  const elapsedSeconds = connectedAt && status === "connected" ? Math.max(0, Math.floor((now - connectedAt) / 1000)) : 0;
+  const totalDurationSeconds = totalDurationMinutes * 60;
+  const remainingSeconds = totalDurationSeconds - elapsedSeconds;
+
+  // Auto trigger warning modal 10 minutes before call ends (remainingSeconds <= 600)
+  // or when call has exceeded the scheduled time
+  useEffect(() => {
+    if (status !== "connected" || !connectedAt) return;
+
+    if (remainingSeconds <= 600 && dismissedThreshold !== totalDurationMinutes) {
+      setShowExtendModal(true);
+    }
+  }, [status, connectedAt, remainingSeconds, dismissedThreshold, totalDurationMinutes]);
+
+  const handleConfirmExtension = () => {
+    const nextExtended = internalExtendedMinutes + selectedExtensionMins;
+    setInternalExtendedMinutes(nextExtended);
+    const newTotal = (scheduledDurationMinutes || 30) + nextExtended + (externalExtendedMinutes || 0);
+    setShowExtendModal(false);
+    onExtendCall?.(selectedExtensionMins, newTotal);
+  };
 
   return (
     <div className="grid gap-4 xl:grid-cols-12">
@@ -840,11 +886,50 @@ export function LiveConsultationPanel({
             {connectionLabel}
           </span>
           {status === "connected" && (
-            <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${
-              isDark ? "border-white/10 bg-white/5 text-slate-200" : "border-slate-200 bg-slate-50 text-slate-700"
-            }`}>
-              {callDuration}
-            </span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${
+                isDark ? "border-white/10 bg-white/5 text-slate-200" : "border-slate-200 bg-slate-50 text-slate-700"
+              }`}>
+                {callDuration} / {totalDurationMinutes}m
+              </span>
+              {remainingSeconds <= 600 ? (
+                <button
+                  type="button"
+                  onClick={() => setShowExtendModal(true)}
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+                    remainingSeconds <= 0
+                      ? "bg-rose-500/15 text-rose-500 border border-rose-500/30 animate-pulse hover:bg-rose-500/25"
+                      : "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25"
+                  }`}
+                  title="Click to extend consultation time"
+                >
+                  <span>⚠️</span>
+                  <span>
+                    {remainingSeconds <= 0
+                      ? `Exceeded (+${Math.abs(Math.floor(remainingSeconds / 60))}m)`
+                      : `${Math.max(1, Math.ceil(remainingSeconds / 60))}m left`}
+                  </span>
+                  <span className="underline font-bold">Extend</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowExtendModal(true)}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+                    isDark
+                      ? "border-slate-700 bg-slate-800/80 text-slate-300 hover:bg-slate-700 hover:text-white"
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  }`}
+                  title="Extend consultation time"
+                >
+                  <svg className="h-2.5 w-2.5 text-brand-teal" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  + Extend
+                </button>
+              )}
+            </div>
           )}
           {isScreenSharing && (
             <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-cyan-600 dark:text-cyan-200">
@@ -1024,6 +1109,105 @@ export function LiveConsultationPanel({
         {documentation}
         {chat}
       </div>
+
+      {/* ── Call Duration Warning & Extension Popup ── */}
+      {showExtendModal && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/75 p-4 backdrop-blur-xs animate-in fade-in duration-200" role="dialog" aria-modal="true" aria-labelledby="extend-call-title">
+          <div className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl space-y-5 ${
+            isDark ? "border-slate-800 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-900"
+          }`}>
+            {/* Header */}
+            <div className="flex items-start gap-4">
+              <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                  ⚠️ Consultation Warning
+                </span>
+                <h3 id="extend-call-title" className="mt-1 text-lg font-black leading-tight">
+                  {remainingSeconds <= 0 ? "Scheduled Duration Exceeded" : "Call Ending in 10 Minutes"}
+                </h3>
+                <p className={`mt-1 text-xs font-medium leading-relaxed ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  {remainingSeconds <= 0
+                    ? `This consultation has exceeded its scheduled limit of ${totalDurationMinutes} minutes. Extend the session if you require additional time.`
+                    : `Your scheduled ${totalDurationMinutes}-minute consultation is nearing its end (${Math.max(1, Math.ceil(remainingSeconds / 60))} minutes remaining). Would you like to extend?`}
+                </p>
+              </div>
+            </div>
+
+            {/* Time overview */}
+            <div className={`grid grid-cols-2 gap-3 rounded-xl border p-3.5 ${
+              isDark ? "border-slate-800 bg-slate-950/60" : "border-slate-100 bg-slate-50"
+            }`}>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Elapsed Time</p>
+                <p className="mt-0.5 text-base font-black text-brand-teal">{callDuration}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Current Limit</p>
+                <p className={`mt-0.5 text-base font-black ${isDark ? "text-slate-200" : "text-slate-800"}`}>
+                  {totalDurationMinutes} mins
+                </p>
+              </div>
+            </div>
+
+            {/* Select extension duration: starts at 30 and adds 30 mins each succeeding */}
+            <div className="space-y-2">
+              <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500">
+                Select Extension Time (Minutes)
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {[30, 60, 90, 120].map((mins) => (
+                  <button
+                    key={mins}
+                    type="button"
+                    onClick={() => setSelectedExtensionMins(mins)}
+                    className={`rounded-xl border py-2.5 px-2 text-center text-xs font-black transition cursor-pointer ${
+                      selectedExtensionMins === mins
+                        ? "border-brand-teal bg-brand-teal text-white shadow-md shadow-brand-teal/25"
+                        : isDark
+                          ? "border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-600"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                    }`}
+                  >
+                    +{mins}m
+                  </button>
+                ))}
+              </div>
+              <p className={`text-[11px] font-medium pt-0.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                Starting from 30 minutes (+30m succeeding increments). Total will become {totalDurationMinutes + selectedExtensionMins} mins.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowExtendModal(false);
+                  setDismissedThreshold(totalDurationMinutes);
+                }}
+                className={`w-full sm:w-auto rounded-xl border px-4 py-2.5 text-xs font-black transition cursor-pointer ${
+                  isDark ? "border-slate-700 text-slate-300 hover:bg-slate-800" : "border-slate-200 text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                I&apos;m Wrapping Up
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmExtension}
+                className="w-full sm:w-auto rounded-xl bg-brand-teal px-5 py-2.5 text-xs font-black text-white shadow-md shadow-brand-teal/20 transition hover:bg-brand-teal/90 active:scale-[0.98] cursor-pointer"
+              >
+                Extend +{selectedExtensionMins} Minutes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
