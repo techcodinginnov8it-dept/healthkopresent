@@ -8,6 +8,7 @@
  * For production, replace the Map with a Redis/database-backed store.
  */
 import "server-only";
+import { prisma } from "@/lib/prisma";
 
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const OTP_LENGTH = 6;
@@ -49,7 +50,7 @@ export function generateOtp(role?: "doctor" | "patient", userId?: string): strin
   return otp;
 }
 
-/** Store a bcrypt-hashed version of the OTP for a user. */
+/** Store a bcrypt-hashed version of the OTP for a user (persisted to Supabase for serverless Vercel). */
 export async function storeOtp(
   role: "doctor" | "patient",
   userId: string,
@@ -57,12 +58,28 @@ export async function storeOtp(
 ): Promise<void> {
   const bcrypt = (await import("bcryptjs")).default;
   const hash = await bcrypt.hash(otp, 10);
-  store.set(makeKey(role, userId), {
+  const key = makeKey(role, userId);
+
+  store.set(key, {
     hash,
     lastOtp: otp,
     expiresAt: Date.now() + OTP_TTL_MS,
     attempts: 0,
   });
+
+  try {
+    // Persist to Supabase database for serverless multi-instance support on Vercel
+    await prisma.emailOtp.create({
+      data: {
+        email: key,
+        otp: hash,
+        purpose: role,
+        expiresAt: new Date(Date.now() + OTP_TTL_MS),
+      },
+    });
+  } catch (err) {
+    console.warn("[storeOtp] Failed to persist OTP to DB, falling back to memory:", err);
+  }
 }
 
 /** Verify a submitted OTP.  Returns 'valid' | 'expired' | 'invalid'. */
@@ -71,27 +88,60 @@ export async function verifyOtp(
   userId: string,
   otp: string
 ): Promise<"valid" | "expired" | "invalid"> {
-  const entry = store.get(makeKey(role, userId));
+  const key = makeKey(role, userId);
+  const bcrypt = (await import("bcryptjs")).default;
+
+  // 1. Try DB first for serverless multi-lambda resilience
+  try {
+    const dbEntry = await prisma.emailOtp.findFirst({
+      where: {
+        email: key,
+        used: false,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (dbEntry) {
+      if (Date.now() > dbEntry.expiresAt.getTime()) {
+        await prisma.emailOtp.update({
+          where: { id: dbEntry.id },
+          data: { used: true },
+        }).catch(() => {});
+        return "expired";
+      }
+
+      const ok = await bcrypt.compare(otp, dbEntry.otp);
+      if (ok) {
+        await prisma.emailOtp.update({
+          where: { id: dbEntry.id },
+          data: { used: true },
+        }).catch(() => {});
+        store.delete(key);
+        return "valid";
+      }
+    }
+  } catch (err) {
+    console.warn("[verifyOtp] DB lookup failed, falling back to memory:", err);
+  }
+
+  // 2. In-memory fallback
+  const entry = store.get(key);
   if (!entry) return "invalid";
 
   if (Date.now() > entry.expiresAt) {
-    store.delete(makeKey(role, userId));
+    store.delete(key);
     return "expired";
   }
 
   entry.attempts += 1;
-
-  // Lock out after 5 wrong attempts to prevent brute-force
   if (entry.attempts > 5) {
-    store.delete(makeKey(role, userId));
+    store.delete(key);
     return "invalid";
   }
 
-  const bcrypt = (await import("bcryptjs")).default;
   const ok = await bcrypt.compare(otp, entry.hash);
-
   if (ok) {
-    store.delete(makeKey(role, userId));
+    store.delete(key);
     return "valid";
   }
 
