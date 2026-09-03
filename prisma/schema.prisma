@@ -8,9 +8,222 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// ─────────────────────────────────────────────
-// Enums
-// ─────────────────────────────────────────────
+model User {
+  id            String   @id @default(uuid())
+  username      String   @unique(map: "users_email_key")
+  password      String
+  role          UserRole @default(PATIENT)
+  isActive      Boolean  @default(true)
+  emailVerified Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  admin         Admin?
+  doctor        Doctor?
+  patient       Patient?
+
+  @@index([role])
+  @@index([username], map: "users_email_idx")
+  @@map("users")
+}
+
+model Admin {
+  id              String    @id @default(uuid())
+  userId          String    @unique @map("user_id")
+  name            String    @default("System Administrator")
+  email           String    @unique
+  role            String    @default("SUPER_ADMIN")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  managedDoctors  Doctor[]  @relation("AdminDoctors")
+  managedPatients Patient[] @relation("AdminPatients")
+
+  @@index([email])
+  @@map("admins")
+}
+
+model Patient {
+  id                       String         @id @default(uuid())
+  firstName                String
+  middleName               String?
+  lastName                 String
+  suffix                   String?
+  email                    String         @unique
+  countryCode              String         @default("+1")
+  phone                    String
+  dob                      String
+  gender                   String?
+  address                  String?
+  city                     String?
+  state                    String?
+  zipCode                  String?
+  country                  String?
+  password                 String
+  hipaaConsent             Boolean        @default(false)
+  isActive                 Boolean        @default(true)
+  emailVerified            Boolean        @default(false)
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+  allergies                String?
+  bloodType                String?
+  currentMedications       String?
+  emergencyContactName     String?
+  emergencyContactPhone    String?
+  emergencyContactRelation String?
+  existingConditions       String?
+  height                   String?
+  image                    String?
+  weight                   String?
+  createdById              String?        @map("created_by_id")
+  userId                   String         @unique @map("user_id")
+  bookings                 Consultation[]
+  createdBy                Admin?         @relation("AdminPatients", fields: [createdById], references: [id])
+  user                     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([lastName, firstName])
+  @@map("patients")
+}
+
+model Doctor {
+  id                       String         @id @default(uuid())
+  name                     String
+  npi                      String         @unique
+  email                    String         @unique
+  password                 String
+  specialty                String
+  bio                      String?
+  image                    String?
+  languages                String[]       @default(["English"])
+  rating                   Float          @default(0.0)
+  reviewCount              Int            @default(0)
+  availability             String         @default("Available")
+  consultFee               Float?
+  licenseNumber            String?
+  licenseState             String?
+  yearsExp                 Int?
+  securityKey              String?
+  isActive                 Boolean        @default(true)
+  isFeatured               Boolean        @default(false)
+  isVerified               Boolean        @default(false)
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+  consultationDuration     Int            @default(30)
+  consultationDurationUnit String         @default("minutes")
+  status                   String         @default("ONLINE")
+  firstName                String?        @map("first_name")
+  middleName               String?        @map("middle_name")
+  lastName                 String?        @map("last_name")
+  suffix                   String?        @map("suffix")
+  createdById              String?        @map("created_by_id")
+  userId                   String         @unique @map("user_id")
+  username                 String?        @unique
+  bookings                 Consultation[]
+  audits                   DoctorAudit[]
+  createdBy                Admin?         @relation("AdminDoctors", fields: [createdById], references: [id])
+  user                     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([npi])
+  @@index([specialty])
+  @@map("doctors")
+}
+
+model Consultation {
+  id              String             @id @default(uuid())
+  patientId       String
+  doctorId        String
+  scheduledAt     DateTime           @default(now())
+  status          ConsultationStatus @default(PENDING)
+  reason          String?
+  notes           String?
+  prescription    String?
+  duration        Int?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  bloodPressure   String?
+  heartRate       String?
+  bodyTemperature String?
+  doctor          Doctor             @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient         Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  videoSession    VideoSession?
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([status])
+  @@map("consultations")
+}
+
+model VideoSession {
+  id             String             @id @default(uuid())
+  consultationId String             @unique
+  status         VideoSessionStatus @default(WAITING)
+  roomId         String             @unique
+  startedAt      DateTime?
+  endedAt        DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  consultation   Consultation       @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("video_sessions")
+}
+
+model DoctorAudit {
+  id            String      @id @default(uuid())
+  doctorId      String?     @map("doctor_id")
+  npi           String
+  licenseNumber String      @map("license_number")
+  licenseState  String      @map("license_state")
+  specialty     String
+  medicalSchool String      @map("medical_school")
+  gradYear      Int         @map("grad_year")
+  yearsExp      Int         @map("years_exp")
+  documentName  String?     @map("document_name")
+  status        AuditStatus @default(PENDING)
+  signature     String
+  consent       Boolean     @default(false)
+  submittedAt   DateTime    @default(now()) @map("submitted_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  firstName     String?     @map("first_name")
+  middleName    String?     @map("middle_name")
+  lastName      String?     @map("last_name")
+  suffix        String?     @map("suffix")
+  approvalType  String      @default("PRC_PRIMARY_SOURCE_VERIFICATION") @map("approval_type")
+  doctor        Doctor?     @relation(fields: [doctorId], references: [id])
+
+  @@index([npi])
+  @@index([status])
+  @@map("doctor_audits")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  email     String
+  userType  String
+  token     String   @unique
+  otp       String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([email])
+  @@map("password_reset_tokens")
+}
+
+model EmailOtp {
+  id        String   @id @default(uuid())
+  email     String
+  otp       String
+  purpose   String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@map("email_otps")
+}
 
 enum UserRole {
   PATIENT
@@ -45,319 +258,9 @@ enum DoctorSpecialty {
   OTHER
 }
 
-// ─────────────────────────────────────────────
-// Central Account User Table
-// ─────────────────────────────────────────────
-
-model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  password      String
-  role          UserRole  @default(PATIENT)
-  isActive      Boolean   @default(true)
-  emailVerified Boolean   @default(false)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  patient       Patient?
-  doctor        Doctor?
-  admin         Admin?
-
-  @@index([email])
-  @@index([role])
-  @@map("users")
-}
-
-// ─────────────────────────────────────────────
-// Admin Portal User
-// ─────────────────────────────────────────────
-
-model Admin {
-  id              String    @id @default(uuid())
-  userId          String    @unique @map("user_id")
-  name            String    @default("System Administrator")
-  email           String    @unique
-  role            String    @default("SUPER_ADMIN")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // Direct administrative relations for oversight
-  managedPatients Patient[] @relation("AdminPatients")
-  managedDoctors  Doctor[]  @relation("AdminDoctors")
-
-  @@index([email])
-  @@map("admins")
-}
-
-// ─────────────────────────────────────────────
-// Patient — registered portal users
-// ─────────────────────────────────────────────
-
-model Patient {
-  id            String         @id @default(uuid())
-
-  // Central User Account Link
-  userId        String         @unique @map("user_id")
-  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // Admin Oversight Link
-  createdById   String?        @map("created_by_id")
-  createdBy     Admin?         @relation("AdminPatients", fields: [createdById], references: [id], onDelete: SetNull)
-
-  // Name segments (split for HIPAA-compliant storage)
-  firstName     String
-  middleName    String?
-  lastName      String
-  suffix        String?
-
-  // Contact
-  email         String         @unique
-  countryCode   String         @default("+1")
-  phone         String
-
-  // Profile
-  image         String?
-  dob           String
-  gender        String?
-  address       String?
-  city          String?
-  state         String?
-  zipCode       String?
-  country       String?
-  height        String?
-  weight        String?
-  bloodType     String?
-  allergies     String?
-  existingConditions String?
-  currentMedications String?
-  emergencyContactName String?
-  emergencyContactPhone String?
-  emergencyContactRelation String?
-
-  // Auth
-  password      String
-
-  // Compliance
-  hipaaConsent  Boolean        @default(false)
-
-  // Flags
-  isActive      Boolean        @default(true)
-  emailVerified Boolean        @default(false)
-
-  // Timestamps
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-
-  // Relations
-  bookings      Consultation[]
-
-  @@index([email])
-  @@index([lastName, firstName])
-  @@map("patients")
-}
-
-// ─────────────────────────────────────────────
-// Doctor — licensed medical practitioners
-// ─────────────────────────────────────────────
-
-model Doctor {
-  id             String          @id @default(uuid())
-
-  // Central User Account Link
-  userId         String          @unique @map("user_id")
-  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // Admin Oversight Link
-  createdById    String?         @map("created_by_id")
-  createdBy      Admin?          @relation("AdminDoctors", fields: [createdById], references: [id], onDelete: SetNull)
-
-  // Identity
-  name           String
-  firstName      String?         @map("first_name")
-  middleName     String?         @map("middle_name")
-  lastName       String?         @map("last_name")
-  suffix         String?         @map("suffix")
-  npi            String          @unique
-  email          String          @unique
-  password       String
-
-  // Profile
-  specialty      String
-  bio            String?
-  image          String?
-  languages      String[]        @default(["English"])
-
-  // Availability & Rating
-  rating         Float           @default(0.0)
-  reviewCount    Int             @default(0)
-  availability   String          @default("Available")
-  status         String          @default("ONLINE")
-  consultFee     Float?
-  consultationDuration Int       @default(30)
-  consultationDurationUnit String @default("minutes")
-
-  // Credentials
-  licenseNumber  String?
-  licenseState   String?
-  yearsExp       Int?
-
-  // Security
-  securityKey    String?
-
-  // Flags
-  isActive       Boolean         @default(true)
-  isFeatured     Boolean         @default(false)
-  isVerified     Boolean         @default(false)
-
-  // Timestamps
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-
-  // Relations
-  bookings       Consultation[]
-  audits         DoctorAudit[]
-
-  @@index([email])
-  @@index([npi])
-  @@index([specialty])
-  @@map("doctors")
-}
-
-// ─────────────────────────────────────────────
-// Consultation — links Patients to Doctors
-// ─────────────────────────────────────────────
-
-model Consultation {
-  id           String              @id @default(uuid())
-
-  patientId    String
-  doctorId     String
-
-  scheduledAt  DateTime            @default(now())
-  status       ConsultationStatus  @default(PENDING)
-
-  // Session details
-  reason       String?
-  notes        String?
-  prescription String?
-  duration     Int?                // minutes
-  bloodPressure String?
-  heartRate     String?
-  bodyTemperature String?
-
-  // Timestamps
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
-
-  // Relations
-  patient      Patient             @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  doctor       Doctor              @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  videoSession VideoSession?
-
-  @@index([patientId])
-  @@index([doctorId])
-  @@index([status])
-  @@map("consultations")
-}
-
-model VideoSession {
-  id             String             @id @default(uuid())
-  consultationId String             @unique
-  status         VideoSessionStatus @default(WAITING)
-  roomId         String             @unique
-  startedAt      DateTime?
-  endedAt        DateTime?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-
-  consultation   Consultation       @relation(fields: [consultationId], references: [id], onDelete: Cascade)
-
-  @@index([status])
-  @@map("video_sessions")
-}
-
-// ─────────────────────────────────────────────
-// Credentials Audit System
-// ─────────────────────────────────────────────
-
 enum AuditStatus {
   PENDING
   UNDER_REVIEW
   APPROVED
   REJECTED
-}
-
-model DoctorAudit {
-  id             String      @id @default(uuid())
-  doctorId       String?     @map("doctor_id")
-  npi            String
-  firstName      String?     @map("first_name")
-  middleName     String?     @map("middle_name")
-  lastName       String?     @map("last_name")
-  suffix         String?     @map("suffix")
-  licenseNumber  String      @map("license_number")
-  licenseState   String      @map("license_state")
-  specialty      String
-  medicalSchool  String      @map("medical_school")
-  gradYear       Int         @map("grad_year")
-  yearsExp       Int         @map("years_exp")
-  documentName   String?     @map("document_name")
-  approvalType   String      @default("PRC_PRIMARY_SOURCE_VERIFICATION") @map("approval_type")
-  status         AuditStatus @default(PENDING)
-  signature      String
-  consent        Boolean     @default(false)
-  doctorEmail    String?     @map("doctor_email")
-  submittedAt    DateTime    @default(now()) @map("submitted_at")
-  updatedAt      DateTime    @updatedAt @map("updated_at")
-
-  doctor         Doctor?     @relation(fields: [doctorId], references: [id], onDelete: SetNull)
-
-  @@index([npi])
-  @@index([status])
-  @@map("doctor_audits")
-}
-
-// ─────────────────────────────────────────────
-// Password Reset — time-limited OTP tokens
-// ─────────────────────────────────────────────
-
-model PasswordResetToken {
-  id        String   @id @default(uuid())
-
-  // Who is resetting
-  email     String
-  userType  String   // "patient" | "doctor"
-
-  // Verification secrets
-  token     String   @unique  // URL-safe token used in the reset link
-  otp       String            // 6-digit numeric OTP sent separately in the email body
-
-  // Lifecycle
-  expiresAt DateTime
-  used      Boolean  @default(false)
-
-  createdAt DateTime @default(now())
-
-  @@index([token])
-  @@index([email])
-  @@map("password_reset_tokens")
-}
-
-// ─────────────────────────────────────────────
-// Email Verification & Login OTP Codes
-// ─────────────────────────────────────────────
-
-model EmailOtp {
-  id        String   @id @default(uuid())
-  email     String
-  otp       String
-  purpose   String   // "signup_verify" | "login_verify"
-  expiresAt DateTime
-  used      Boolean  @default(false)
-  createdAt DateTime @default(now())
-
-  @@index([email])
-  @@map("email_otps")
 }

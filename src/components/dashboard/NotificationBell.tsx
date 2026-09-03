@@ -34,15 +34,17 @@ export function NotificationBell({
   unreadCount,
   onMarkAllRead,
   onOpenNotifications,
+  tone = "light",
 }: {
   role: DashboardRole;
   notifications: DashboardNotification[];
   unreadCount: number;
   onMarkAllRead: () => void;
   onOpenNotifications: () => void;
+  tone?: "light" | "dark";
 }) {
   const [open, setOpen] = useState(false);
-  const isDoctor = role === "doctor";
+  const isDark = tone === "dark";
 
   useEffect(() => {
     if (!open) {
@@ -65,8 +67,10 @@ export function NotificationBell({
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className={`relative flex h-10 w-10 items-center justify-center rounded-lg border ${
-          isDoctor ? "border-slate-800 bg-slate-900 text-slate-200" : "border-slate-200 bg-white text-slate-700"
+        className={`relative flex h-10 w-10 items-center justify-center rounded-xl border transition-colors ${
+          isDark
+            ? "border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 shadow-2xs"
         }`}
         aria-label={`Open notifications${unreadCount ? `, ${unreadCount} unread` : ""}`}
         aria-expanded={open}
@@ -90,11 +94,11 @@ export function NotificationBell({
 
       {open && (
         <div
-          className={`absolute right-0 z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-xl border shadow-2xl ${
-            isDoctor ? "border-slate-800 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-950"
+          className={`absolute right-0 z-30 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-xl border shadow-2xl ${
+            isDark ? "border-slate-800 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-950"
           }`}
         >
-          <div className={`flex items-center justify-between gap-3 border-b p-4 ${isDoctor ? "border-slate-800" : "border-slate-200"}`}>
+          <div className={`flex items-center justify-between gap-3 border-b p-4 ${isDark ? "border-slate-800" : "border-slate-200"}`}>
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Notifications</p>
               <p className="mt-1 text-sm font-black">{unreadCount ? `${unreadCount} unread` : "All caught up"}</p>
@@ -103,7 +107,7 @@ export function NotificationBell({
               type="button"
               onClick={onMarkAllRead}
               className={`rounded-lg px-3 py-2 text-[10px] font-black uppercase ${
-                isDoctor ? "bg-slate-900 text-slate-300" : "bg-slate-100 text-slate-600"
+                isDark ? "bg-slate-900 text-slate-300" : "bg-slate-100 text-slate-600"
               }`}
             >
               Mark Read
@@ -115,21 +119,21 @@ export function NotificationBell({
               notifications.slice(0, 8).map((item) => (
                 <article
                   key={item.id}
-                  className={`rounded-lg p-3 ${isDoctor ? "hover:bg-slate-900" : "hover:bg-slate-50"} ${item.readAt ? "opacity-70" : ""}`}
+                  className={`rounded-lg p-3 ${isDark ? "hover:bg-slate-900" : "hover:bg-slate-50"} ${item.readAt ? "opacity-70" : ""}`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <p className="text-sm font-black">{item.title}</p>
                     {!item.readAt && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-brand-red" aria-label="Unread" />}
                   </div>
-                  <p className={`mt-1 line-clamp-2 text-xs font-semibold ${isDoctor ? "text-slate-400" : "text-slate-500"}`}>{item.body}</p>
-                  <div className={`mt-2 flex items-center justify-between gap-3 text-[10px] font-black uppercase ${isDoctor ? "text-slate-500" : "text-slate-400"}`}>
+                  <p className={`mt-1 line-clamp-2 text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>{item.body}</p>
+                  <div className={`mt-2 flex items-center justify-between gap-3 text-[10px] font-black uppercase ${isDark ? "text-slate-500" : "text-slate-400"}`}>
                     <span>{getKindLabel(item.kind)}</span>
                     <time dateTime={new Date(item.createdAt).toISOString()}>{formatDateTime(item.createdAt)}</time>
                   </div>
                 </article>
               ))
             ) : (
-              <div className={`p-5 text-sm font-semibold ${isDoctor ? "text-slate-400" : "text-slate-500"}`}>
+              <div className={`p-5 text-sm font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                 No alerts yet.
               </div>
             )}
@@ -142,7 +146,7 @@ export function NotificationBell({
               onOpenNotifications();
             }}
             className={`w-full border-t px-4 py-3 text-xs font-black ${
-              isDoctor ? "border-slate-800 text-brand-teal" : "border-slate-200 text-brand-teal"
+              isDark ? "border-slate-800 text-brand-teal" : "border-slate-200 text-brand-teal"
             }`}
           >
             View Notification Center

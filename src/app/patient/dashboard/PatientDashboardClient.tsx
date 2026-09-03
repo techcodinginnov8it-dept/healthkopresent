@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Image from "next/image";
@@ -397,35 +397,39 @@ function PatientAppointmentMiniCalendar({
   const monthLabel = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(anchorDate);
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4">
+    <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Mini Calendar</p>
           <h3 className="text-base font-black text-slate-950">{monthLabel}</h3>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => onAnchorDateChange(startOfMonth(addMonths(anchorDate, -1)))}
-            className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-600"
+            className="grid h-8 w-8 place-items-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition"
             aria-label="Previous month"
           >
-            <span aria-hidden="true">â€¹</span>
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="m15 18-6-6 6-6" />
+            </svg>
           </button>
           <button
             type="button"
             onClick={() => onAnchorDateChange(startOfMonth(addMonths(anchorDate, 1)))}
-            className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-600"
+            className="grid h-8 w-8 place-items-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition"
             aria-label="Next month"
           >
-            <span aria-hidden="true">â€º</span>
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="m9 18 6 6-6 6" />
+            </svg>
           </button>
         </div>
       </div>
-      <div className="mt-4 grid grid-cols-7 gap-1 text-center text-[10px] font-black uppercase text-slate-400">
+      <div className="mt-4 grid grid-cols-7 gap-0.5 text-center text-[10px] font-black uppercase text-slate-400">
         {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => <span key={`${day}-${index}`}>{day}</span>)}
       </div>
-      <div className="mt-2 grid grid-cols-7 gap-1">
+      <div className="mt-1.5 grid grid-cols-7 gap-0.5">
         {days.map((day) => {
           const key = toDateKey(day);
           const count = appointmentCounts[key] || 0;
@@ -437,18 +441,22 @@ function PatientAppointmentMiniCalendar({
               key={key}
               type="button"
               onClick={() => onDateSelect(key)}
-              className={`min-h-12 rounded-lg border p-1 text-left transition ${
+              className={`flex h-10 flex-col justify-between rounded-lg border p-1 text-left transition ${
                 selected
-                  ? "border-brand-teal bg-brand-teal text-white"
+                  ? "border-brand-teal bg-brand-teal text-white shadow-xs"
                   : muted
-                    ? "border-slate-100 bg-slate-50 text-slate-300"
-                    : "border-slate-200 bg-white text-slate-700 hover:border-brand-teal/50"
+                  ? "border-transparent bg-slate-50/50 text-slate-300 hover:bg-slate-100/60"
+                  : "border-slate-100 bg-slate-50/80 text-slate-800 hover:border-slate-200"
               }`}
             >
-              <span className="text-xs font-black">{day.getDate()}</span>
-              {count ? (
-                <span className={`mt-1 block h-1.5 w-1.5 rounded-full ${selected ? "bg-white" : "bg-brand-red"}`} />
-              ) : null}
+              <span className={`text-[11px] font-black leading-none ${selected ? "text-white" : muted ? "text-slate-300" : "text-slate-900"}`}>
+                {day.getDate()}
+              </span>
+              {count > 0 && (
+                <span className={`self-end rounded-full px-1 py-0.2 text-[9px] font-black leading-none ${selected ? "bg-white text-brand-teal" : "bg-brand-teal text-white"}`}>
+                  {count}
+                </span>
+              )}
             </button>
           );
         })}
@@ -529,12 +537,19 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
   const [appointmentDate, setAppointmentDate] = useState("");
   const [appointmentTime, setAppointmentTime] = useState("");
   const [reason, setReason] = useState("");
+  const [patientNotes, setPatientNotes] = useState("");
   const [authorizedRooms, setAuthorizedRooms] = useState<Record<string, string>>({});
   const [startedAppointmentId, setStartedAppointmentId] = useState("");
   const [joiningAppointmentId, setJoiningAppointmentId] = useState("");
   const [dismissedStartedId, setDismissedStartedId] = useState("");
   const [blockedAppointment, setBlockedAppointment] = useState<PatientAppointment | null>(null);
   const [isBookingOpen, setIsBookingOpen] = useState(false);
+  const [noShowModal, setNoShowModal] = useState<{
+    isOpen: boolean;
+    appointmentId: string;
+    doctorName: string;
+    doctorId?: string;
+  } | null>(null);
   const [appointmentFilter, setAppointmentFilter] = useState<AppointmentFeedFilter>("all");
   const [selectedAppointmentId, setSelectedAppointmentId] = useState("");
   const [consultationFilter, setConsultationFilter] = useState<ConsultationTimelineFilter>("all");
@@ -593,8 +608,10 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
   }, [medicalIdUrl]);
 
   // Ref holding the set of this patient's appointmentIds â€” used inside the
-  // socket event callback to guard against cross-patient broadcasts.
+  // Keep ref of bookings and appointment IDs accessible in socket event callbacks
   const patientAppointmentIdsRef = React.useRef<Set<string>>(new Set());
+  const patientBookingsRef = React.useRef(patient.bookings);
+  patientBookingsRef.current = patient.bookings;
 
   const onRealtimeEvent = useCallback((event: RealtimeEvent) => {
     if (
@@ -610,6 +627,25 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
         event.type === "notification:new"
       )
     ) {
+      if (event.type === "appointment:cancelled") {
+        if (!patientAppointmentIdsRef.current.has(event.appointmentId)) {
+          return;
+        }
+        if (
+          event.title?.toLowerCase().includes("no show") ||
+          event.body?.toLowerCase().includes("no show")
+        ) {
+          const booked = patientBookingsRef.current.find((b) => b.id === event.appointmentId);
+          showToast("error", event.body || "Your consultation was marked as No Show. Please book a new consultation.");
+          setNoShowModal({
+            isOpen: true,
+            appointmentId: event.appointmentId,
+            doctorName: booked?.doctor.name || "your doctor",
+            doctorId: booked?.doctor.id,
+          });
+        }
+      }
+
       if (event.type === "session:started" && event.roomId) {
         // Only act if this appointment belongs to this patient.
         if (!patientAppointmentIdsRef.current.has(event.appointmentId)) {
@@ -695,29 +731,6 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
   // the server data changes (router.refresh), not when the user dismisses.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patient.bookings]);
-  // Auto-pre-join: silently authorize + join WebRTC as soon as the doctor
-  // starts the session (even before patient clicks "Join").
-  // The Join button then just reveals the video UI â€” no network call needed.
-  const autoJoinedRef = React.useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (session.roomId) {
-      // Already in a session â€” nothing to auto-join
-      return;
-    }
-    const pendingEntries = Object.entries(authorizedRooms);
-    if (pendingEntries.length === 0) return;
-
-    const [appointmentId] = pendingEntries[0];
-    if (autoJoinedRef.current.has(appointmentId)) return;
-
-    const booking = patient.bookings.find((b) => b.id === appointmentId);
-    if (!booking) return;
-
-    autoJoinedRef.current.add(appointmentId);
-    console.log("[PatientDashboard] Auto-pre-joining WebRTC for appointment", appointmentId);
-    void joinAuthorizedSession(booking as PatientAppointment);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authorizedRooms, session.roomId]);
 
   const webRTC = useWebRTC({
     roomId: session.roomId,
@@ -869,6 +882,19 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     : false;
   const notificationSeed = useMemo<DashboardNotification[]>(
     () => [
+      ...patient.bookings
+        .filter((b) => b.status === "CANCELLED" && b.notes?.toLowerCase().includes("no show"))
+        .slice(0, 3)
+        .map((booking) =>
+          createDashboardNotification({
+            id: `patient-noshow-${booking.id}`,
+            title: "Consultation marked as No Show",
+            body: `You were marked as No Show for your scheduled consultation with ${booking.doctor.name}. Please book a new consultation.`,
+            kind: "appointment",
+            createdAt: booking.createdAt,
+            readAt: null,
+          })
+        ),
       ...upcomingAppointments.slice(0, 3).map((booking) =>
         createDashboardNotification({
           id: `patient-appointment-${booking.id}`,
@@ -921,10 +947,14 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     }
 
     setBookingState({ loading: true, error: "", success: "" });
+    const combinedReason = patientNotes.trim()
+      ? `${reason.trim()}\n\nPatient Notes: ${patientNotes.trim()}`
+      : reason.trim();
+
     const result = await bookAppointment({
       doctorId: selectedDoctorId,
       scheduledAt: `${appointmentDate}T${appointmentTime}:00`,
-      reason,
+      reason: combinedReason,
     });
 
     if (!result.success) {
@@ -948,6 +978,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     setAppointmentDate("");
     setAppointmentTime("");
     setReason("");
+    setPatientNotes("");
     setIsBookingOpen(false);
     setActiveModule("book");
     router.refresh();
@@ -1273,6 +1304,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
         detail: patient.email,
         meta: patient.emailVerified ? "Email verified" : "Email pending verification",
         image: patient.image,
+        isVerified: Boolean(patient.emailVerified),
       }}
       connectionState={realtime.connectionState}
       notificationBell={
@@ -1425,95 +1457,248 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       )}
 
       {startedAppointmentId && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/80 p-4 backdrop-blur" role="dialog" aria-modal="true">
-          <div className="w-full max-w-2xl rounded-xl border border-emerald-200 bg-white p-8 text-center shadow-2xl">
-            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-brand-teal">Live consultation ready</p>
-            <h2 className="mt-3 font-display text-3xl font-black text-slate-950">
-              {startedAppointment?.doctor.name || "Your doctor"} started the consultation
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Doctor is ready — Join consultation"
+        >
+          <div className="w-full max-w-lg rounded-2xl border border-emerald-200/60 bg-white p-8 text-center shadow-2xl">
+            {/* Pulsing ring icon */}
+            <div className="relative mx-auto mb-5 flex h-20 w-20 items-center justify-center">
+              <span className="absolute h-20 w-20 animate-ping rounded-full bg-brand-teal/15" style={{ animationDuration: "2s" }} />
+              <span className="absolute h-14 w-14 animate-ping rounded-full bg-brand-teal/20" style={{ animationDuration: "2s", animationDelay: "0.5s" }} />
+              <div className="relative z-10 flex h-14 w-14 items-center justify-center rounded-full bg-brand-teal text-white shadow-lg">
+                {/* Video call icon */}
+                <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m16 13 5 3V8l-5 3" />
+                  <rect width="14" height="10" x="2" y="7" rx="2" />
+                </svg>
+              </div>
+            </div>
+
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-teal">Consultation Ready</p>
+            <h2 className="mt-2 font-display text-2xl font-black text-slate-950">
+              {startedAppointment?.doctor.name || "Your doctor"} is waiting
             </h2>
-            <p className="mx-auto mt-3 max-w-lg text-sm font-semibold text-slate-500">
-              Join the secure live room now.
+            <p className="mx-auto mt-3 max-w-sm text-sm font-semibold leading-relaxed text-slate-500">
+              Your doctor has opened the secure consultation room.{" "}
+              <strong className="text-slate-700">Join when you&apos;re ready</strong> — take a moment to prepare if needed.
             </p>
-            <button
-              type="button"
-              disabled={!startedAppointment || joiningAppointmentId === startedAppointment.id}
-              onClick={() => {
-                if (startedAppointment) {
-                  void joinAuthorizedSession(startedAppointment);
-                }
-              }}
-              className="mt-6 rounded-lg bg-brand-teal px-6 py-3 text-sm font-black text-white disabled:bg-slate-300"
-            >
-              {joiningAppointmentId === startedAppointment?.id ? "Joining..." : startedAppointment ? "Join Consultation" : "Syncing room..."}
-            </button>
+
+            {/* Privacy hint */}
+            <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-left">
+              <svg className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              <p className="text-[11px] font-semibold leading-snug text-slate-500">
+                Your camera and microphone will only activate when you click <strong className="text-slate-700">Join Consultation</strong> below.
+              </p>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-2.5 sm:flex-row sm:justify-center">
+              <button
+                type="button"
+                disabled={!startedAppointment || joiningAppointmentId === startedAppointment.id}
+                onClick={() => {
+                  if (startedAppointment) {
+                    void joinAuthorizedSession(startedAppointment);
+                  }
+                }}
+                className="flex-1 rounded-xl bg-brand-teal px-6 py-3 text-sm font-black text-white shadow-md transition hover:bg-teal-600 disabled:bg-slate-300 sm:max-w-[200px]"
+              >
+                {joiningAppointmentId === startedAppointment?.id
+                  ? "Joining..."
+                  : startedAppointment
+                    ? "Join Consultation"
+                    : "Syncing room..."}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDismissedStartedId(startedAppointmentId);
+                  setStartedAppointmentId("");
+                }}
+                className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-6 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-100 sm:max-w-[160px]"
+              >
+                Not now
+              </button>
+            </div>
+            <p className="mt-4 text-[11px] text-slate-400">
+              The doctor&apos;s session will remain open for up to 10 minutes.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {noShowModal?.isOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/80 p-4 backdrop-blur" role="dialog" aria-modal="true">
+          <div className="w-full max-w-lg rounded-2xl border border-amber-300/50 bg-white p-6 sm:p-8 text-center shadow-2xl">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+              <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+            <p className="mt-4 text-[10px] font-black uppercase tracking-[0.25em] text-amber-600">Consultation Alert</p>
+            <h2 className="mt-1 font-display text-2xl font-black text-slate-950">
+              Missed Consultation (No Show)
+            </h2>
+            <p className="mt-3 text-sm font-semibold text-slate-600 leading-relaxed">
+              You were marked as <strong className="text-amber-800 font-black">No Show</strong> for your scheduled appointment with <strong className="text-slate-900">{noShowModal.doctorName}</strong>.
+            </p>
+            <p className="mt-2 text-xs font-medium text-slate-500">
+              Would you like to schedule a new consultation to continue your care?
+            </p>
+
+            <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+              <button
+                type="button"
+                onClick={() => setNoShowModal(null)}
+                className="rounded-xl border border-slate-200 bg-slate-100 px-5 py-3 text-xs font-black text-slate-700 hover:bg-slate-200 transition"
+              >
+                Dismiss
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (noShowModal.doctorId) {
+                    setSelectedDoctorId(noShowModal.doctorId);
+                  }
+                  setNoShowModal(null);
+                  setIsBookingOpen(true);
+                }}
+                className="rounded-xl bg-brand-teal px-6 py-3 text-xs font-black text-white hover:bg-brand-teal-hover transition shadow-md shadow-brand-teal/20"
+              >
+                Book New Consultation
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {isBookingOpen && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/70 p-4 backdrop-blur" role="dialog" aria-modal="true">
-          <section className="w-full max-w-3xl rounded-xl border border-slate-200 bg-white p-5 shadow-2xl">
-            <div className="flex items-start justify-between gap-4">
+        <div className="fixed inset-0 z-50 flex flex-col bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4" role="dialog" aria-modal="true">
+          <section className="flex w-full flex-col bg-white shadow-2xl sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl sm:border sm:border-slate-200">
+            {/* Sticky modal header */}
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:rounded-t-2xl">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.25em] text-brand-teal">Appointments</p>
-                <h2 className="mt-1 text-lg font-black text-slate-950">Book Appointment</h2>
-                <p className="mt-1 text-sm font-semibold text-slate-500">Your request goes to the selected doctor queue and updates both dashboards.</p>
+                <h2 className="mt-0.5 text-xl font-black text-slate-950">Book Appointment</h2>
+                <p className="mt-1 text-xs font-medium text-slate-500">Your request goes to the selected doctor queue.</p>
               </div>
-              <button type="button" onClick={() => setIsBookingOpen(false)} className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50" aria-label="Close booking modal">
-                <span aria-hidden="true">X</span>
+              <button
+                type="button"
+                onClick={() => setIsBookingOpen(false)}
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 active:bg-slate-100"
+                aria-label="Close booking modal"
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+                </svg>
               </button>
             </div>
-            <form onSubmit={handleBookAppointment} className="mt-5 grid gap-4 md:grid-cols-2">
-              <label className="space-y-1 text-xs font-black uppercase tracking-wider text-slate-500 md:col-span-2">
-                Doctor
-                <select value={selectedDoctorId} onChange={(event) => setSelectedDoctorId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold normal-case text-slate-900">
-                  {doctors.filter((d) => d.isVerified).map((doctor) => (
-                    <option key={doctor.id} value={doctor.id}>
-                      {doctor.name} - {doctor.specialty}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="space-y-1 text-xs font-black uppercase tracking-wider text-slate-500">
-                Date
-                <input type="date" value={appointmentDate} onChange={(event) => setAppointmentDate(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-900" />
-              </label>
-              <label className="space-y-1 text-xs font-black uppercase tracking-wider text-slate-500">
-                Time
-                <input type="time" value={appointmentTime} onChange={(event) => setAppointmentTime(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-900" />
-              </label>
-              {patientConflict && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-700 md:col-span-2">
-                  This time overlaps with one of your active consultations. Pick a suggested slot or choose another time.
+
+            {/* Scrollable form body */}
+            <form onSubmit={handleBookAppointment} className="flex flex-col flex-1 overflow-y-auto">
+              <div className="grid gap-4 p-5 md:grid-cols-2">
+                <label className="space-y-1.5 md:col-span-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Doctor</span>
+                  <select
+                    value={selectedDoctorId}
+                    onChange={(event) => setSelectedDoctorId(event.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 focus:border-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/20"
+                  >
+                    {doctors.filter((d) => d.isVerified).map((doctor) => (
+                      <option key={doctor.id} value={doctor.id}>
+                        {doctor.name} — {doctor.specialty}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Date</span>
+                  <input
+                    type="date"
+                    value={appointmentDate}
+                    onChange={(event) => setAppointmentDate(event.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 focus:border-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/20"
+                  />
+                </label>
+                <label className="space-y-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Time</span>
+                  <input
+                    type="time"
+                    value={appointmentTime}
+                    onChange={(event) => setAppointmentTime(event.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 focus:border-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/20"
+                  />
+                </label>
+                {patientConflict && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs font-bold text-amber-700 md:col-span-2">
+                    ⚠️ This time overlaps with one of your active consultations. Pick a suggested slot or choose another time.
+                  </div>
+                )}
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Suggested Slots</p>
+                  <div className="mt-2.5 flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                    {schedulingSuggestions.length ? schedulingSuggestions.map((slot) => (
+                      <button
+                        key={slot.toISOString()}
+                        type="button"
+                        onClick={() => {
+                          setAppointmentDate(toDateKey(slot));
+                          setAppointmentTime(toTimeValue(slot));
+                        }}
+                        className="shrink-0 rounded-xl border border-slate-200 bg-white px-4 py-2 text-[11px] font-black text-slate-700 hover:border-brand-teal hover:text-brand-teal transition-colors"
+                      >
+                        {formatDateTime(slot)}
+                      </button>
+                    )) : (
+                      <span className="text-xs font-medium text-slate-500">No suggestions available for this doctor yet.</span>
+                    )}
+                  </div>
                 </div>
-              )}
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Suggested slots</p>
-                <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-                  {schedulingSuggestions.length ? schedulingSuggestions.map((slot) => (
-                    <button
-                      key={slot.toISOString()}
-                      type="button"
-                      onClick={() => {
-                        setAppointmentDate(toDateKey(slot));
-                        setAppointmentTime(toTimeValue(slot));
-                      }}
-                      className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black text-slate-700 hover:border-brand-teal"
-                    >
-                      {formatDateTime(slot)}
-                    </button>
-                  )) : (
-                    <span className="text-xs font-semibold text-slate-500">No suggestions available for this doctor yet.</span>
-                  )}
-                </div>
+                <label className="space-y-1.5 md:col-span-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Visit Reason (Chief Complaint)</span>
+                  <textarea
+                    value={reason}
+                    onChange={(event) => setReason(event.target.value)}
+                    rows={3}
+                    placeholder="Describe your symptoms or primary reason for visit..."
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:border-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/20"
+                  />
+                </label>
+                <label className="space-y-1.5 md:col-span-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Patient Notes & Suspected Causes (Optional)</span>
+                  <textarea
+                    value={patientNotes}
+                    onChange={(event) => setPatientNotes(event.target.value)}
+                    rows={3}
+                    placeholder="Share what you think caused this, symptom triggers, timeline, or any extra details for the doctor..."
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:border-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/20"
+                  />
+                </label>
               </div>
-              <label className="space-y-1 text-xs font-black uppercase tracking-wider text-slate-500 md:col-span-2">
-                Visit reason
-                <textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={4} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold normal-case text-slate-900" />
-              </label>
-              <button type="submit" disabled={bookingState.loading} className="rounded-lg bg-brand-teal px-4 py-3 text-sm font-black text-white disabled:bg-slate-300 md:col-span-2">
-                {bookingState.loading ? "Sending request..." : "Send Appointment Request"}
-              </button>
+
+              {/* Sticky footer */}
+              <div className="border-t border-slate-100 p-5 sm:rounded-b-2xl">
+                {bookingState.error && (
+                  <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700">{bookingState.error}</p>
+                )}
+                {bookingState.success && (
+                  <p className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700">{bookingState.success}</p>
+                )}
+                <button
+                  type="submit"
+                  disabled={bookingState.loading}
+                  className="w-full rounded-xl bg-brand-teal py-3.5 text-sm font-black text-white shadow-md shadow-brand-teal/20 transition-all hover:bg-brand-teal-hover active:scale-[0.99] disabled:bg-slate-300 disabled:shadow-none"
+                >
+                  {bookingState.loading ? "Sending request…" : "Send Appointment Request"}
+                </button>
+              </div>
             </form>
           </section>
         </div>
@@ -1532,62 +1717,62 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
 
           <div className="grid gap-5 xl:grid-cols-12">
             <div className="flex flex-col gap-5 xl:col-span-7">
-              <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-sm backdrop-blur-md transition-all duration-300 hover:border-slate-300">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-[10px] font-black uppercase tracking-[0.24em] text-brand-teal">Identity Profile</p>
-                    <h2 className="mt-2 text-lg font-black text-slate-950">Basic patient details</h2>
+                    <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">Basic Patient Details</h2>
                   </div>
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-teal/10 text-brand-teal">
-                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-teal-tint text-brand-teal border border-brand-teal/10">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" />
                       <path d="M5 20a7 7 0 0 1 14 0" />
                     </svg>
                   </div>
                 </div>
-                <dl className="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+                <dl className="mt-6 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
                   {identityFields.map((field) => (
                     <MedicalInfoField key={field.label} icon={field.icon} label={field.label} value={field.value} />
                   ))}
                 </dl>
               </section>
 
-              <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-sm backdrop-blur-md transition-all duration-300 hover:border-slate-300">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-[0.24em] text-brand-teal">Vital Health Metrics</p>
-                    <h2 className="mt-2 text-lg font-black text-slate-950">Clinical measurements</h2>
+                    <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-600">Vital Health Metrics</p>
+                    <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">Clinical Measurements</h2>
                   </div>
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
-                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-200/50">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M4 19h16" />
                       <path d="M7 19V9" />
                       <path d="M17 19V5" />
                     </svg>
                   </div>
                 </div>
-                <dl className="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+                <dl className="mt-6 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
                   {vitalFields.map((field) => (
                     <MedicalInfoField key={field.label} icon={field.icon} label={field.label} value={field.value} />
                   ))}
                 </dl>
               </section>
 
-              <section className="overflow-hidden rounded-3xl border border-red-200 bg-gradient-to-b from-red-50 to-white p-5 shadow-sm">
+              <section className="overflow-hidden rounded-3xl border border-red-200/80 bg-gradient-to-br from-red-50/90 via-white to-white p-6 shadow-sm transition-all duration-300 hover:border-red-300">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-[10px] font-black uppercase tracking-[0.24em] text-red-600">Clinical Risk Alerts</p>
-                    <h2 className="mt-2 text-lg font-black text-slate-950">High-priority medical info</h2>
+                    <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">High-Priority Medical Info</h2>
                   </div>
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-100 text-red-700">
-                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-100/80 text-red-700 border border-red-200/60">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 9v4" />
                       <path d="M12 17h.01" />
                       <path d="M10.3 4.3 2.3 18a2 2 0 0 0 1.7 3h16a2 2 0 0 0 1.7-3l-8-13.7a2 2 0 0 0-3.4 0Z" />
                     </svg>
                   </div>
                 </div>
-                <div className="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+                <div className="mt-6 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
                   {riskFields.map((field) => (
                     <MedicalInfoField key={field.label} icon={field.icon} label={field.label} value={field.value} emphasized />
                   ))}
@@ -1595,10 +1780,10 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
               </section>
             </div>
 
-            <section className="rounded-3xl border border-brand-teal/15 bg-gradient-to-b from-brand-teal/10 via-white to-white p-6 shadow-sm xl:col-span-5">
+            <section className="rounded-3xl border border-brand-teal/20 bg-gradient-to-br from-brand-teal/15 via-white to-slate-50/50 p-7 shadow-sm xl:col-span-5 flex flex-col justify-between">
               <div className="flex h-full min-h-[28rem] flex-col items-center justify-center text-center">
-                <div className="inline-flex items-center gap-2 rounded-full border border-brand-teal/15 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-brand-teal shadow-sm">
-                  <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <div className="inline-flex items-center gap-2 rounded-full border border-brand-teal/20 bg-white/90 px-4 py-2 text-[10px] font-black uppercase tracking-[0.22em] text-brand-teal shadow-xs backdrop-blur-xs">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M4 7a3 3 0 0 1 3-3h1" />
                     <path d="M16 4h1a3 3 0 0 1 3 3v1" />
                     <path d="M20 17v1a3 3 0 0 1-3 3h-1" />
@@ -1608,22 +1793,22 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                   Digital Medical ID
                 </div>
 
-                <div className="mt-5 rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-inner">
+                <div className="mt-6 rounded-[2rem] border border-slate-200/80 bg-white p-5 shadow-lg ring-1 ring-slate-900/5">
                   <PatientQrCode svgMarkup={medicalIdQrSvg} />
                 </div>
 
-                <div className="mt-5 w-full max-w-sm">
-                  <h3 className="text-lg font-black text-slate-950 sm:text-xl">Digital Medical ID</h3>
-                  <p className="mt-2 text-sm font-medium leading-relaxed text-slate-600">
-                    Scan to securely share your medical profile with authorized clinicians.
+                <div className="mt-6 w-full max-w-sm">
+                  <h3 className="text-xl font-black tracking-tight text-slate-950">Digital Medical ID</h3>
+                  <p className="mt-2 text-xs sm:text-sm font-medium leading-relaxed text-slate-600">
+                    Scan to securely share your medical profile with authorized clinicians anywhere, anytime.
                   </p>
                 </div>
 
-                <div className="mt-5 flex w-full flex-col gap-3 sm:flex-row sm:justify-center">
+                <div className="mt-6 flex w-full flex-col gap-3 sm:flex-row sm:justify-center">
                   <button
                     type="button"
                     onClick={handleCopyMedicalIdLink}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 shadow-sm transition hover:border-brand-teal hover:text-brand-teal active:scale-[0.99] sm:min-w-36"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3.5 text-xs font-bold text-slate-800 shadow-xs transition-all hover:border-brand-teal hover:text-brand-teal active:scale-[0.99] sm:min-w-36"
                     aria-label="Copy medical profile link"
                   >
                     <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1636,7 +1821,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                   <button
                     type="button"
                     onClick={handleDownloadMedicalIdQr}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-teal px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-brand-teal-hover active:scale-[0.99] sm:min-w-36"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-teal px-5 py-3.5 text-xs font-bold text-white shadow-md shadow-brand-teal/20 transition-all hover:bg-brand-teal-hover active:scale-[0.99] sm:min-w-36"
                     aria-label="Download medical QR code"
                   >
                     <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1659,20 +1844,20 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
 
       {activeModule === "book" && (
         <section className="space-y-5">
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Appointments</p>
-                <h2 className="mt-1 text-2xl font-black text-slate-950">Consultation Timeline</h2>
-                <p className="mt-2 max-w-2xl text-sm font-semibold text-slate-500">
-                  Track requests, doctor approvals, live-room readiness, prescriptions, and follow-up care without leaving the telehealth workflow.
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-brand-teal">Appointments</p>
+                <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">Consultation Timeline</h2>
+                <p className="mt-1.5 max-w-2xl text-sm font-medium text-slate-500">
+                  Track requests, doctor approvals, live-room readiness, and follow-up care.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => setActiveModule("doctors")}
-                  className="rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-black text-slate-700"
+                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.98]"
                 >
                   Doctor Directory
                 </button>
@@ -1682,22 +1867,22 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                     setBookingState({ loading: false, error: "", success: "" });
                     setIsBookingOpen(true);
                   }}
-                  className="rounded-lg bg-brand-teal px-4 py-2.5 text-xs font-black text-white"
+                  className="rounded-xl bg-brand-teal px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-brand-teal/20 transition hover:bg-brand-teal-hover active:scale-[0.98]"
                 >
-                  Book Appointment
+                  + Book Appointment
                 </button>
               </div>
             </div>
-            <div className="mt-5 grid gap-3 md:grid-cols-4">
+            <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
               {[
-                { label: "Pending", value: appointments.filter((item) => item.status === "PENDING").length },
-                { label: "Confirmed", value: confirmedAppointments.length },
-                { label: "Completed", value: completedAppointments.length },
-                { label: "Prescriptions", value: prescriptions.length },
+                { label: "Pending", value: appointments.filter((item) => item.status === "PENDING").length, color: "text-amber-600", bg: "bg-amber-50 border-amber-100" },
+                { label: "Confirmed", value: confirmedAppointments.length, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-100" },
+                { label: "Completed", value: completedAppointments.length, color: "text-blue-600", bg: "bg-blue-50 border-blue-100" },
+                { label: "Prescriptions", value: prescriptions.length, color: "text-purple-600", bg: "bg-purple-50 border-purple-100" },
               ].map((stat) => (
-                <div key={stat.label} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-                  <p className="text-2xl font-black text-slate-950">{stat.value}</p>
-                  <p className="mt-1 text-[10px] font-black uppercase tracking-wider text-slate-500">{stat.label}</p>
+                <div key={stat.label} className={`rounded-xl border px-4 py-3 ${stat.bg}`}>
+                  <p className={`text-2xl font-black ${stat.color}`}>{stat.value}</p>
+                  <p className="mt-0.5 text-[10px] font-black uppercase tracking-wider text-slate-500">{stat.label}</p>
                 </div>
               ))}
             </div>
@@ -1713,7 +1898,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                       {selectedCalendarDate ? `Selected Date: ${selectedCalendarDate}` : "All Appointment States"}
                     </h3>
                   </div>
-                  <div className="flex gap-2 overflow-x-auto pb-1">
+                  <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
                     {APPOINTMENT_FILTERS.map((filter) => (
                       <button
                         key={filter.id}
@@ -1749,28 +1934,43 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                         key={booking.id}
                         type="button"
                         onClick={() => setSelectedAppointmentId(booking.id)}
-                        className={`w-full rounded-xl border p-4 text-left transition ${
-                          isSelected ? "border-brand-teal bg-brand-teal/5 shadow-[0_0_0_1px_rgba(20,184,166,0.2)]" : "border-slate-200 bg-white hover:border-brand-teal/40"
+                        className={`group w-full rounded-2xl border p-4 text-left transition-all duration-200 ${
+                          isSelected
+                            ? "border-brand-teal bg-brand-teal/5 shadow-sm shadow-brand-teal/10"
+                            : "border-slate-200/80 bg-white hover:border-brand-teal/30 hover:shadow-sm"
                         }`}
                       >
-                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="text-sm font-black text-slate-950">{booking.doctor.name}</p>
-                              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${getAppointmentStatusStyle(booking.status)}`}>
-                                {booking.status}
-                              </span>
-                              {roomReady && <span className="rounded-full bg-brand-red px-2 py-0.5 text-[10px] font-black uppercase text-white">Room ready</span>}
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="flex items-start gap-3 min-w-0 flex-1">
+                            {/* Doctor avatar initials */}
+                            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-teal/10 text-xs font-black text-brand-teal">
+                              {getInitials(booking.doctor.name) || "DR"}
                             </div>
-                            <p className="mt-1 text-xs font-bold text-brand-teal">{booking.doctor.specialty}</p>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <h4 className="text-sm font-black leading-tight text-slate-950">{booking.doctor.name}</h4>
+                                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${getAppointmentStatusStyle(booking.status)}`}>
+                                  {booking.status}
+                                </span>
+                                {roomReady && <span className="animate-pulse rounded-full bg-brand-red px-2 py-0.5 text-[10px] font-black uppercase text-white">● Room ready</span>}
+                              </div>
+                              <p className="mt-1 text-xs font-bold text-brand-teal">{booking.doctor.specialty}</p>
+                              {booking.reason && (
+                                <p className="mt-1.5 line-clamp-2 text-xs font-medium text-slate-600 leading-relaxed">
+                                  {booking.reason}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                          <time
-                            dateTime={new Date(booking.scheduledAt).toISOString()}
-                            className="shrink-0 text-right text-xs font-black text-slate-700"
-                          >
-                            <span className="block">{formatAppointmentFeedDate(booking.scheduledAt)}</span>
-                            <span className="mt-0.5 block text-slate-500">{formatAppointmentFeedTime(booking.scheduledAt)}</span>
-                          </time>
+                          <div className="flex shrink-0 items-center justify-between gap-2 border-t border-slate-100 pt-2.5 sm:border-t-0 sm:pt-0 sm:flex-col sm:items-end">
+                            <time
+                              dateTime={new Date(booking.scheduledAt).toISOString()}
+                              className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-1.5 text-left sm:text-right text-[11px] font-black text-slate-700"
+                            >
+                              <span className="block">{formatAppointmentFeedDate(booking.scheduledAt)}</span>
+                              <span className="mt-0.5 block font-semibold text-slate-500">{formatAppointmentFeedTime(booking.scheduledAt)}</span>
+                            </time>
+                          </div>
                         </div>
                       </button>
                     );
@@ -1787,12 +1987,34 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                         <h3 className="mt-1 text-lg font-black text-slate-950">{selectedAppointment.doctor.name}</h3>
                         <p className="mt-1 text-xs font-bold text-slate-500">{formatDateTime(selectedAppointment.scheduledAt)}</p>
                       </div>
-                      <div className={`rounded-xl border p-3 text-xs font-bold ${getAppointmentStatusStyle(selectedAppointment.status)}`}>
+                      <div className={`rounded-xl border p-3 text-xs font-bold ${
+                        selectedAppointment.status === "CANCELLED" && selectedAppointment.notes?.toLowerCase().includes("no show")
+                          ? "border-amber-300 bg-amber-50 text-amber-900"
+                          : getAppointmentStatusStyle(selectedAppointment.status)
+                      }`}>
                         {selectedAppointment.status === "PENDING" && "Waiting for doctor approval. You will be notified when this consultation is confirmed."}
                         {selectedAppointment.status === "CONFIRMED" && "Confirmed. The doctor must start the secure room before you can join."}
                         {selectedAppointment.status === "COMPLETED" && "Completed. Clinical notes and prescriptions are available from Medical Access."}
-                        {selectedAppointment.status === "CANCELLED" && "Cancelled. You can book another appointment from the doctor directory."}
+                        {selectedAppointment.status === "CANCELLED" && (
+                          selectedAppointment.notes?.toLowerCase().includes("no show")
+                            ? "Missed Consultation / No Show. You were marked as No Show for this scheduled consultation. Please book a new consultation to receive care."
+                            : "Cancelled. You can book another appointment from the doctor directory."
+                        )}
                       </div>
+                      {selectedAppointment.status === "CANCELLED" && selectedAppointment.notes?.toLowerCase().includes("no show") && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedAppointment.doctor.id) {
+                              setSelectedDoctorId(selectedAppointment.doctor.id);
+                            }
+                            setIsBookingOpen(true);
+                          }}
+                          className="w-full rounded-xl bg-brand-teal py-3 text-xs font-black text-white hover:bg-brand-teal-hover transition shadow-md shadow-brand-teal/20"
+                        >
+                          Book New Consultation
+                        </button>
+                      )}
                       <dl className="space-y-3 text-sm">
                         <div>
                           <dt className="text-[10px] font-black uppercase tracking-wider text-slate-400">Visit reason</dt>
@@ -1943,8 +2165,8 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                         key={booking.id}
                         type="button"
                         onClick={() => setSelectedAppointmentId(booking.id)}
-                        className={`w-full rounded-xl border p-4 text-left transition ${
-                          isSelected ? "border-brand-teal bg-brand-teal/5 shadow-[0_0_0_1px_rgba(20,184,166,0.2)]" : "border-slate-200 bg-white hover:border-brand-teal/40"
+                        className={`w-full rounded-2xl border p-4 text-left transition-all duration-200 ${
+                          isSelected ? "border-brand-teal bg-brand-teal/5 shadow-sm shadow-brand-teal/10" : "border-slate-200 bg-white hover:border-brand-teal/40"
                         }`}
                       >
                         <div className="flex items-start gap-3">
@@ -1956,20 +2178,20 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                             </div>
                           )}
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-black text-slate-950">{booking.doctor.name}</p>
-                                <p className="mt-1 truncate text-xs font-bold text-brand-teal">{booking.doctor.specialty}</p>
+                            <div className="flex flex-wrap items-start justify-between gap-1.5">
+                              <div className="min-w-0 flex-1">
+                                <p className="font-black text-sm leading-tight text-slate-950">{booking.doctor.name}</p>
+                                <p className="mt-0.5 text-xs font-bold text-brand-teal">{booking.doctor.specialty}</p>
                               </div>
                               <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${getAppointmentStatusStyle(booking.status)}`}>
                                 {booking.status}
                               </span>
                             </div>
-                            <time dateTime={new Date(booking.scheduledAt).toISOString()} className="mt-3 grid grid-cols-2 gap-2 text-xs font-black text-slate-700">
-                              <span className="rounded-lg bg-slate-50 px-2 py-1">{formatAppointmentFeedDate(booking.scheduledAt)}</span>
-                              <span className="rounded-lg bg-slate-50 px-2 py-1 text-right">{formatAppointmentFeedTime(booking.scheduledAt)}</span>
-                            </time>
-                            {roomReady && <p className="mt-3 rounded-lg bg-brand-red px-2 py-1 text-[10px] font-black uppercase text-white">Join room available</p>}
+                            <div className="mt-2.5 flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-2.5 py-1.5 text-xs font-bold text-slate-700">
+                              <span>{formatAppointmentFeedDate(booking.scheduledAt)}</span>
+                              <span>{formatAppointmentFeedTime(booking.scheduledAt)}</span>
+                            </div>
+                            {roomReady && <p className="mt-2 rounded-lg bg-brand-red px-2 py-1 text-center text-[10px] font-black uppercase text-white">● Join Room Ready</p>}
                           </div>
                         </div>
                       </button>
@@ -1980,15 +2202,15 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                 </div>
               </section>
 
-              <section className="rounded-xl border border-slate-200 bg-white">
+              <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
                 {selectedAppointment ? (
                   <div className="space-y-5 p-5">
-                    <div className="rounded-xl border border-slate-200 bg-slate-950 p-5 text-white">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-950 p-5 text-white">
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <p className="text-[10px] font-black uppercase tracking-[0.25em] text-brand-teal">Action Hub</p>
-                          <h3 className="mt-2 text-2xl font-black">{selectedAppointment.status === "CONFIRMED" && (authorizedRooms[selectedAppointment.id] || startedAppointmentId === selectedAppointment.id) ? "Live Consultation Ready" : selectedAppointment.status === "CONFIRMED" ? "Waiting for Doctor" : selectedAppointment.status === "PENDING" ? "Awaiting Confirmation" : `${selectedAppointment.status.charAt(0)}${selectedAppointment.status.slice(1).toLowerCase()} Consultation`}</h3>
-                          <p className="mt-2 text-sm font-semibold text-slate-300">
+                          <h3 className="mt-1 text-xl font-black text-white">{selectedAppointment.status === "CONFIRMED" && (authorizedRooms[selectedAppointment.id] || startedAppointmentId === selectedAppointment.id) ? "Live Consultation Ready" : selectedAppointment.status === "CONFIRMED" ? "Waiting for Doctor" : selectedAppointment.status === "PENDING" ? "Awaiting Confirmation" : `${selectedAppointment.status.charAt(0)}${selectedAppointment.status.slice(1).toLowerCase()} Consultation`}</h3>
+                          <p className="mt-1.5 text-xs font-medium leading-relaxed text-slate-300">
                             {selectedAppointment.status === "PENDING" && "Your appointment is in the clinical queue for doctor review."}
                             {selectedAppointment.status === "CONFIRMED" && (authorizedRooms[selectedAppointment.id] || startedAppointmentId === selectedAppointment.id) && "The secure WebRTC room has been opened for this consultation."}
                             {selectedAppointment.status === "CONFIRMED" && !(authorizedRooms[selectedAppointment.id] || startedAppointmentId === selectedAppointment.id) && "Your appointment is confirmed. The join button activates once the doctor starts the live room."}
@@ -2003,7 +2225,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                                 type="button"
                                 disabled={followUpActionId === selectedAppointment.id}
                                 onClick={() => void handleConfirmFollowUp(selectedAppointment)}
-                                className="rounded-lg bg-brand-teal px-4 py-3 text-xs font-black text-white disabled:bg-slate-600"
+                                className="rounded-xl bg-brand-teal px-4 py-3 text-xs font-black text-white disabled:bg-slate-600"
                               >
                                 Confirm Follow-Up
                               </button>
@@ -2011,7 +2233,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                                 type="button"
                                 disabled={followUpActionId === selectedAppointment.id}
                                 onClick={() => openFollowUpReschedule(selectedAppointment)}
-                                className="rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-xs font-black text-white disabled:text-slate-400"
+                                className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-xs font-black text-white disabled:text-slate-400"
                               >
                                 Request Reschedule
                               </button>
@@ -2020,7 +2242,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                             <button
                               type="button"
                               onClick={() => startLiveSession(selectedAppointment)}
-                              className={`rounded-lg px-4 py-3 text-xs font-black text-white ${authorizedRooms[selectedAppointment.id] || startedAppointmentId === selectedAppointment.id ? "bg-brand-red" : "bg-brand-teal"}`}
+                              className={`rounded-xl px-4 py-3 text-xs font-black text-white ${authorizedRooms[selectedAppointment.id] || startedAppointmentId === selectedAppointment.id ? "bg-brand-red" : "bg-brand-teal"}`}
                             >
                               {joiningAppointmentId === selectedAppointment.id ? "Joining..." : authorizedRooms[selectedAppointment.id] || startedAppointmentId === selectedAppointment.id ? "Join Live Consultation" : "Waiting for Doctor"}
                             </button>
@@ -2028,7 +2250,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                             <button
                               type="button"
                               onClick={() => setActiveModule(selectedAppointment.status === "COMPLETED" ? "history" : "book")}
-                              className="rounded-lg bg-white px-4 py-3 text-xs font-black text-slate-950"
+                              className="rounded-xl bg-white px-4 py-3 text-xs font-black text-slate-950 shadow-sm"
                             >
                               {selectedAppointment.status === "COMPLETED" ? "View Medical Record" : "Manage Appointment"}
                             </button>
@@ -2038,22 +2260,22 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                     </div>
 
                     <div className="grid gap-4 lg:grid-cols-2">
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4">
                         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Appointment Information</p>
-                        <dl className="mt-4 grid gap-3 text-sm">
-                          <div className="flex items-center justify-between gap-3">
+                        <dl className="mt-3.5 space-y-2.5 text-xs">
+                          <div className="grid grid-cols-[100px_minmax(0,1fr)] items-start gap-2">
                             <dt className="font-bold text-slate-500">Doctor</dt>
-                            <dd className="text-right font-black text-slate-950">{selectedAppointment.doctor.name}</dd>
+                            <dd className="text-right font-black text-slate-950 break-words">{selectedAppointment.doctor.name}</dd>
                           </div>
-                          <div className="flex items-center justify-between gap-3">
+                          <div className="grid grid-cols-[100px_minmax(0,1fr)] items-start gap-2">
                             <dt className="font-bold text-slate-500">Specialization</dt>
-                            <dd className="text-right font-black text-slate-950">{selectedAppointment.doctor.specialty}</dd>
+                            <dd className="text-right font-black text-slate-950 break-words">{selectedAppointment.doctor.specialty}</dd>
                           </div>
-                          <div className="flex items-center justify-between gap-3">
+                          <div className="grid grid-cols-[100px_minmax(0,1fr)] items-start gap-2">
                             <dt className="font-bold text-slate-500">Date</dt>
                             <dd className="text-right font-black text-slate-950">{formatAppointmentFeedDate(selectedAppointment.scheduledAt)}</dd>
                           </div>
-                          <div className="flex items-center justify-between gap-3">
+                          <div className="grid grid-cols-[100px_minmax(0,1fr)] items-start gap-2">
                             <dt className="font-bold text-slate-500">Time</dt>
                             <dd className="text-right font-black text-slate-950">{formatAppointmentFeedTime(selectedAppointment.scheduledAt)}</dd>
                           </div>
@@ -2080,7 +2302,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                     </div>
 
                     <div className="rounded-xl border border-slate-200 bg-white">
-                      <div className="flex gap-2 overflow-x-auto border-b border-slate-200 p-3">
+                      <div className="flex gap-2 overflow-x-auto no-scrollbar border-b border-slate-200 p-3">
                         {CONSULTATION_HUB_TABS.map((tab) => (
                           <button
                             key={tab.id}
@@ -2206,7 +2428,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                       Download PDF Report
                     </button>
                   </div>
-                  <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+                  <div className="mt-4 flex gap-2 overflow-x-auto no-scrollbar pb-1">
                     {MEDICAL_ACCESS_TABS.map((tab) => (
                       <button
                         key={tab.id}
@@ -2360,7 +2582,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       )}
 
       {activeModule === "settings" && (
-        <PatientSettingsModule patient={patient} onToast={showToast} />
+        <PatientSettingsModule tone={tone} patient={patient} onToast={showToast} />
       )}
     </DashboardShell>
   );

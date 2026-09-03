@@ -6,17 +6,24 @@ import { getErrorMessage } from "@/lib/errors";
 import { loginDoctor } from "../../actions/auth";
 
 export default function DoctorSignInPage() {
-  const [emailOrNpi, setEmailOrNpi] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!emailOrNpi || !password) {
-      setError("Please enter your NPI/Email and password to proceed.");
+    const trimmedIdentifier = identifier.trim();
+    if (!trimmedIdentifier || !password) {
+      setError("Please enter your Username or License Number and password to proceed.");
+      return;
+    }
+
+    if (trimmedIdentifier.includes("@")) {
+      setError("Email login is not supported for physicians. Please sign in with your Username or License Number.");
       return;
     }
 
@@ -25,7 +32,7 @@ export default function DoctorSignInPage() {
 
     try {
       const res = await loginDoctor({
-        emailOrNpi,
+        identifier: trimmedIdentifier,
         password,
       });
 
@@ -79,7 +86,7 @@ export default function DoctorSignInPage() {
               <svg className="w-5 h-5 text-brand-teal" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4" />
               </svg>
-              <span>NPI Credentials Authenticated</span>
+              <span>License &amp; Username Authenticated</span>
             </div>
             <div className="flex items-center space-x-2">
               <svg className="w-5 h-5 text-brand-teal" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -119,7 +126,7 @@ export default function DoctorSignInPage() {
               Physician Sign In
             </h2>
             <p className="text-slate-500 font-medium text-xs sm:text-sm">
-              Enter your clinical email or 10-digit NPI number to enter your medical workspace.
+              Enter your admin-assigned Username or License Number to access your clinical workspace.
             </p>
           </div>
 
@@ -131,19 +138,22 @@ export default function DoctorSignInPage() {
                 </div>
               )}
               
-              {/* Email / NPI */}
+              {/* Username / License Number */}
               <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5 tracking-wider">
-                  NPI Number or Email
+                  Username or License Number
                 </label>
                 <input
                   type="text"
                   required
-                  value={emailOrNpi}
-                  onChange={(e) => setEmailOrNpi(e.target.value)}
-                  placeholder="e.g. 1982736450 or name@clinic.com"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="e.g. 001102294 or doctor_username"
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-850 focus:outline-none focus:border-brand-teal focus:ring-1 focus:ring-brand-teal/20"
                 />
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Use your assigned username or PRC license number. Email login is not used for physicians.
+                </p>
               </div>
 
               {/* Password */}

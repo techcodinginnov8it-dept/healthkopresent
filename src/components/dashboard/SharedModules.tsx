@@ -81,7 +81,6 @@ function useCallDuration(startedAt?: number | null) {
       return;
     }
 
-    setNow(Date.now());
     const timer = window.setInterval(() => {
       setNow(Date.now());
     }, 1000);
@@ -103,27 +102,55 @@ export function StatGrid({
 
   return (
     <div className={`grid gap-4 ${gridColumns}`}>
-      {stats.map((stat) => (
-        <div
-          key={stat.label}
-          className={`rounded-xl border p-5 ${
-            tone === "dark" ? "border-slate-850 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-950"
-          }`}
-        >
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">{stat.label}</p>
-          <p className="mt-3 font-display text-3xl font-black">{stat.value}</p>
-          <p className={`mt-1 text-xs font-semibold ${tone === "dark" ? "text-slate-400" : "text-slate-500"}`}>{stat.helper}</p>
-        </div>
-      ))}
+      {stats.map((stat, idx) => {
+        const accents = [
+          "from-brand-teal/10 via-white to-white border-brand-teal/20 text-brand-teal",
+          "from-emerald-500/10 via-white to-white border-emerald-500/20 text-emerald-600",
+          "from-blue-500/10 via-white to-white border-blue-500/20 text-blue-600",
+          "from-purple-500/10 via-white to-white border-purple-500/20 text-purple-600",
+        ];
+        const accent = accents[idx % accents.length];
+
+        return (
+          <div
+            key={stat.label}
+            className={`group relative overflow-hidden rounded-2xl border p-5 transition-all duration-300 hover:shadow-md ${
+              tone === "dark"
+                ? "border-slate-800 bg-slate-900/90 text-white hover:border-slate-700"
+                : `bg-gradient-to-br ${accent} shadow-xs`
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-brand-teal">{stat.label}</p>
+              <span className="h-2 w-2 rounded-full bg-brand-teal/40 group-hover:bg-brand-teal transition-colors" />
+            </div>
+            <p className="mt-2 font-display text-3xl font-black tracking-tight">{stat.value}</p>
+            <p className={`mt-1 text-xs font-medium leading-snug ${tone === "dark" ? "text-slate-400" : "text-slate-500"}`}>{stat.helper}</p>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-export function EmptyState({ title, body }: { title: string; body: string }) {
+export function EmptyState({
+  title,
+  body,
+  tone = "light",
+}: {
+  title: string;
+  body: string;
+  tone?: "light" | "dark";
+}) {
+  const isDark = tone === "dark";
   return (
-    <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-      <p className="text-sm font-black text-slate-800">{title}</p>
-      <p className="mt-1 text-xs font-semibold text-slate-500">{body}</p>
+    <div
+      className={`rounded-xl border border-dashed p-8 text-center transition-colors ${
+        isDark ? "border-slate-800 bg-slate-950/60" : "border-slate-300/80 bg-slate-50/70"
+      }`}
+    >
+      <p className={`text-sm font-black ${isDark ? "text-slate-200" : "text-slate-800"}`}>{title}</p>
+      <p className={`mt-1 text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>{body}</p>
     </div>
   );
 }
@@ -157,27 +184,43 @@ export function AppointmentCard({
 }) {
   return (
     <article
-      className={`rounded-xl border p-4 ${
-        tone === "dark" ? "border-slate-800 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-950"
+      className={`group rounded-2xl border p-4 transition-all duration-200 hover:shadow-md ${
+        tone === "dark"
+          ? "border-slate-800 bg-slate-900/80 text-white hover:border-slate-700"
+          : "border-slate-200/80 bg-white text-slate-950 hover:border-slate-300"
       }`}
     >
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-black">{title}</h3>
-            <span className="rounded-full border border-brand-teal/20 bg-brand-teal/10 px-2 py-0.5 text-[10px] font-black uppercase text-brand-teal">
-              {status}
-            </span>
+            <AppointmentStatusBadge status={status} />
           </div>
-          <p className={`mt-1 text-xs font-bold ${tone === "dark" ? "text-slate-400" : "text-slate-500"}`}>{subtitle}</p>
-          {reason && <p className={`mt-2 text-xs leading-relaxed ${tone === "dark" ? "text-slate-300" : "text-slate-600"}`}>{reason}</p>}
+          <p className="mt-1 text-xs font-bold tracking-wide text-brand-teal">{subtitle}</p>
+          {reason && <p className={`mt-2 line-clamp-2 text-xs leading-relaxed ${tone === "dark" ? "text-slate-400" : "text-slate-500"}`}>{reason}</p>}
         </div>
-        <div className="shrink-0 text-left md:text-right">
-          <p className={`text-xs font-black ${tone === "dark" ? "text-slate-300" : "text-slate-700"}`}>{formatDateTime(scheduledAt)}</p>
-          {actions && <div className="mt-3 flex flex-wrap gap-2 md:justify-end">{actions}</div>}
+        <div className={`shrink-0 rounded-xl border px-3 py-2 text-center text-xs sm:text-right ${tone === "dark" ? "border-slate-800 bg-slate-800/60" : "border-slate-100 bg-slate-50"}`}>
+          <p className={`font-black leading-tight ${tone === "dark" ? "text-slate-200" : "text-slate-800"}`}>{formatDateTime(scheduledAt)}</p>
         </div>
       </div>
+      {actions && <div className="mt-3 flex flex-wrap gap-2">{actions}</div>}
     </article>
+  );
+}
+
+function AppointmentStatusBadge({ status }: { status: string }) {
+  const s = status.toUpperCase();
+  const styles: Record<string, string> = {
+    PENDING: "bg-amber-50 text-amber-700 border-amber-200",
+    CONFIRMED: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    COMPLETED: "bg-blue-50 text-blue-700 border-blue-200",
+    CANCELLED: "bg-red-50 text-red-700 border-red-200",
+  };
+  const cls = styles[s] ?? "bg-slate-100 text-slate-600 border-slate-200";
+  return (
+    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${cls}`}>
+      {status}
+    </span>
   );
 }
 
@@ -293,7 +336,7 @@ export function ChatPanel({
             return <ConversationChatMessage key={message.id} message={message} mine={mine} tone={tone} />;
           })
         ) : (
-          <EmptyState title="No messages yet" body="Start the conversation from either dashboard." />
+          <EmptyState tone={tone} title="No messages yet" body="Start the conversation from either dashboard." />
         )}
         {visibleMessages.length > 0 && !hasConversationMessages && (
           <p className={`pt-1 text-center text-xs font-semibold ${tone === "dark" ? "text-slate-500" : "text-slate-400"}`}>
@@ -429,16 +472,17 @@ function ConsultationVideoTile({
 
   useEffect(() => {
     if (!stream) {
-      setStreamTracks([]);
-      return;
+      const timer = setTimeout(() => setStreamTracks([]), 0);
+      return () => clearTimeout(timer);
     }
-    // Sync immediately in case tracks already exist
-    setStreamTracks(stream.getTracks());
 
     const refresh = () => setStreamTracks(stream.getTracks());
+    const timer = setTimeout(refresh, 0);
+
     stream.addEventListener("addtrack", refresh);
     stream.addEventListener("removetrack", refresh);
     return () => {
+      clearTimeout(timer);
       stream.removeEventListener("addtrack", refresh);
       stream.removeEventListener("removetrack", refresh);
     };
@@ -720,6 +764,7 @@ export function LiveConsultationPanel({
   onCameraDeviceChange,
   onMicrophoneDeviceChange,
   onRefreshDevices,
+  tone = "light",
 }: {
   role: DashboardRole;
   counterpartName: string;
@@ -751,7 +796,9 @@ export function LiveConsultationPanel({
   onCameraDeviceChange?: (deviceId: string) => void;
   onMicrophoneDeviceChange?: (deviceId: string) => void;
   onRefreshDevices?: () => void;
+  tone?: "light" | "dark";
 }) {
+  const isDark = tone === "dark";
   const statusLabel = status === "connected" ? "Connected" : role === "doctor" ? "Waiting for Patient" : "Waiting room";
   const remoteVideoAvailable = Boolean(remoteStream?.getVideoTracks().length);
   const remoteVideoActive = remoteVideoAvailable && counterpartCameraOn;
@@ -768,38 +815,54 @@ export function LiveConsultationPanel({
 
   return (
     <div className="grid gap-4 xl:grid-cols-12">
-      <section className="relative rounded-xl border border-slate-800 bg-slate-950 text-white xl:col-span-7">
-        <header className="flex flex-col gap-3 border-b border-slate-800 p-4 md:flex-row md:items-center md:justify-between">
+      <section className={`relative rounded-xl border transition-colors xl:col-span-7 ${
+        isDark ? "border-slate-800 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-900 shadow-xs"
+      }`}>
+        <header className={`flex flex-col gap-3 border-b p-4 md:flex-row md:items-center md:justify-between ${
+          isDark ? "border-slate-800" : "border-slate-100"
+        }`}>
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Live Consultation</p>
-            <h2 className="mt-1 text-lg font-black">{counterpartName}</h2>
-            <p className="text-xs font-semibold text-slate-400">{formatDateTime(appointmentTime)}</p>
+            <h2 className={`mt-1 text-lg font-black ${isDark ? "text-white" : "text-slate-900"}`}>{counterpartName}</h2>
+            <p className={`text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>{formatDateTime(appointmentTime)}</p>
           </div>
-          <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase ${status === "connected" ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
+          <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase ${
+            status === "connected"
+              ? isDark ? "bg-emerald-500/15 text-emerald-300" : "border border-emerald-300 bg-emerald-50 text-emerald-800 font-bold"
+              : isDark ? "bg-amber-500/15 text-amber-300" : "border border-amber-300 bg-amber-50 text-amber-800 font-bold"
+          }`}>
             {statusLabel}
           </span>
         </header>
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 px-4 py-3">
-          <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${connectionState === "failed" ? "bg-red-500/15 text-red-200" : "bg-white/10 text-slate-200"}`}>
+        <div className={`flex flex-wrap items-center gap-2 border-b px-4 py-3 ${
+          isDark ? "border-slate-800" : "border-slate-100"
+        }`}>
+          <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${
+            connectionState === "failed"
+              ? "bg-red-500/15 text-red-400"
+              : isDark ? "bg-white/10 text-slate-200" : "border border-slate-200 bg-slate-100 text-slate-700 font-semibold"
+          }`}>
             {connectionLabel}
           </span>
           {status === "connected" && (
-            <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-200">
+            <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${
+              isDark ? "border-white/10 bg-white/5 text-slate-200" : "border-slate-200 bg-slate-50 text-slate-700"
+            }`}>
               {callDuration}
             </span>
           )}
           {isScreenSharing && (
-            <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-cyan-200">
+            <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-cyan-600 dark:text-cyan-200">
               Presenting
             </span>
           )}
           {mediaError && (
-            <span className="rounded-full bg-red-500/15 px-2.5 py-1 text-[10px] font-bold text-red-100">
+            <span className="rounded-full bg-red-500/15 px-2.5 py-1 text-[10px] font-bold text-red-500">
               {mediaError}
             </span>
           )}
         </div>
-        <div className="border-b border-slate-800 px-4 py-3">
+        <div className={`border-b px-4 py-3 ${isDark ? "border-slate-800" : "border-slate-100"}`}>
           <MediaDeviceControls
             devices={devices}
             cameraDeviceId={cameraDeviceId}
@@ -1114,27 +1177,544 @@ export function FloatingConsultationCall({
 export function PrescriptionList({
   items,
   role,
+  tone = "light",
 }: {
   items: { id: string; prescription: string | null; reason?: string | null; scheduledAt: Date | string; owner: string }[];
   role: DashboardRole;
+  tone?: "light" | "dark";
 }) {
   const active = items.filter((item) => item.prescription);
 
   return active.length ? (
     <div className="grid gap-4 md:grid-cols-2">
       {active.map((item) => (
-        <article key={item.id} className="rounded-xl border border-brand-red/20 bg-white p-4">
+        <article
+          key={item.id}
+          className={`rounded-xl border p-4 transition-colors ${
+            tone === "dark"
+              ? "border-brand-red/30 bg-slate-900 text-white shadow-xs"
+              : "border-brand-red/20 bg-white text-slate-950 shadow-2xs"
+          }`}
+        >
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-red">Prescription</p>
-          <h3 className="mt-2 text-sm font-black text-slate-950">{item.prescription}</h3>
-          <p className="mt-1 text-xs font-semibold text-slate-500">{role === "doctor" ? "Patient" : "Doctor"}: {item.owner}</p>
-          <p className="mt-3 text-xs text-slate-500">{formatDate(item.scheduledAt)} · {item.reason || "Clinical encounter"}</p>
-          <button type="button" className="mt-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-black text-slate-700">
+          <h3 className={`mt-2 text-sm font-black ${tone === "dark" ? "text-white" : "text-slate-950"}`}>{item.prescription}</h3>
+          <p className={`mt-1 text-xs font-semibold ${tone === "dark" ? "text-slate-400" : "text-slate-500"}`}>{role === "doctor" ? "Patient" : "Doctor"}: {item.owner}</p>
+          <p className={`mt-3 text-xs ${tone === "dark" ? "text-slate-400" : "text-slate-500"}`}>{formatDate(item.scheduledAt)} · {item.reason || "Clinical encounter"}</p>
+          <button
+            type="button"
+            className={`mt-4 w-full rounded-lg border px-3 py-2 text-xs font-black transition-colors ${
+              tone === "dark"
+                ? "border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+            }`}
+          >
             Download PDF
           </button>
         </article>
       ))}
     </div>
   ) : (
-    <EmptyState title="No active prescriptions" body="Prescriptions issued during completed visits appear here." />
+    <EmptyState tone={tone} title="No active prescriptions" body="Prescriptions issued during completed visits appear here." />
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WaitingLobby — shown on doctor side while waiting for patient to connect
+// ─────────────────────────────────────────────────────────────────────────────
+
+const WAIT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+const WAIT_WARNING_MS = 2 * 60 * 1000;  // warn when 2 minutes remain
+
+function useWaitingTimer(startedAt: number | null) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!startedAt) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [startedAt]);
+
+  if (!startedAt) {
+    return { elapsed: 0, remaining: WAIT_TIMEOUT_MS, isExpired: false, isWarning: false, elapsedLabel: "0:00", remainingLabel: "10:00", progressPct: 100 };
+  }
+
+  const elapsed = now - startedAt;
+  const remaining = Math.max(0, WAIT_TIMEOUT_MS - elapsed);
+  const isExpired = remaining === 0;
+  const isWarning = remaining <= WAIT_WARNING_MS && !isExpired;
+
+  const fmt = (ms: number) => {
+    const totalSecs = Math.floor(ms / 1000);
+    const m = Math.floor(totalSecs / 60);
+    const s = totalSecs % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  };
+
+  return {
+    elapsed,
+    remaining,
+    isExpired,
+    isWarning,
+    elapsedLabel: fmt(elapsed),
+    remainingLabel: fmt(remaining),
+    progressPct: Math.max(0, (remaining / WAIT_TIMEOUT_MS) * 100),
+  };
+}
+
+export function WaitingLobby({
+  patientName,
+  waitingStartedAt,
+  onEndSession,
+  onMarkNoShow,
+  tone = "light",
+}: {
+  patientName: string;
+  waitingStartedAt: number | null;
+  onEndSession: () => void;
+  onMarkNoShow: () => void;
+  tone?: "light" | "dark";
+}) {
+  const isDark = tone === "dark";
+  const timer = useWaitingTimer(waitingStartedAt);
+
+  const progressColor = timer.isExpired
+    ? "bg-red-500"
+    : timer.isWarning
+      ? "bg-amber-500"
+      : "bg-brand-teal";
+
+  const initials = patientName
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+
+  return (
+    <div
+      className={`flex min-h-[calc(100vh-9rem)] flex-col items-center justify-center gap-8 rounded-xl border p-8 text-center transition-colors ${
+        isDark ? "border-slate-800 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-900 shadow-xs"
+      }`}
+    >
+      {/* Pulsing avatar ring */}
+      <div className="relative flex items-center justify-center">
+        {!timer.isExpired && (
+          <>
+            <span
+              className="absolute h-40 w-40 animate-ping rounded-full bg-brand-teal/10"
+              style={{ animationDuration: "2.4s" }}
+            />
+            <span
+              className="absolute h-32 w-32 animate-ping rounded-full bg-brand-teal/15"
+              style={{ animationDuration: "2.4s", animationDelay: "0.6s" }}
+            />
+          </>
+        )}
+        <div
+          className={`relative z-10 flex h-24 w-24 items-center justify-center rounded-full text-3xl font-black shadow-xl ring-4 ${
+            timer.isExpired
+              ? isDark
+                ? "bg-red-500/20 text-red-300 ring-red-500/30"
+                : "bg-red-100 text-red-700 ring-red-200"
+              : timer.isWarning
+                ? isDark
+                  ? "bg-amber-500/20 text-amber-200 ring-amber-500/30"
+                  : "bg-amber-100 text-amber-800 ring-amber-200"
+                : isDark
+                  ? "bg-brand-teal/15 text-brand-teal ring-brand-teal/20"
+                  : "bg-teal-50 text-brand-teal ring-teal-100"
+          }`}
+        >
+          {initials}
+        </div>
+      </div>
+
+      {/* Status header */}
+      <div className="space-y-1.5">
+        {timer.isExpired ? (
+          <>
+            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-red-500">Connection Timeout</p>
+            <h2 className={`font-display text-2xl font-black ${isDark ? "text-white" : "text-slate-950"}`}>
+              Patient did not connect
+            </h2>
+            <p className={`text-sm font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+              <span className={`font-black ${isDark ? "text-white" : "text-slate-800"}`}>{patientName}</span> did not
+              join within the 10-minute window.
+            </p>
+          </>
+        ) : (
+          <>
+            <p
+              className={`text-[10px] font-black uppercase tracking-[0.28em] ${
+                timer.isWarning ? "text-amber-500" : "text-brand-teal"
+              }`}
+            >
+              {timer.isWarning ? "Waiting — Time Running Out" : "Waiting for Patient"}
+            </p>
+            <h2 className={`font-display text-2xl font-black ${isDark ? "text-white" : "text-slate-950"}`}>
+              {patientName}
+            </h2>
+            <p className={`text-sm font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+              {timer.isWarning
+                ? "Patient has not joined yet. The session will auto-expire soon."
+                : "The secure room is open. Waiting for the patient to join."}
+            </p>
+          </>
+        )}
+      </div>
+
+      {/* Timer + Progress bar */}
+      <div className="w-full max-w-sm space-y-3">
+        <div className="flex items-center justify-between text-xs font-black">
+          <span className={isDark ? "text-slate-400" : "text-slate-500"}>
+            Elapsed:{" "}
+            <span className={isDark ? "text-white" : "text-slate-900"}>{timer.elapsedLabel}</span>
+          </span>
+          <span
+            className={
+              timer.isExpired
+                ? "text-red-500"
+                : timer.isWarning
+                  ? "text-amber-500"
+                  : isDark
+                    ? "text-slate-400"
+                    : "text-slate-500"
+            }
+          >
+            {timer.isExpired ? "Timed out" : `Remaining: ${timer.remainingLabel}`}
+          </span>
+        </div>
+
+        <div className={`h-2 w-full overflow-hidden rounded-full ${isDark ? "bg-slate-800" : "bg-slate-100"}`}>
+          <div
+            className={`h-full rounded-full transition-all duration-1000 ${progressColor}`}
+            style={{ width: `${timer.isExpired ? 100 : timer.progressPct}%` }}
+          />
+        </div>
+
+        {timer.isWarning && !timer.isExpired && (
+          <p
+            className={`rounded-lg border px-3 py-2 text-xs font-semibold ${
+              isDark
+                ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                : "border-amber-200 bg-amber-50 text-amber-800"
+            }`}
+          >
+            ⚠️ Less than {timer.remainingLabel} remaining. Consider marking this patient as No Show if they
+            don&apos;t connect soon.
+          </p>
+        )}
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        {timer.isExpired ? (
+          <>
+            <button
+              type="button"
+              onClick={onMarkNoShow}
+              className="rounded-xl bg-amber-600 px-6 py-3 text-sm font-black text-white shadow-lg transition hover:bg-amber-700"
+            >
+              Mark as No Show
+            </button>
+            <button
+              type="button"
+              onClick={onEndSession}
+              className={`rounded-xl border px-6 py-3 text-sm font-black transition ${
+                isDark
+                  ? "border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                  : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              End Session
+            </button>
+          </>
+        ) : (
+          <>
+            <div
+              className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${
+                isDark
+                  ? "border-slate-700 bg-slate-800 text-slate-300"
+                  : "border-slate-200 bg-slate-50 text-slate-600"
+              }`}
+            >
+              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-brand-teal" />
+              Secure room open
+            </div>
+            <button
+              type="button"
+              onClick={onEndSession}
+              className={`rounded-xl border px-5 py-2.5 text-xs font-black transition ${
+                isDark
+                  ? "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white"
+                  : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              }`}
+            >
+              Cancel &amp; End Session
+            </button>
+          </>
+        )}
+      </div>
+
+      {!timer.isExpired && (
+        <p className={`text-[11px] leading-relaxed ${isDark ? "text-slate-600" : "text-slate-400"}`}>
+          The patient was notified and has up to <strong>10 minutes</strong> to join.
+          <br />
+          Session will auto-expire when the countdown reaches 0:00.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DateRangePicker — calendar popover that lets the user pick a date range
+// with a configurable max-day cap.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MONTH_NAMES = [
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December",
+];
+const DAY_NAMES = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+function isoDate(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function addDays(d: Date, n: number): Date {
+  const r = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  r.setDate(r.getDate() + n);
+  return r;
+}
+
+function parseLocal(s: string): Date {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+export function DateRangePicker({
+  from,
+  to,
+  onChange,
+  maxDays = 26,
+  tone = "light",
+}: {
+  from: string;   // "YYYY-MM-DD" or ""
+  to: string;     // "YYYY-MM-DD" or ""
+  onChange: (from: string, to: string) => void;
+  maxDays?: number;
+  tone?: "light" | "dark";
+}) {
+  const isDark = tone === "dark";
+  const [isOpen, setIsOpen] = useState(false);
+  const [picking, setPicking] = useState<"from" | "to">("from");
+  const [hover, setHover] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const seed = from ? parseLocal(from) : new Date();
+  const [viewYear, setViewYear] = useState(seed.getFullYear());
+  const [viewMonth, setViewMonth] = useState(seed.getMonth());
+
+  // Close on outside click
+  useEffect(() => {
+    if (!isOpen) return;
+    const fn = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, [isOpen]);
+
+  const todayStr = isoDate(new Date());
+
+  function handleDayClick(dayStr: string) {
+    if (picking === "from") {
+      onChange(dayStr, "");
+      setPicking("to");
+    } else {
+      if (!from) { onChange(dayStr, ""); setPicking("to"); return; }
+      const fromD = parseLocal(from);
+      const clickD = parseLocal(dayStr);
+      if (clickD < fromD) {
+        // Clicked before start — restart from here
+        onChange(dayStr, "");
+        setPicking("to");
+        return;
+      }
+      const diff = Math.round((clickD.getTime() - fromD.getTime()) / 86_400_000);
+      const finalTo = diff > maxDays ? isoDate(addDays(fromD, maxDays)) : dayStr;
+      onChange(from, finalTo);
+      setPicking("from");
+      setIsOpen(false);
+    }
+  }
+
+  function effectiveTo() {
+    if (picking === "to" && hover) return hover;
+    return to;
+  }
+
+  function isStart(d: string) { return d === from; }
+  function isEnd(d: string) { return d === effectiveTo(); }
+  function inRange(d: string) {
+    const eff = effectiveTo();
+    if (!from || !eff) return false;
+    return d > from && d < eff;
+  }
+  function isDisabled(d: string) {
+    if (picking === "to" && from && d < from) return true;
+    return false;
+  }
+
+  function getCalDays(): string[] {
+    const firstOfMonth = new Date(viewYear, viewMonth, 1);
+    const startDow = firstOfMonth.getDay(); // 0=Sun ... 6=Sat
+    // First cell is startDow days before the 1st
+    const startDate = new Date(viewYear, viewMonth, 1 - startDow);
+    const days: string[] = [];
+    for (let i = 0; i < 42; i++) {
+      days.push(isoDate(addDays(startDate, i)));
+    }
+    return days;
+  }
+
+  function prevMonth() {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
+    else setViewMonth(m => m - 1);
+  }
+  function nextMonth() {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
+    else setViewMonth(m => m + 1);
+  }
+
+  const calDays = getCalDays();
+  const hasRange = from && to;
+
+  const triggerLabel = hasRange
+    ? `${parseLocal(from).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${parseLocal(to).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+    : from
+      ? `From ${parseLocal(from).toLocaleDateString("en-US", { month: "short", day: "numeric" })}…`
+      : "Filter by date range";
+
+  return (
+    <div ref={containerRef} className="relative">
+      {/* Trigger button */}
+      <button
+        type="button"
+        onClick={() => {
+          setIsOpen(o => !o);
+          setPicking(from && !to ? "to" : "from");
+        }}
+        className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${
+          isDark
+            ? `bg-slate-800 ${hasRange || from ? "border-brand-teal/50" : "border-slate-700"} hover:border-brand-teal`
+            : `bg-slate-50 ${hasRange || from ? "border-brand-teal/40" : "border-slate-200"} hover:border-brand-teal`
+        }`}
+      >
+        <svg className={`h-3.5 w-3.5 shrink-0 ${isDark ? "text-slate-400" : "text-slate-400"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
+          <line x1="16" y1="2" x2="16" y2="6" />
+          <line x1="8" y1="2" x2="8" y2="6" />
+          <line x1="3" y1="10" x2="21" y2="10" />
+        </svg>
+        <span className={`flex-1 truncate text-xs font-semibold ${
+          hasRange || from
+            ? isDark ? "text-white" : "text-slate-900"
+            : isDark ? "text-slate-400" : "text-slate-400"
+        }`}>
+          {triggerLabel}
+        </span>
+        {(from || to) && (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => { e.stopPropagation(); onChange("", ""); setPicking("from"); }}
+            onKeyDown={(e) => e.key === "Enter" && (e.stopPropagation(), onChange("", ""), setPicking("from"))}
+            className={`cursor-pointer text-xs font-black transition ${isDark ? "text-slate-500 hover:text-white" : "text-slate-400 hover:text-slate-700"}`}
+          >✕</span>
+        )}
+      </button>
+
+      {/* Calendar popover */}
+      {isOpen && (
+        <div className={`absolute left-0 top-full z-50 mt-2 w-72 rounded-2xl border p-4 shadow-2xl ${
+          isDark ? "border-slate-700 bg-slate-900" : "border-slate-200 bg-white"
+        }`}>
+          {/* Picking hint */}
+          <p className={`mb-3 text-center text-[9px] font-black uppercase tracking-[0.25em] ${
+            picking === "from" ? "text-brand-teal" : "text-sky-500"
+          }`}>
+            {picking === "from" ? "Click to set start date" : `Click to set end date · max ${maxDays} days`}
+          </p>
+
+          {/* Month navigation */}
+          <div className="mb-3 flex items-center justify-between">
+            <button type="button" onClick={prevMonth} className={`rounded-lg p-1.5 transition ${isDark ? "text-slate-400 hover:bg-slate-800 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
+            </button>
+            <p className={`text-xs font-black ${isDark ? "text-white" : "text-slate-900"}`}>
+              {MONTH_NAMES[viewMonth]} {viewYear}
+            </p>
+            <button type="button" onClick={nextMonth} className={`rounded-lg p-1.5 transition ${isDark ? "text-slate-400 hover:bg-slate-800 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+            </button>
+          </div>
+
+          {/* Day-of-week headers */}
+          <div className="mb-1 grid grid-cols-7">
+            {DAY_NAMES.map((d) => (
+              <div key={d} className={`text-center text-[9px] font-black uppercase ${isDark ? "text-slate-600" : "text-slate-400"}`}>{d}</div>
+            ))}
+          </div>
+
+          {/* Day cells */}
+          <div className="grid grid-cols-7 gap-y-0.5">
+            {calDays.map((dayStr, idx) => {
+              const isThisMonth = parseLocal(dayStr).getMonth() === viewMonth;
+              const start = isStart(dayStr);
+              const end = isEnd(dayStr);
+              const ranged = inRange(dayStr);
+              const disabled = isDisabled(dayStr);
+              const today = dayStr === todayStr;
+
+              return (
+                <button
+                  key={`${dayStr}-${idx}`}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => handleDayClick(dayStr)}
+                  onMouseEnter={() => picking === "to" && setHover(dayStr)}
+                  onMouseLeave={() => setHover(null)}
+                  className={[
+                    "h-8 w-full rounded-md text-[11px] transition-all",
+                    !isThisMonth && "opacity-25",
+                    disabled && "cursor-not-allowed opacity-20",
+                    start || end
+                      ? "bg-brand-teal font-black text-white shadow-sm"
+                      : ranged
+                        ? isDark ? "bg-brand-teal/20 font-semibold text-brand-teal" : "bg-teal-50 font-semibold text-teal-700"
+                        : today
+                          ? isDark ? "font-black text-brand-teal ring-1 ring-brand-teal/40" : "font-black text-brand-teal ring-1 ring-brand-teal/30"
+                          : isDark ? "font-medium text-slate-300 hover:bg-slate-800" : "font-medium text-slate-700 hover:bg-slate-100",
+                  ].filter(Boolean).join(" ")}
+                >
+                  {parseLocal(dayStr).getDate()}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Footer */}
+          <p className={`mt-3 text-center text-[10px] ${isDark ? "text-slate-600" : "text-slate-400"}`}>
+            Maximum range: <strong className={isDark ? "text-slate-400" : "text-slate-600"}>{maxDays} days</strong>
+          </p>
+        </div>
+      )}
+    </div>
   );
 }

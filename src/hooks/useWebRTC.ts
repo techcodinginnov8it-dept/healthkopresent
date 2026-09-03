@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -343,8 +343,10 @@ export function useWebRTC({
 
   useEffect(() => {
     if (!isActive || !roomId) {
-      void cleanup().then(() => setError(null));
-      return;
+      const timer = setTimeout(() => {
+        void cleanup().then(() => setError(null));
+      }, 0);
+      return () => clearTimeout(timer);
     }
 
     async function getLocalMedia() {

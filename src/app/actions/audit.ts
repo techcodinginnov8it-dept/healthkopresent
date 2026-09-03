@@ -1,8 +1,7 @@
 "use server";
 
 import { getErrorMessage } from "@/lib/errors";
-import { isPrismaConfigured, prisma } from "@/lib/prisma";
-import { mockDb } from "@/lib/mockDb";
+import { prisma } from "@/lib/prisma";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
@@ -173,66 +172,7 @@ async function submitDoctorAuditToSupabase(data: {
   };
 }
 
-async function approveDoctorAuditWithMockDb(auditId: string) {
-  const audit = mockDb.findDoctorAuditById(auditId);
 
-  if (!audit) {
-    return { success: false, error: "Audit record not found" };
-  }
-
-  if (audit.status === "APPROVED") {
-    return { success: false, error: "This audit is already approved" };
-  }
-
-  const updatedAudit = mockDb.updateDoctorAudit(auditId, { status: "APPROVED" });
-
-  if (!updatedAudit) {
-    return { success: false, error: "Audit record not found" };
-  }
-
-  if (audit.doctorId) {
-    mockDb.updateDoctor(audit.doctorId, {
-      isVerified: true,
-      isActive: true,
-    });
-  }
-
-  return {
-    success: true,
-    message: "Doctor credentials approved successfully",
-    auditId: updatedAudit.id,
-    status: updatedAudit.status,
-  };
-}
-
-async function rejectDoctorAuditWithMockDb(auditId: string, reason?: string) {
-  const audit = mockDb.findDoctorAuditById(auditId);
-
-  if (!audit) {
-    return { success: false, error: "Audit record not found" };
-  }
-
-  if (audit.status === "REJECTED") {
-    return { success: false, error: "This audit is already rejected" };
-  }
-
-  const updatedAudit = mockDb.updateDoctorAudit(auditId, { status: "REJECTED" });
-
-  if (!updatedAudit) {
-    return { success: false, error: "Audit record not found" };
-  }
-
-  if (audit.doctorId) {
-    mockDb.updateDoctor(audit.doctorId, { isVerified: false });
-  }
-
-  return {
-    success: true,
-    message: reason ? `Rejected: ${reason}` : "Doctor credentials rejected",
-    auditId: updatedAudit.id,
-    status: updatedAudit.status,
-  };
-}
 
 export async function submitDoctorAudit(data: {
   npi: string;
@@ -292,109 +232,66 @@ export async function submitDoctorAudit(data: {
       return { success: false, error: "Legal consent and digital signature are required" };
     }
 
+    // Try Prisma first, fall back to Supabase direct client
     try {
-      if (isPrismaConfigured()) {
-        try {
-          // Keep Prisma as a fast path when it is actually reachable.
-          const doc = doctorEmail
-            ? await prisma.doctor.findUnique({ where: { email: doctorEmail } })
-            : await prisma.doctor.findUnique({ where: { npi } });
+      const doc = doctorEmail
+        ? await prisma.doctor.findUnique({ where: { email: doctorEmail } })
+        : await prisma.doctor.findUnique({ where: { npi } });
 
-          const linkedDoctorId = doc?.id ?? null;
+      const linkedDoctorId = doc?.id ?? null;
 
-          const audit = await prisma.doctorAudit.create({
-            data: {
-              npi,
-              licenseNumber,
-              licenseState,
-              firstName: firstName || null,
-              middleName: middleName || null,
-              lastName: lastName || null,
-              suffix: suffix || null,
-              specialty,
-              medicalSchool,
-              gradYear: Number(gradYear),
-              yearsExp: Number(yearsExp),
-              documentName: documentName || null,
-              approvalType: approvalType || "PRC_PRIMARY_SOURCE_VERIFICATION",
-              signature,
-              consent,
-              doctorEmail: doctorEmail || null,
-              status: "PENDING",
-              doctorId: linkedDoctorId,
-            },
-          });
-
-          if (linkedDoctorId) {
-            await prisma.doctor.update({
-              where: { id: linkedDoctorId },
-              data: {
-                name: [firstName, middleName, lastName, suffix].filter(Boolean).join(" "),
-                firstName: firstName || null,
-                middleName: middleName || null,
-                lastName: lastName || null,
-                suffix: suffix || null,
-                licenseNumber,
-                licenseState,
-                yearsExp: Number(yearsExp),
-                specialty,
-                isVerified: false,
-              },
-            });
-          }
-
-          return {
-            success: true,
-            auditId: audit.id,
-            status: audit.status,
-            linked: !!linkedDoctorId,
-          };
-        } catch (error: unknown) {
-          if (!isPrismaConnectionError(error)) {
-            throw error;
-          }
-          console.warn("Prisma is unavailable for audit submission. Using Supabase direct client.");
-        }
-      }
-
-      return await submitDoctorAuditToSupabase(data);
-    } catch (error: unknown) {
-      // Last resort: fall back to mockDb so submissions still work in dev/offline mode
-      console.warn("Supabase unavailable for audit submission. Falling back to mock database.");
-      try {
-        const mockAudit = mockDb.createDoctorAudit({
-          doctorId: null,
-          npi: data.npi,
-          firstName: data.firstName || null,
-          middleName: data.middleName || null,
-          lastName: data.lastName || null,
-          suffix: data.suffix || null,
-          licenseNumber: data.licenseNumber,
-          licenseState: data.licenseState,
-          specialty: data.specialty,
-          medicalSchool: data.medicalSchool,
-          gradYear: Number(data.gradYear),
-          yearsExp: Number(data.yearsExp),
-          documentName: data.documentName || null,
-          approvalType: data.approvalType || "PRC_PRIMARY_SOURCE_VERIFICATION",
+      const audit = await prisma.doctorAudit.create({
+        data: {
+          npi,
+          licenseNumber,
+          licenseState,
+          firstName: firstName || null,
+          middleName: middleName || null,
+          lastName: lastName || null,
+          suffix: suffix || null,
+          specialty,
+          medicalSchool,
+          gradYear: Number(gradYear),
+          yearsExp: Number(yearsExp),
+          documentName: documentName || null,
+          approvalType: approvalType || "PRC_PRIMARY_SOURCE_VERIFICATION",
+          signature,
+          consent,
           status: "PENDING",
-          signature: data.signature,
-          consent: data.consent,
-          doctorEmail: data.doctorEmail || null,
+          doctorId: linkedDoctorId,
+        },
+      });
+
+      if (linkedDoctorId) {
+        await prisma.doctor.update({
+          where: { id: linkedDoctorId },
+          data: {
+            name: [firstName, middleName, lastName, suffix].filter(Boolean).join(" "),
+            firstName: firstName || null,
+            middleName: middleName || null,
+            lastName: lastName || null,
+            suffix: suffix || null,
+            licenseNumber,
+            licenseState,
+            yearsExp: Number(yearsExp),
+            specialty,
+            isVerified: false,
+          },
         });
-        return {
-          success: true,
-          auditId: mockAudit.id,
-          status: mockAudit.status,
-          linked: false,
-        };
-      } catch (mockErr: unknown) {
-        console.error("MockDb audit creation error:", mockErr);
-        return {
-          success: false,
-          error: getErrorMessage(error, "Failed to submit credential audit details"),
-        };
       }
+
+      return {
+        success: true,
+        auditId: audit.id,
+        status: audit.status,
+        linked: !!linkedDoctorId,
+      };
+    } catch (error: unknown) {
+      if (!isPrismaConnectionError(error)) {
+        throw error;
+      }
+      console.warn("Prisma is unavailable for audit submission. Using Supabase direct client.");
+      return await submitDoctorAuditToSupabase(data);
     }
   } catch (error: unknown) {
     console.error("Credentials Audit Error:", error);
@@ -411,52 +308,34 @@ export async function approveDoctorAudit(auditId: string) {
       return { success: false, error: "Audit ID is required" };
     }
 
-    if (!isPrismaConfigured()) {
-      return approveDoctorAuditWithMockDb(auditId);
+    const audit = await prisma.doctorAudit.findUnique({ where: { id: auditId } });
+
+    if (!audit) {
+      return { success: false, error: "Audit record not found" };
     }
 
-    try {
-      const audit = await prisma.doctorAudit.findUnique({
-        where: { id: auditId },
-      });
-
-      if (!audit) {
-        return { success: false, error: "Audit record not found" };
-      }
-
-      if (audit.status === "APPROVED") {
-        return { success: false, error: "This audit is already approved" };
-      }
-
-      const updatedAudit = await prisma.doctorAudit.update({
-        where: { id: auditId },
-        data: { status: "APPROVED" },
-      });
-
-      if (audit.doctorId) {
-        await prisma.doctor.update({
-          where: { id: audit.doctorId },
-          data: {
-            isVerified: true,
-            isActive: true,
-          },
-        });
-      }
-
-      return {
-        success: true,
-        message: "Doctor credentials approved successfully",
-        auditId: updatedAudit.id,
-        status: updatedAudit.status,
-      };
-    } catch (error: unknown) {
-      if (isPrismaConnectionError(error)) {
-        console.warn("Prisma is unavailable for audit approval. Falling back to mock database.");
-        return approveDoctorAuditWithMockDb(auditId);
-      }
-
-      throw error;
+    if (audit.status === "APPROVED") {
+      return { success: false, error: "This audit is already approved" };
     }
+
+    const updatedAudit = await prisma.doctorAudit.update({
+      where: { id: auditId },
+      data: { status: "APPROVED" },
+    });
+
+    if (audit.doctorId) {
+      await prisma.doctor.update({
+        where: { id: audit.doctorId },
+        data: { isVerified: true, isActive: true },
+      });
+    }
+
+    return {
+      success: true,
+      message: "Doctor credentials approved successfully",
+      auditId: updatedAudit.id,
+      status: updatedAudit.status,
+    };
   } catch (error: unknown) {
     console.error("Doctor Audit Approval Error:", error);
     return {
@@ -472,49 +351,34 @@ export async function rejectDoctorAudit(auditId: string, reason?: string) {
       return { success: false, error: "Audit ID is required" };
     }
 
-    if (!isPrismaConfigured()) {
-      return rejectDoctorAuditWithMockDb(auditId, reason);
+    const audit = await prisma.doctorAudit.findUnique({ where: { id: auditId } });
+
+    if (!audit) {
+      return { success: false, error: "Audit record not found" };
     }
 
-    try {
-      const audit = await prisma.doctorAudit.findUnique({
-        where: { id: auditId },
-      });
-
-      if (!audit) {
-        return { success: false, error: "Audit record not found" };
-      }
-
-      if (audit.status === "REJECTED") {
-        return { success: false, error: "This audit is already rejected" };
-      }
-
-      const updatedAudit = await prisma.doctorAudit.update({
-        where: { id: auditId },
-        data: { status: "REJECTED" },
-      });
-
-      if (audit.doctorId) {
-        await prisma.doctor.update({
-          where: { id: audit.doctorId },
-          data: { isVerified: false },
-        });
-      }
-
-      return {
-        success: true,
-        message: reason ? `Rejected: ${reason}` : "Doctor credentials rejected",
-        auditId: updatedAudit.id,
-        status: updatedAudit.status,
-      };
-    } catch (error: unknown) {
-      if (isPrismaConnectionError(error)) {
-        console.warn("Prisma is unavailable for audit rejection. Falling back to mock database.");
-        return rejectDoctorAuditWithMockDb(auditId, reason);
-      }
-
-      throw error;
+    if (audit.status === "REJECTED") {
+      return { success: false, error: "This audit is already rejected" };
     }
+
+    const updatedAudit = await prisma.doctorAudit.update({
+      where: { id: auditId },
+      data: { status: "REJECTED" },
+    });
+
+    if (audit.doctorId) {
+      await prisma.doctor.update({
+        where: { id: audit.doctorId },
+        data: { isVerified: false },
+      });
+    }
+
+    return {
+      success: true,
+      message: reason ? `Rejected: ${reason}` : "Doctor credentials rejected",
+      auditId: updatedAudit.id,
+      status: updatedAudit.status,
+    };
   } catch (error: unknown) {
     console.error("Doctor Audit Rejection Error:", error);
     return {
@@ -526,46 +390,16 @@ export async function rejectDoctorAudit(auditId: string, reason?: string) {
 
 export async function getPendingDoctorAudits() {
   try {
-    if (!isPrismaConfigured()) {
-      const audits = mockDb.getPendingDoctorAudits().map((audit) => serializeAudit(audit));
-      return {
-        success: true,
-        audits,
-      };
-    }
-
-    try {
-      const audits = await prisma.doctorAudit.findMany({
-        where: { status: "PENDING" },
-        include: {
-          doctor: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              specialty: true,
-            },
-          },
+    const audits = await prisma.doctorAudit.findMany({
+      where: { status: "PENDING" },
+      include: {
+        doctor: {
+          select: { id: true, name: true, email: true, specialty: true },
         },
-        orderBy: { submittedAt: "desc" },
-      });
-
-      return {
-        success: true,
-        audits: audits.map(serializeAudit),
-      };
-    } catch (error: unknown) {
-      if (isPrismaConnectionError(error)) {
-        console.warn("Prisma is unavailable for pending audit lookup. Falling back to mock database.");
-        const audits = mockDb.getPendingDoctorAudits().map((audit) => serializeAudit(audit));
-        return {
-          success: true,
-          audits,
-        };
-      }
-
-      throw error;
-    }
+      },
+      orderBy: { submittedAt: "desc" },
+    });
+    return { success: true, audits: audits.map((audit: any) => serializeAudit(audit)) };
   } catch (error: unknown) {
     console.error("Fetch Pending Audits Error:", error);
     return {
@@ -578,35 +412,15 @@ export async function getPendingDoctorAudits() {
 
 export async function getAllDoctorAudits() {
   try {
-    if (!isPrismaConfigured()) {
-      const audits = mockDb.getAllDoctorAudits().map((audit) => serializeAudit(audit));
-      return { success: true, audits };
-    }
-
-    try {
-      const audits = await prisma.doctorAudit.findMany({
-        include: {
-          doctor: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              specialty: true,
-            },
-          },
+    const audits = await prisma.doctorAudit.findMany({
+      include: {
+        doctor: {
+          select: { id: true, name: true, email: true, specialty: true },
         },
-        orderBy: { submittedAt: "desc" },
-      });
-
-      return { success: true, audits: audits.map(serializeAudit) };
-    } catch (error: unknown) {
-      if (isPrismaConnectionError(error)) {
-        console.warn("Prisma unavailable for all audits lookup. Falling back to mock database.");
-        const audits = mockDb.getAllDoctorAudits().map((audit) => serializeAudit(audit));
-        return { success: true, audits };
-      }
-      throw error;
-    }
+      },
+      orderBy: { submittedAt: "desc" },
+    });
+    return { success: true, audits: audits.map((audit: any) => serializeAudit(audit)) };
   } catch (error: unknown) {
     console.error("Fetch All Audits Error:", error);
     return {
@@ -621,6 +435,7 @@ export async function getAllDoctorAudits() {
 export type CreateDoctorAccountPayload = {
   email: string;
   password: string;
+  username?: string;
   npi: string;
   firstName: string;
   middleName?: string;
@@ -639,6 +454,7 @@ export async function createDoctorAccountByAdmin(data: CreateDoctorAccountPayloa
     const {
       email,
       password,
+      username,
       npi,
       firstName,
       middleName,
@@ -654,8 +470,13 @@ export async function createDoctorAccountByAdmin(data: CreateDoctorAccountPayloa
 
     const normalizedEmail = email.trim().toLowerCase();
     const cleanNpi = npi.trim();
+    const cleanLicenseNumber = licenseNumber.trim();
+    const cleanUsername = (username || cleanLicenseNumber || cleanNpi)
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "");
 
-    if (!normalizedEmail || !password || !cleanNpi || !firstName || !lastName || !specialty || !licenseNumber || !licenseState) {
+    if (!normalizedEmail || !password || !cleanNpi || !firstName || !lastName || !specialty || !cleanLicenseNumber || !licenseState) {
       return { success: false, error: "Please fill in all required doctor account fields." };
     }
 
@@ -663,17 +484,31 @@ export async function createDoctorAccountByAdmin(data: CreateDoctorAccountPayloa
       return { success: false, error: "Password must be at least 6 characters long." };
     }
 
+    // Check if username is already taken by another doctor
+    const existingWithUsername = await prisma.doctor.findFirst({
+      where: {
+        username: cleanUsername,
+        NOT: { email: normalizedEmail },
+      },
+      select: { id: true, name: true },
+    });
+
+    if (existingWithUsername) {
+      return {
+        success: false,
+        error: `The username "${cleanUsername}" is already in use by another physician (${existingWithUsername.name}).`,
+      };
+    }
+
     const fullName = [firstName, middleName, lastName, suffix].filter((part) => part && part.trim().length > 0).join(" ").trim();
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Step 1: Attempt creation in Prisma if configured
-    if (isPrismaConfigured()) {
-      try {
-        const createdAccount = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    try {
+      const createdAccount = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
           const user = await tx.user.upsert({
-            where: { email: normalizedEmail },
+            where: { username: cleanUsername },
             create: {
-              email: normalizedEmail,
+              username: cleanUsername,
               password: hashedPassword,
               role: "DOCTOR",
               emailVerified: true,
@@ -692,6 +527,7 @@ export async function createDoctorAccountByAdmin(data: CreateDoctorAccountPayloa
             create: {
               userId: user.id,
               name: fullName || `Dr. ${lastName}`,
+              username: cleanUsername,
               firstName: firstName || null,
               middleName: middleName || null,
               lastName: lastName || null,
@@ -700,7 +536,7 @@ export async function createDoctorAccountByAdmin(data: CreateDoctorAccountPayloa
               email: normalizedEmail,
               password: hashedPassword,
               specialty,
-              licenseNumber,
+              licenseNumber: cleanLicenseNumber,
               licenseState,
               yearsExp: Number(yearsExp),
               consultFee: Number(consultFee),
@@ -710,6 +546,7 @@ export async function createDoctorAccountByAdmin(data: CreateDoctorAccountPayloa
             update: {
               userId: user.id,
               name: fullName || `Dr. ${lastName}`,
+              username: cleanUsername,
               firstName: firstName || null,
               middleName: middleName || null,
               lastName: lastName || null,
@@ -717,7 +554,7 @@ export async function createDoctorAccountByAdmin(data: CreateDoctorAccountPayloa
               npi: cleanNpi,
               password: hashedPassword,
               specialty,
-              licenseNumber,
+              licenseNumber: cleanLicenseNumber,
               licenseState,
               yearsExp: Number(yearsExp),
               consultFee: Number(consultFee),
@@ -741,97 +578,21 @@ export async function createDoctorAccountByAdmin(data: CreateDoctorAccountPayloa
 
         return {
           success: true,
-          message: `Doctor account for Dr. ${fullName || lastName} created and verified successfully!`,
+          message: `Doctor account for Dr. ${fullName || lastName} created and approved with username "${cleanUsername}"!`,
           doctor: {
             id: createdAccount.id,
             name: createdAccount.name,
+            username: cleanUsername,
             email: createdAccount.email,
             npi: createdAccount.npi,
+            licenseNumber: cleanLicenseNumber,
             specialty: createdAccount.specialty,
           },
         };
       } catch (error: unknown) {
-        if (!isPrismaConnectionError(error)) {
-          console.error("Prisma doctor creation error:", error);
-          return { success: false, error: getErrorMessage(error, "Failed to create doctor account in Prisma database") };
-        }
-        console.warn("Prisma unavailable for doctor creation. Falling back to MockDB.");
+        console.error("Doctor creation error:", error);
+        return { success: false, error: getErrorMessage(error, "Failed to create doctor account") };
       }
-    }
-
-    // Step 2: Fallback to MockDB
-    const existingDoctor = mockDb.findDoctorByEmailOrNpi(normalizedEmail) || mockDb.findDoctorByEmailOrNpi(cleanNpi);
-    if (existingDoctor) {
-      mockDb.updateDoctor(existingDoctor.id, {
-        password: hashedPassword,
-        name: fullName || existingDoctor.name,
-        firstName: firstName || existingDoctor.firstName,
-        middleName: middleName || existingDoctor.middleName,
-        lastName: lastName || existingDoctor.lastName,
-        suffix: suffix || existingDoctor.suffix,
-        npi: cleanNpi,
-        specialty,
-        licenseNumber,
-        licenseState,
-        yearsExp: Number(yearsExp),
-        isVerified: true,
-        isActive: true,
-      });
-
-      if (auditId) {
-        mockDb.updateDoctorAudit(auditId, { status: "APPROVED" });
-      }
-
-      return {
-        success: true,
-        message: `Doctor account for Dr. ${fullName || lastName} updated and verified in system!`,
-        doctor: {
-          id: existingDoctor.id,
-          name: fullName || existingDoctor.name,
-          email: normalizedEmail,
-          npi: cleanNpi,
-          specialty,
-        },
-      };
-    }
-
-    const newDoctor = mockDb.createDoctor({
-      name: fullName || `Dr. ${lastName}`,
-      firstName: firstName || null,
-      middleName: middleName || null,
-      lastName: lastName || null,
-      suffix: suffix || null,
-      npi: cleanNpi,
-      email: normalizedEmail,
-      password: hashedPassword,
-      specialty,
-      licenseNumber,
-      licenseState,
-      yearsExp: Number(yearsExp),
-      consultFee: Number(consultFee),
-      isVerified: true,
-      isActive: true,
-      bio: null,
-      image: null,
-      languages: ["English"],
-      isFeatured: false,
-    });
-
-    if (auditId) {
-      mockDb.updateDoctorAudit(auditId, { status: "APPROVED" });
-    }
-
-    return {
-      success: true,
-      message: `Doctor account for Dr. ${fullName || lastName} created successfully!`,
-      doctor: {
-        id: newDoctor.id,
-        name: newDoctor.name,
-        email: newDoctor.email,
-        npi: newDoctor.npi,
-        specialty: newDoctor.specialty,
-      },
-    };
   } catch (error: unknown) {
     console.error("Create Doctor Account Error:", error);
     return {

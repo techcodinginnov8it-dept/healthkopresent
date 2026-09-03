@@ -130,6 +130,7 @@ export type RealtimeEvent =
       appointmentId: string;
       actorRole: DashboardRole;
       targetDoctorId?: string;
+      targetPatientId?: string;
       scheduledAt?: string;
       title?: string;
       body?: string;

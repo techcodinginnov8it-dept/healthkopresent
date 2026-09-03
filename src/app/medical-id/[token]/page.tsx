@@ -2,8 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { formatDate } from "@/lib/dashboard/format";
-import { isPrismaConfigured, prisma } from "@/lib/prisma";
-import { mockDb } from "@/lib/mockDb";
+import { prisma } from "@/lib/prisma";
 import { parsePatientMedicalIdToken } from "@/lib/patient-medical-id";
 
 type EmergencyPatient = {
@@ -29,76 +28,53 @@ async function loadEmergencyPatient(token: string): Promise<EmergencyPatient | n
   const payload = parsePatientMedicalIdToken(token);
   if (!payload) return null;
 
-  if (isPrismaConfigured()) {
-    try {
-      const patient = await prisma.patient.findUnique({
-        where: { id: payload.patientId },
-        select: {
-          firstName: true,
-          lastName: true,
-          dob: true,
-          gender: true,
-          bloodType: true,
-          height: true,
-          weight: true,
-          allergies: true,
-          existingConditions: true,
-          currentMedications: true,
-          emergencyContactName: true,
-          emergencyContactPhone: true,
-          emergencyContactRelation: true,
-          phone: true,
-          countryCode: true,
-          updatedAt: true,
-        },
-      });
+  try {
+    const patient = await prisma.patient.findUnique({
+      where: { id: payload.patientId },
+      select: {
+        firstName: true,
+        lastName: true,
+        dob: true,
+        gender: true,
+        bloodType: true,
+        height: true,
+        weight: true,
+        allergies: true,
+        existingConditions: true,
+        currentMedications: true,
+        emergencyContactName: true,
+        emergencyContactPhone: true,
+        emergencyContactRelation: true,
+        phone: true,
+        countryCode: true,
+        updatedAt: true,
+      },
+    });
 
-      if (patient) {
-        return {
-          firstName: patient.firstName,
-          lastName: patient.lastName,
-          dob: patient.dob,
-          gender: patient.gender ?? null,
-          bloodType: patient.bloodType ?? null,
-          height: patient.height ?? null,
-          weight: patient.weight ?? null,
-          allergies: patient.allergies ?? null,
-          existingConditions: patient.existingConditions ?? null,
-          currentMedications: patient.currentMedications ?? null,
-          emergencyContactName: patient.emergencyContactName ?? null,
-          emergencyContactPhone: patient.emergencyContactPhone ?? null,
-          emergencyContactRelation: patient.emergencyContactRelation ?? null,
-          phone: patient.phone,
-          countryCode: patient.countryCode ?? null,
-          updatedAt: new Date(patient.updatedAt),
-        };
-      }
-    } catch (error) {
-      console.warn("Prisma query in loadEmergencyPatient failed, falling back to mock JSON database:", error);
-    }
+    if (!patient) return null;
+
+    return {
+      firstName: patient.firstName,
+      lastName: patient.lastName,
+      dob: patient.dob,
+      gender: patient.gender ?? null,
+      bloodType: patient.bloodType ?? null,
+      height: patient.height ?? null,
+      weight: patient.weight ?? null,
+      allergies: patient.allergies ?? null,
+      existingConditions: patient.existingConditions ?? null,
+      currentMedications: patient.currentMedications ?? null,
+      emergencyContactName: patient.emergencyContactName ?? null,
+      emergencyContactPhone: patient.emergencyContactPhone ?? null,
+      emergencyContactRelation: patient.emergencyContactRelation ?? null,
+      phone: patient.phone,
+      countryCode: patient.countryCode ?? null,
+      updatedAt: new Date(patient.updatedAt),
+    };
+  } catch (error) {
+    console.error("[loadEmergencyPatient] Prisma query failed:", error);
+    return null;
   }
-
-  // Fallback to mockDb
-  const patient = mockDb.findPatientById(payload.patientId);
-  if (!patient) return null;
-  return {
-    firstName: patient.firstName,
-    lastName: patient.lastName,
-    dob: patient.dob,
-    gender: patient.gender ?? null,
-    bloodType: patient.bloodType ?? null,
-    height: patient.height ?? null,
-    weight: patient.weight ?? null,
-    allergies: patient.allergies ?? null,
-    existingConditions: patient.existingConditions ?? null,
-    currentMedications: patient.currentMedications ?? null,
-    emergencyContactName: patient.emergencyContactName ?? null,
-    emergencyContactPhone: patient.emergencyContactPhone ?? null,
-    emergencyContactRelation: patient.emergencyContactRelation ?? null,
-    phone: patient.phone,
-    countryCode: patient.countryCode ?? null,
-    updatedAt: new Date(patient.updatedAt),
-  };
 }
 
 function CriticalBadge({ label, value }: { label: string; value: string }) {

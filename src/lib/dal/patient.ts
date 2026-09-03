@@ -3,9 +3,8 @@ import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 
-import { isPrismaConfigured, prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { requirePatientSession } from "@/lib/auth/patient-session";
-import { mockDb } from "@/lib/mockDb";
 
 const PATIENT_BOOKINGS_SELECT = {
   orderBy: { scheduledAt: "asc" as const },
@@ -71,81 +70,14 @@ const PATIENT_PROFILE_SELECT = {
 export const getPatientDashboardData = cache(async () => {
   const session = await requirePatientSession();
 
-  if (!isPrismaConfigured()) {
-    return getMockPatientDashboardData(session);
-  }
-
-  let patient = null;
-
-  try {
-    patient = await prisma.patient.findUnique({
-      where: { id: session.userId },
-      select: PATIENT_PROFILE_SELECT,
-    });
-  } catch (error) {
-    console.error("[getPatientDashboardData] Prisma query failed:", error);
-  }
+  const patient = await prisma.patient.findUnique({
+    where: { id: session.userId },
+    select: PATIENT_PROFILE_SELECT,
+  });
 
   if (!patient) {
-    const mockPatient = mockDb.findPatientById(session.userId);
-    if (mockPatient) {
-      return getMockPatientDashboardData(session);
-    }
     redirect("/signin");
   }
 
-  return {
-    session,
-    patient,
-  };
+  return { session, patient };
 });
-
-function getMockPatientDashboardData(session: { userId: string; email: string }) {
-  try {
-    const patientData = mockDb.findPatientById(session.userId) ?? mockDb.findPatientByEmail(session.email);
-
-    if (!patientData) {
-      redirect("/signin");
-    }
-
-    const bookings = mockDb.getBookingsForPatient(patientData.id);
-
-    return {
-      session,
-      patient: {
-        id: patientData.id,
-        firstName: patientData.firstName,
-        middleName: patientData.middleName,
-        suffix: patientData.suffix,
-        lastName: patientData.lastName,
-        email: patientData.email,
-        image: patientData.image ?? null,
-        phone: patientData.phone,
-        countryCode: patientData.countryCode,
-        dob: patientData.dob,
-        gender: patientData.gender,
-        address: patientData.address ?? null,
-        city: patientData.city ?? null,
-        state: patientData.state ?? null,
-        zipCode: patientData.zipCode ?? null,
-        country: patientData.country ?? null,
-        height: patientData.height ?? null,
-        weight: patientData.weight ?? null,
-        bloodType: patientData.bloodType ?? null,
-        allergies: patientData.allergies ?? null,
-        existingConditions: patientData.existingConditions ?? null,
-        currentMedications: patientData.currentMedications ?? null,
-        emergencyContactName: patientData.emergencyContactName ?? null,
-        emergencyContactPhone: patientData.emergencyContactPhone ?? null,
-        emergencyContactRelation: patientData.emergencyContactRelation ?? null,
-        emailVerified: patientData.emailVerified,
-        createdAt: new Date(patientData.createdAt),
-        updatedAt: new Date(patientData.updatedAt),
-        bookings,
-      },
-    };
-  } catch (mockErr) {
-    console.error("Patient DAL Mock DB critical failure:", mockErr);
-    redirect("/signin");
-  }
-}

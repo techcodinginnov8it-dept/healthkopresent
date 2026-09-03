@@ -56,12 +56,12 @@ export default function DashboardPreview() {
         </div>
 
         {/* Tab Controllers */}
-        <div className="flex flex-wrap justify-center gap-2 mb-10 max-w-4xl mx-auto p-1.5 rounded-2xl bg-slate-100 border border-slate-200/50">
+        <div className="flex overflow-x-auto no-scrollbar sm:flex-wrap justify-start sm:justify-center gap-1.5 sm:gap-2 mb-8 sm:mb-10 max-w-4xl mx-auto p-1.5 rounded-2xl bg-slate-100/80 border border-slate-200/60 pb-2 sm:pb-1.5">
           <button
             onClick={() => setActiveTab("patient")}
-            className={`flex items-center space-x-2 px-5 py-3 rounded-xl font-bold text-sm transition-all ${
+            className={`flex shrink-0 items-center space-x-2 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all ${
               activeTab === "patient"
-                ? "bg-white text-brand-teal shadow-md"
+                ? "bg-white text-brand-teal shadow-md shadow-slate-200/50"
                 : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
             }`}
           >
@@ -73,9 +73,9 @@ export default function DashboardPreview() {
 
           <button
             onClick={() => setActiveTab("doctor")}
-            className={`flex items-center space-x-2 px-5 py-3 rounded-xl font-bold text-sm transition-all ${
+            className={`flex shrink-0 items-center space-x-2 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all ${
               activeTab === "doctor"
-                ? "bg-white text-brand-teal shadow-md"
+                ? "bg-white text-brand-teal shadow-md shadow-slate-200/50"
                 : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
             }`}
           >
@@ -87,9 +87,9 @@ export default function DashboardPreview() {
 
           <button
             onClick={() => setActiveTab("video")}
-            className={`flex items-center space-x-2 px-5 py-3 rounded-xl font-bold text-sm transition-all ${
+            className={`flex shrink-0 items-center space-x-2 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all ${
               activeTab === "video"
-                ? "bg-white text-brand-teal shadow-md"
+                ? "bg-white text-brand-teal shadow-md shadow-slate-200/50"
                 : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
             }`}
           >
@@ -101,9 +101,9 @@ export default function DashboardPreview() {
 
           <button
             onClick={() => setActiveTab("records")}
-            className={`flex items-center space-x-2 px-5 py-3 rounded-xl font-bold text-sm transition-all ${
+            className={`flex shrink-0 items-center space-x-2 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm transition-all ${
               activeTab === "records"
-                ? "bg-white text-brand-teal shadow-md"
+                ? "bg-white text-brand-teal shadow-md shadow-slate-200/50"
                 : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
             }`}
           >

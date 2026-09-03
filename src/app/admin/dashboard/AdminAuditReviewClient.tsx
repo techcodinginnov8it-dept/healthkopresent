@@ -105,6 +105,7 @@ export default function AdminAuditReviewClient({ initialAudits }: { initialAudit
   const [createForm, setCreateForm] = useState({
     email: "",
     password: "",
+    username: "",
     npi: "",
     firstName: "",
     middleName: "",
@@ -119,6 +120,8 @@ export default function AdminAuditReviewClient({ initialAudits }: { initialAudit
   });
   const [createdResult, setCreatedResult] = useState<{
     email: string;
+    username: string;
+    licenseNumber: string;
     npi: string;
     password: string;
     name: string;
@@ -174,10 +177,15 @@ export default function AdminAuditReviewClient({ initialAudits }: { initialAudit
     const firstName = audit.firstName || nameParts[0] || "";
     const lastName = audit.lastName || (nameParts.length > 1 ? nameParts[nameParts.length - 1] : "");
     const generatedPass = `HkDoc${Math.floor(1000 + Math.random() * 9000)}!`;
+    const defaultUsername = (audit.licenseNumber || `dr.${(lastName || "doc").toLowerCase()}`)
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "");
 
     setCreateForm({
       email: audit.doctorEmail || audit.doctor?.email || "",
       password: generatedPass,
+      username: defaultUsername,
       npi: audit.npi,
       firstName,
       middleName: audit.middleName || "",
@@ -217,6 +225,8 @@ export default function AdminAuditReviewClient({ initialAudits }: { initialAudit
       setFeedback(res.message || "Doctor account created and approved successfully!");
       setCreatedResult({
         email: createForm.email,
+        username: (res.doctor as any)?.username || createForm.username,
+        licenseNumber: createForm.licenseNumber,
         npi: createForm.npi,
         password: createForm.password,
         name: res.doctor?.name || `Dr. ${createForm.lastName}`,
@@ -273,11 +283,11 @@ export default function AdminAuditReviewClient({ initialAudits }: { initialAudit
         </div>
 
         {/* Filter Tabs */}
-        <div className="mt-6 flex flex-wrap gap-2 border-t border-white/10 pt-6">
+        <div className="mt-6 flex gap-2 overflow-x-auto no-scrollbar border-t border-white/10 pt-6 pb-1">
           <button
             type="button"
             onClick={() => setActiveTab("pending")}
-            className={`rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+            className={`shrink-0 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
               activeTab === "pending"
                 ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
                 : "bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white"
@@ -288,7 +298,7 @@ export default function AdminAuditReviewClient({ initialAudits }: { initialAudit
           <button
             type="button"
             onClick={() => setActiveTab("approved")}
-            className={`rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+            className={`shrink-0 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
               activeTab === "approved"
                 ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
                 : "bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white"
@@ -299,9 +309,9 @@ export default function AdminAuditReviewClient({ initialAudits }: { initialAudit
           <button
             type="button"
             onClick={() => setActiveTab("rejected")}
-            className={`rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+            className={`shrink-0 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
               activeTab === "rejected"
-                ? "bg-brand-red/20 text-brand-red border border-brand-red/40"
+                ? "bg-brand-red/20 text-rose-300 border border-brand-red/40"
                 : "bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white"
             }`}
           >
@@ -310,13 +320,13 @@ export default function AdminAuditReviewClient({ initialAudits }: { initialAudit
           <button
             type="button"
             onClick={() => setActiveTab("all")}
-            className={`rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+            className={`shrink-0 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
               activeTab === "all"
                 ? "bg-brand-teal/20 text-brand-teal border border-brand-teal/40"
                 : "bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white"
             }`}
           >
-            All Submissions ({audits.length})
+            All Audits ({audits.length})
           </button>
         </div>
       </div>
@@ -348,149 +358,115 @@ export default function AdminAuditReviewClient({ initialAudits }: { initialAudit
           filteredAudits.map((audit) => (
             <article
               key={audit.id}
-              className="rounded-3xl border border-white/10 bg-slate-900/60 p-6 shadow-xl backdrop-blur transition-all duration-200 hover:border-white/20"
+              className="overflow-hidden rounded-3xl border border-white/10 bg-slate-900/60 shadow-xl backdrop-blur transition-all duration-200 hover:border-white/20"
             >
-              <div className="flex flex-col gap-6 lg:grid lg:grid-cols-12">
-                {/* Column 1: Practitioner Identity (4 cols) */}
-                <div className="lg:col-span-4 space-y-3 pr-4 lg:border-r lg:border-white/10">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-brand-teal bg-brand-teal/10 border border-brand-teal/20 px-2.5 py-1 rounded-lg">
-                      Doctor Profile
-                    </span>
+              {/* Mobile-first card header */}
+              <div className="flex items-start gap-3 border-b border-white/8 p-4 sm:p-5">
+                {/* Doctor avatar */}
+                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-brand-teal/15 text-sm font-black text-brand-teal border border-brand-teal/20">
+                  {(audit.signature || audit.doctor?.name || "DP").split(" ").map((p: string) => p[0]).join("").slice(0, 2).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-base font-black text-white">
+                      {audit.signature || audit.doctor?.name || "Dr. Practitioner"}
+                    </h3>
                     <span
-                      className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-lg border ${
+                      className={`rounded-full border px-2.5 py-0.5 text-[10px] font-black uppercase ${
                         audit.status === "APPROVED"
-                          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
                           : audit.status === "REJECTED"
-                          ? "bg-brand-red/10 text-brand-red border-brand-red/20"
-                          : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                          ? "bg-brand-red/15 text-brand-red border-brand-red/30"
+                          : "bg-amber-500/15 text-amber-400 border-amber-500/30"
                       }`}
                     >
                       {audit.status}
                     </span>
                   </div>
-
-                  <div>
-                    <h3 className="font-display text-lg font-black text-white">
-                      {audit.signature || audit.doctor?.name || "Dr. Practitioner"}
-                    </h3>
-                    <p className="text-xs font-semibold text-slate-400 mt-0.5">
-                      Specialty: <span className="text-white font-bold">{audit.specialty}</span>
-                    </p>
-                  </div>
-
-                  <div className="space-y-1.5 pt-2 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">PRC License / NPI:</span>
-                      <span className="font-mono font-bold text-white">{audit.npi}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Account Link:</span>
-                      <span className="font-semibold text-white">
-                        {audit.doctorEmail || audit.doctor?.email ? (audit.doctorEmail || audit.doctor?.email) : <span className="text-amber-400 font-bold">Unlinked (Audit Only)</span>}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Submitted:</span>
-                      <span className="text-slate-300">{new Date(audit.submittedAt).toISOString().split("T")[0]}</span>
-                    </div>
+                  <p className="mt-0.5 text-xs font-bold text-brand-teal">{audit.specialty}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-400">
+                    <span className="font-mono font-bold text-white">NPI: {audit.npi}</span>
+                    <span>{new Date(audit.submittedAt).toISOString().split("T")[0]}</span>
                   </div>
                 </div>
+              </div>
 
-                {/* Column 2: PRC Credentials & Schooling (4 cols) */}
-                <div className="lg:col-span-4 space-y-3 pr-4 lg:border-r lg:border-white/10">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                    Primary Source Credentials
-                  </span>
-
-                  <div className="grid grid-cols-2 gap-3 text-xs">
+              {/* Card body – credentials + docs */}
+              <div className="grid gap-4 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-3">
+                {/* Credentials block */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">PRC Credentials</p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="rounded-xl border border-white/5 bg-white/5 p-3">
-                      <p className="text-[10px] font-bold uppercase text-slate-400">PRC Reg. Number</p>
+                      <p className="text-[10px] font-bold uppercase text-slate-400">Reg. Number</p>
                       <p className="mt-1 font-mono text-sm font-bold text-white">{audit.licenseNumber}</p>
                     </div>
                     <div className="rounded-xl border border-white/5 bg-white/5 p-3">
-                      <p className="text-[10px] font-bold uppercase text-slate-400">Medical Board</p>
+                      <p className="text-[10px] font-bold uppercase text-slate-400">Board</p>
                       <p className="mt-1 font-bold text-white">{audit.licenseState}</p>
                     </div>
                   </div>
-
-                  <div className="space-y-1.5 text-xs text-slate-300">
-                    <p>
-                      <span className="text-slate-400">Medical School:</span>{" "}
-                      <strong className="text-white">{audit.medicalSchool}</strong>
-                    </p>
-                    <p>
-                      <span className="text-slate-400">Graduation Year:</span>{" "}
-                      <strong className="text-white">{audit.gradYear}</strong> ({audit.yearsExp} Years Exp.)
-                    </p>
-                    <p>
-                      <span className="text-slate-400">Digital Signature:</span>{" "}
-                      <strong className="text-brand-teal italic">{audit.signature}</strong>
-                    </p>
+                  <div className="space-y-1 text-xs text-slate-300">
+                    <p><span className="text-slate-400">School:</span> <strong className="text-white">{audit.medicalSchool}</strong></p>
+                    <p><span className="text-slate-400">Grad:</span> <strong className="text-white">{audit.gradYear}</strong> · {audit.yearsExp}yr exp</p>
                   </div>
                 </div>
 
-                {/* Column 3: Verification & Actions (4 cols) */}
-                <div className="lg:col-span-4 flex flex-col justify-between space-y-4">
-                  <div>
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                      Supporting Documents
-                    </span>
-                    <div className="mt-2 rounded-xl border border-white/10 bg-slate-950/60 p-3 text-xs">
-                      {(() => {
-                        const docs = parseDocumentName(audit.documentName);
-                        if (docs.plain) {
-                          return (
-                            <div className="flex items-center space-x-2 text-slate-200">
-                              <svg className="h-4 w-4 text-brand-teal" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                              </svg>
-                              <span className="font-semibold truncate">{docs.plain}</span>
-                            </div>
-                          );
-                        }
-                        const anyDoc = docs.front || docs.back || docs.selfie;
-                        if (!anyDoc) {
-                          return <p className="text-slate-400 italic">No documents uploaded</p>;
-                        }
+                {/* Documents block */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Supporting Documents</p>
+                  <div className="rounded-xl border border-white/10 bg-slate-950/60 p-3 text-xs">
+                    {(() => {
+                      const docs = parseDocumentName(audit.documentName);
+                      if (docs.plain) {
                         return (
-                          <div className="flex gap-2 flex-wrap">
-                            {docs.front && <DocThumbnail label="ID Front" doc={docs.front} />}
-                            {docs.back && <DocThumbnail label="ID Back" doc={docs.back} />}
-                            {docs.selfie && <DocThumbnail label="Selfie" doc={docs.selfie} />}
+                          <div className="flex items-center gap-2 text-slate-200">
+                            <svg className="h-4 w-4 text-brand-teal" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                            </svg>
+                            <span className="truncate font-semibold">{docs.plain}</span>
                           </div>
                         );
-                      })()}
-                    </div>
+                      }
+                      const anyDoc = docs.front || docs.back || docs.selfie;
+                      if (!anyDoc) return <p className="italic text-slate-400">No documents uploaded</p>;
+                      return (
+                        <div className="flex flex-wrap gap-2">
+                          {docs.front && <DocThumbnail label="ID Front" doc={docs.front} />}
+                          {docs.back && <DocThumbnail label="ID Back" doc={docs.back} />}
+                          {docs.selfie && <DocThumbnail label="Selfie" doc={docs.selfie} />}
+                        </div>
+                      );
+                    })()}
                   </div>
+                </div>
 
-                  <div className="flex flex-col gap-2 pt-2">
+                {/* Actions block */}
+                <div className="flex flex-col justify-end gap-2 sm:col-span-2 lg:col-span-1">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAudit(audit)}
+                    className="w-full rounded-xl border border-white/15 bg-white/8 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-white/15 active:scale-[0.99]"
+                  >
+                    Inspect Full Details
+                  </button>
+                  <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => setSelectedAudit(audit)}
-                      className="w-full rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-white/20"
+                      onClick={() => handleApprove(audit)}
+                      disabled={workingId === audit.id || audit.status === "APPROVED" || audit.status === "REJECTED"}
+                      className="flex-1 rounded-xl bg-emerald-500 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-600 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      Inspect Full Details
+                      {audit.status === "APPROVED" ? "✓ Approved" : "Approve & Create"}
                     </button>
-
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleApprove(audit)}
-                        disabled={workingId === audit.id || audit.status === "APPROVED" || audit.status === "REJECTED"}
-                        className="flex-1 rounded-xl bg-emerald-500 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        {audit.status === "APPROVED" ? "✓ Approved" : "Approve & Create Account"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleReject(audit.id)}
-                        disabled={workingId === audit.id || audit.status === "APPROVED" || audit.status === "REJECTED"}
-                        className="flex-1 rounded-xl border border-brand-red/30 bg-brand-red/10 px-3 py-2.5 text-xs font-bold text-brand-red transition hover:bg-brand-red/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        {audit.status === "REJECTED" ? "✗ Rejected" : "Reject"}
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleReject(audit.id)}
+                      disabled={workingId === audit.id || audit.status === "APPROVED" || audit.status === "REJECTED"}
+                      className="flex-1 rounded-xl border border-brand-red/30 bg-brand-red/10 px-3 py-2.5 text-xs font-bold text-brand-red transition hover:bg-brand-red/20 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {audit.status === "REJECTED" ? "✗ Rejected" : "Reject"}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -660,18 +636,25 @@ export default function AdminAuditReviewClient({ initialAudits }: { initialAudit
                       <span className="text-brand-teal">/doctor/signin</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-400">Email:</span>
-                      <strong>{createdResult.email}</strong>
+                      <span className="text-slate-400">Username:</span>
+                      <strong className="text-brand-teal">{createdResult.username}</strong>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-400">NPI Number:</span>
-                      <strong>{createdResult.npi}</strong>
+                      <span className="text-slate-400">License Number:</span>
+                      <strong>{createdResult.licenseNumber}</strong>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">Password:</span>
                       <strong className="text-emerald-400">{createdResult.password}</strong>
                     </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Contact Email:</span>
+                      <span className="text-slate-400">{createdResult.email}</span>
+                    </div>
                   </div>
+                  <p className="text-[11px] text-slate-400 italic">
+                    ℹ Note: Physicians log in using their <strong>Username</strong> or <strong>License Number</strong>. Email is used strictly for notifications & OTPs and does not affect login.
+                  </p>
                 </div>
 
                 <button
@@ -719,10 +702,32 @@ export default function AdminAuditReviewClient({ initialAudits }: { initialAudit
                   </div>
                 </div>
 
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-400 mb-1">
+                    Doctor Username (Permanent Login Identifier) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={createForm.username}
+                    onChange={(e) =>
+                      setCreateForm({
+                        ...createForm,
+                        username: e.target.value.toLowerCase().replace(/\s+/g, ""),
+                      })
+                    }
+                    placeholder="e.g. dr.santos or 001102294"
+                    className="w-full rounded-xl border border-white/10 bg-slate-950 px-3.5 py-2.5 font-mono text-white focus:outline-none focus:border-brand-teal"
+                  />
+                  <p className="mt-1 text-[10px] text-slate-400">
+                    Assigned by admin and permanent. The physician can log in with this username or their license number.
+                  </p>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[10px] font-black uppercase text-slate-400 mb-1">
-                      Doctor Email *
+                      Contact Email *
                     </label>
                     <input
                       type="email"

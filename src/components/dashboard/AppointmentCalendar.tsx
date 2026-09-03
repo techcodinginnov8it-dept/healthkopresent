@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { formatDateTime } from "@/lib/dashboard/format";
 import { parseAvailability } from "@/lib/scheduling";
 
@@ -130,38 +130,275 @@ function AppointmentBlock({
   appointment,
   editable,
   compact = false,
+  onSelect,
+  tone = "light",
 }: {
   appointment: CalendarAppointment;
   editable: boolean;
   compact?: boolean;
+  onSelect: (appointment: CalendarAppointment, rect: DOMRect) => void;
+  tone?: "light" | "dark";
 }) {
   const confirmed = appointment.status === "CONFIRMED";
   const pending = appointment.status === "PENDING";
+  const completed = appointment.status === "COMPLETED";
+  const dark = tone === "dark";
+
+  const statusColor = confirmed
+    ? dark
+      ? "border-sky-400/30 bg-sky-500/15 text-sky-100 hover:border-sky-400/60 hover:bg-sky-500/25"
+      : "border-sky-300 bg-sky-50/90 text-sky-950 shadow-2xs hover:border-sky-400 hover:bg-sky-100"
+    : pending
+      ? dark
+        ? "border-amber-400/30 bg-amber-500/15 text-amber-100 hover:border-amber-400/60 hover:bg-amber-500/25"
+        : "border-amber-300 bg-amber-50/90 text-amber-950 shadow-2xs hover:border-amber-400 hover:bg-amber-100"
+      : completed
+        ? dark
+          ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100 hover:border-emerald-400/60 hover:bg-emerald-500/25"
+          : "border-emerald-300 bg-emerald-50/90 text-emerald-950 shadow-2xs hover:border-emerald-400 hover:bg-emerald-100"
+        : dark
+          ? "border-slate-700 bg-slate-800 text-slate-100 hover:bg-slate-750"
+          : "border-slate-200 bg-slate-100 text-slate-800 hover:bg-slate-200/70";
+
+  const badgeColor = confirmed
+    ? dark
+      ? "bg-sky-400/20 text-sky-200 border-sky-400/30"
+      : "bg-sky-100 text-sky-800 border-sky-300"
+    : pending
+      ? dark
+        ? "bg-amber-400/20 text-amber-200 border-amber-400/30"
+        : "bg-amber-100 text-amber-800 border-amber-300"
+      : completed
+        ? dark
+          ? "bg-emerald-400/20 text-emerald-200 border-emerald-400/30"
+          : "bg-emerald-100 text-emerald-800 border-emerald-300"
+        : dark
+          ? "bg-slate-700 text-slate-300 border-slate-600"
+          : "bg-slate-200 text-slate-700 border-slate-300";
+
+  const subtitleColor = confirmed
+    ? dark ? "text-sky-300/80" : "text-sky-800/80"
+    : pending
+      ? dark ? "text-amber-300/80" : "text-amber-800/80"
+      : completed
+        ? dark ? "text-emerald-300/80" : "text-emerald-800/80"
+        : dark ? "text-slate-400" : "text-slate-600";
+
+  const badgeLabel = confirmed ? "CNF" : pending ? "REQ" : completed ? "CMP" : appointment.status.slice(0, 3);
 
   return (
     <article
-      draggable={editable}
+      draggable={editable && !completed}
       onDragStart={(event) => event.dataTransfer.setData("text/plain", appointment.id)}
-      className={`rounded-md border shadow-sm transition ${
+      onClick={(event) => {
+        event.stopPropagation();
+        const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+        onSelect(appointment, rect);
+      }}
+      className={`rounded-md border shadow-sm transition select-none ${
         compact ? "px-2 py-1.5 text-[10px]" : "px-2.5 py-2 text-xs"
-      } ${
-        confirmed
-          ? "border-sky-300/30 bg-sky-400/15 text-sky-50"
-          : pending
-            ? "border-amber-300/30 bg-amber-400/15 text-amber-50"
-            : "border-slate-700 bg-slate-800 text-slate-100"
-      } ${editable ? "cursor-grab active:cursor-grabbing" : ""}`}
-      title={editable ? "Drag to another calendar slot" : undefined}
+      } ${statusColor} cursor-pointer active:scale-[0.98]`}
+      title="Click to see actions"
     >
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-1.5">
         <span className="truncate font-black">{appointment.title}</span>
-        <span className={confirmed ? "text-sky-200" : pending ? "text-amber-200" : "text-slate-300"}>
-          {confirmed ? "CNF" : pending ? "REQ" : appointment.status.slice(0, 3)}
+        <span className={`shrink-0 rounded px-1.5 py-0.2 text-[9px] font-black uppercase border ${badgeColor}`}>
+          {badgeLabel}
         </span>
       </div>
-      {!compact && <p className="mt-1 truncate font-semibold text-slate-300">{appointment.subtitle}</p>}
-      {compact && <p className="mt-1 font-semibold text-slate-300">{formatDateTime(appointment.scheduledAt)}</p>}
+      {!compact && <p className={`mt-1 truncate font-semibold ${subtitleColor}`}>{appointment.subtitle}</p>}
+      {compact && <p className={`mt-1 font-semibold ${subtitleColor}`}>{formatDateTime(appointment.scheduledAt)}</p>}
     </article>
+  );
+}
+
+function AppointmentActionPopup({
+  appointment,
+  anchorRect,
+  onClose,
+  onStartConsultation,
+  onFollowUpConsultation,
+  tone = "light",
+}: {
+  appointment: CalendarAppointment;
+  anchorRect: DOMRect;
+  onClose: () => void;
+  onStartConsultation?: (appointment: CalendarAppointment) => void;
+  onFollowUpConsultation?: (appointment: CalendarAppointment) => void;
+  tone?: "light" | "dark";
+}) {
+  const confirmed = appointment.status === "CONFIRMED";
+  const pending = appointment.status === "PENDING";
+  const completed = appointment.status === "COMPLETED";
+  const dark = tone === "dark";
+
+  const popupRef = useRef<HTMLDivElement>(null);
+
+  // Compute popover position anchored to the clicked element rect
+  const POPOVER_WIDTH = 232;
+  const GAP = 8;
+
+  const spaceRight = window.innerWidth - anchorRect.right;
+  const spaceLeft = anchorRect.left;
+  const openRight = spaceRight >= POPOVER_WIDTH + GAP || spaceRight >= spaceLeft;
+
+  let left: number;
+  let arrowSide: "left" | "right";
+  if (openRight) {
+    left = Math.min(anchorRect.right + GAP, window.innerWidth - POPOVER_WIDTH - 8);
+    arrowSide = "left";
+  } else {
+    left = Math.max(anchorRect.left - POPOVER_WIDTH - GAP, 8);
+    arrowSide = "right";
+  }
+
+  // Vertical: align top of popover with top of anchor, clamp to viewport
+  const top = Math.max(8, Math.min(anchorRect.top, window.innerHeight - 280));
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    const handleClickOutside = (event: MouseEvent) => {
+      if (popupRef.current && !popupRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [onClose]);
+
+  const statusLabel = confirmed ? "Confirmed" : pending ? "Pending Request" : completed ? "Completed" : appointment.status;
+  const statusColor = confirmed ? "text-sky-400" : pending ? "text-amber-400" : completed ? "text-emerald-400" : "text-slate-400";
+  const statusDot = confirmed ? "bg-sky-400" : pending ? "bg-amber-400" : completed ? "bg-emerald-400" : "bg-slate-500";
+
+  // Arrow pointing from popover toward the anchor element
+  const arrowTop = Math.max(12, Math.min(anchorRect.top + anchorRect.height / 2 - top - 6, 200));
+
+  return (
+    <div
+      className="fixed inset-0 z-[200]"
+      style={{ pointerEvents: "none" }}
+    >
+      {/* Invisible click-away layer */}
+      <div
+        className="absolute inset-0"
+        style={{ pointerEvents: "auto" }}
+        onClick={onClose}
+      />
+
+      {/* Popover card */}
+      <div
+        ref={popupRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Appointment action"
+        style={{
+          position: "fixed",
+          top,
+          left,
+          width: POPOVER_WIDTH,
+          pointerEvents: "auto",
+        }}
+        className={`overflow-hidden rounded-xl border shadow-2xl transition-all ${
+          dark
+            ? "border-slate-700/80 bg-slate-900 text-white ring-1 ring-white/5"
+            : "border-slate-200 bg-white text-slate-900 shadow-xl ring-1 ring-slate-900/5"
+        }`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        {/* Arrow caret */}
+        <div
+          className="absolute"
+          style={{
+            top: arrowTop,
+            ...(arrowSide === "left"
+              ? {
+                  left: -6,
+                  borderRight: `6px solid ${dark ? "#0f172a" : "#ffffff"}`,
+                  borderTop: "6px solid transparent",
+                  borderBottom: "6px solid transparent",
+                }
+              : {
+                  right: -6,
+                  borderLeft: `6px solid ${dark ? "#0f172a" : "#ffffff"}`,
+                  borderTop: "6px solid transparent",
+                  borderBottom: "6px solid transparent",
+                }),
+            width: 0,
+            height: 0,
+          }}
+        />
+
+        {/* Header */}
+        <div className={`border-b px-4 pb-3 pt-4 ${dark ? "border-slate-700/60" : "border-slate-100"}`}>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Appointment</p>
+          <p className={`mt-1 text-sm font-black leading-snug ${dark ? "text-white" : "text-slate-900"}`}>{appointment.title}</p>
+          <div className="mt-1 flex items-center gap-1.5">
+            <span className={`inline-block h-1.5 w-1.5 rounded-full ${statusDot}`} />
+            <span className={`text-[10px] font-semibold ${statusColor}`}>{statusLabel}</span>
+          </div>
+          <p className={`mt-1 text-[10px] font-semibold ${dark ? "text-slate-500" : "text-slate-400"}`}>{formatDateTime(appointment.scheduledAt)}</p>
+        </div>
+
+        {/* Actions */}
+        <div className="p-2 space-y-0.5">
+          {(confirmed || pending) && (
+            <button
+              type="button"
+              className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-semibold transition ${
+                dark
+                  ? "text-slate-200 hover:bg-brand-teal/20 hover:text-white"
+                  : "text-slate-700 hover:bg-brand-teal/10 hover:text-slate-950"
+              }`}
+              onClick={() => {
+                onClose();
+                onStartConsultation?.(appointment);
+              }}
+            >
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-teal/20 text-brand-teal">
+                <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 3l14 9-14 9V3z" />
+                </svg>
+              </span>
+              <span>
+                <span className="block font-black">Start Consultation</span>
+                <span className={`block text-[10px] font-medium ${dark ? "text-slate-400" : "text-slate-500"}`}>Open live session</span>
+              </span>
+            </button>
+          )}
+
+          {completed && (
+            <button
+              type="button"
+              className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-semibold transition ${
+                dark
+                  ? "text-slate-200 hover:bg-emerald-400/20 hover:text-emerald-100"
+                  : "text-slate-700 hover:bg-emerald-50 hover:text-emerald-950"
+              }`}
+              onClick={() => {
+                onClose();
+                onFollowUpConsultation?.(appointment);
+              }}
+            >
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-400/20 text-emerald-300">
+                <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </span>
+              <span>
+                <span className="block font-black">Follow Up Consultation</span>
+                <span className={`block text-[10px] font-medium ${dark ? "text-slate-400" : "text-slate-500"}`}>Schedule follow-up visit</span>
+              </span>
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -170,6 +407,8 @@ export function AppointmentCalendar({
   tone = "light",
   editable = false,
   onReschedule,
+  onStartConsultation,
+  onFollowUpConsultation,
   variant = "standard",
   viewMode = "week",
   onViewModeChange,
@@ -181,6 +420,8 @@ export function AppointmentCalendar({
   tone?: "light" | "dark";
   editable?: boolean;
   onReschedule?: (appointmentId: string, scheduledAt: string) => void;
+  onStartConsultation?: (appointment: CalendarAppointment) => void;
+  onFollowUpConsultation?: (appointment: CalendarAppointment) => void;
   variant?: "standard" | "stage";
   viewMode?: CalendarViewMode;
   onViewModeChange?: (viewMode: CalendarViewMode) => void;
@@ -189,6 +430,7 @@ export function AppointmentCalendar({
   availability?: string | null;
 }) {
   const resolvedAnchorDate = startOfDay(anchorDate || new Date());
+  const [selectedEntry, setSelectedEntry] = useState<{ appointment: CalendarAppointment; rect: DOMRect } | null>(null);
   const days = getCalendarDays(viewMode, resolvedAnchorDate);
   const availabilityWindow = parseAvailability(availability);
   const hours = Array.from({ length: 24 }, (_, index) => index);
@@ -265,8 +507,9 @@ export function AppointmentCalendar({
                 </svg>
               </span>
             </label>
-            <span className={`rounded-full px-2.5 py-1 ${dark ? "bg-sky-400/15 text-sky-200" : "border border-sky-200 bg-sky-50 text-sky-700"}`}>Confirmed</span>
-            <span className={`rounded-full px-2.5 py-1 ${dark ? "bg-amber-400/15 text-amber-200" : "border border-amber-200 bg-amber-50 text-amber-700"}`}>Pending</span>
+            <span className={`rounded-full px-2.5 py-1 ${dark ? "bg-sky-400/15 text-sky-200 border border-sky-400/30" : "border border-sky-300 bg-sky-50 text-sky-800"}`}>Confirmed</span>
+            <span className={`rounded-full px-2.5 py-1 ${dark ? "bg-amber-400/15 text-amber-200 border border-amber-400/30" : "border border-amber-300 bg-amber-50 text-amber-800"}`}>Pending</span>
+            <span className={`rounded-full px-2.5 py-1 ${dark ? "bg-emerald-400/15 text-emerald-200 border border-emerald-400/30" : "border border-emerald-300 bg-emerald-50 text-emerald-800"}`}>Completed</span>
           </div>
         )}
       </div>
@@ -293,7 +536,7 @@ export function AppointmentCalendar({
               <div className="mt-3 space-y-2">
                 {dayAppointments.length ? (
                   dayAppointments.map((appointment) => (
-                    <AppointmentBlock key={appointment.id} appointment={appointment} editable={editable} compact />
+                    <AppointmentBlock key={appointment.id} appointment={appointment} editable={editable} compact onSelect={(appt, rect) => setSelectedEntry({ appointment: appt, rect })} tone={tone} />
                   ))
                 ) : (
                   <p className={`rounded-lg border border-dashed p-3 text-xs font-semibold ${dark ? "border-slate-800 text-slate-500" : "border-slate-300 text-slate-500"}`}>
@@ -308,7 +551,9 @@ export function AppointmentCalendar({
 
       <div className="hidden md:block">
         {viewMode === "month" ? (
-          <div className="max-h-[620px] overflow-auto rounded-lg border border-slate-800 bg-slate-800 transition-all duration-300">
+          <div className={`max-h-[620px] overflow-auto rounded-lg border transition-all duration-300 ${
+            dark ? "border-slate-800 bg-slate-800" : "border-slate-200 bg-slate-200"
+          }`}>
             <div className="grid min-w-[920px] grid-cols-7 gap-px">
               {days.map((day) => {
                 const dayAppointments = appointments.filter((appointment) => sameDay(appointment.scheduledAt, day));
@@ -333,20 +578,26 @@ export function AppointmentCalendar({
                         onReschedule(appointmentId, moveAppointmentToDay(appointment.scheduledAt, day));
                       }
                     }}
-                    className={`min-h-36 p-2 transition-colors ${dayAvailable ? "bg-slate-950" : "bg-slate-900/50"}`}
+                    className={`min-h-36 p-2 transition-colors ${
+                      dayAvailable
+                        ? dark ? "bg-slate-950" : "bg-white"
+                        : dark ? "bg-slate-900/50" : "bg-slate-100"
+                    }`}
                   >
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <div>
-                        <p className="text-xs font-black text-white">{formatMonthDay(day)}</p>
-                        <p className="text-[10px] font-bold uppercase text-slate-500">{formatWeekday(day)}</p>
+                        <p className={`text-xs font-black ${dark ? "text-white" : "text-slate-900"}`}>{formatMonthDay(day)}</p>
+                        <p className={`text-[10px] font-bold uppercase ${dark ? "text-slate-500" : "text-slate-400"}`}>{formatWeekday(day)}</p>
                       </div>
                       {dayAppointments.length ? (
-                        <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-black text-slate-200">{dayAppointments.length}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
+                          dark ? "bg-white/10 text-slate-200" : "bg-slate-100 text-slate-700 border border-slate-200"
+                        }`}>{dayAppointments.length}</span>
                       ) : null}
                     </div>
                     <div className="max-h-24 space-y-1.5 overflow-y-auto pr-1">
                       {dayAppointments.map((appointment) => (
-                        <AppointmentBlock key={appointment.id} appointment={appointment} editable={editable} compact />
+                        <AppointmentBlock key={appointment.id} appointment={appointment} editable={editable} compact onSelect={(appt, rect) => setSelectedEntry({ appointment: appt, rect })} tone={tone} />
                       ))}
                     </div>
                   </div>
@@ -410,7 +661,7 @@ export function AppointmentCalendar({
                         <div className={stage ? "flex max-h-28 flex-col gap-1.5 overflow-y-auto pr-1" : "space-y-2"}>
                           {slotAppointments.map((appointment) => {
                             return stage ? (
-                              <AppointmentBlock key={appointment.id} appointment={appointment} editable={editable} />
+                              <AppointmentBlock key={appointment.id} appointment={appointment} editable={editable} onSelect={(appt, rect) => setSelectedEntry({ appointment: appt, rect })} tone={tone} />
                             ) : (
                               <article
                                 key={appointment.id}
@@ -446,6 +697,18 @@ export function AppointmentCalendar({
           ))}
         </div>
       ) : null}
+
+      {/* Anchored popover */}
+      {selectedEntry && (
+        <AppointmentActionPopup
+          appointment={selectedEntry.appointment}
+          anchorRect={selectedEntry.rect}
+          onClose={() => setSelectedEntry(null)}
+          onStartConsultation={onStartConsultation}
+          onFollowUpConsultation={onFollowUpConsultation}
+          tone={tone}
+        />
+      )}
     </section>
   );
 }

@@ -3,18 +3,24 @@ import Link from "next/link";
 import { getAllDoctorAudits } from "@/app/actions/audit";
 import { logoutAdmin } from "@/app/actions/auth";
 import { requireAdminSession } from "@/lib/auth/admin-session";
-import { mockDb } from "@/lib/mockDb";
+import { prisma } from "@/lib/prisma";
 
 import AdminAuditReviewClient from "./AdminAuditReviewClient";
 
 export default async function AdminDashboardPage() {
   const session = await requireAdminSession();
-  const metrics = mockDb.getAdminMetrics();
   const auditsResult = await getAllDoctorAudits();
   const audits = auditsResult.success ? auditsResult.audits : [];
 
-  const totalUsers = metrics.totalPatients + metrics.totalDoctors;
-  const activeUsers = metrics.activePatients + metrics.activeDoctors;
+  const [totalPatients, totalDoctors, activePatients, activeDoctors] = await Promise.all([
+    prisma.patient.count(),
+    prisma.doctor.count(),
+    prisma.patient.count({ where: { isActive: true } }),
+    prisma.doctor.count({ where: { isActive: true } }),
+  ]).catch(() => [0, 0, 0, 0] as number[]);
+
+  const totalUsers = totalPatients + totalDoctors;
+  const activeUsers = activePatients + activeDoctors;
 
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-10 text-white sm:px-10">
