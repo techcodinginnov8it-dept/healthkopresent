@@ -141,6 +141,94 @@ const RX_TIMING_OPTIONS = [
   "As needed (PRN)",
 ] as const;
 
+const RX_MEDICINE_TYPES = [
+  { id: "tablet",   label: "Tablet / Capsule",    icon: "💊" },
+  { id: "liquid",   label: "Liquid / Syrup / Suspension", icon: "🧪" },
+  { id: "drops",    label: "Eye / Ear / Nasal Drops", icon: "💧" },
+  { id: "inhaler",  label: "Inhaler / Puff",      icon: "🌬️" },
+  { id: "sachet",   label: "Sachet / Powder",     icon: "📦" },
+  { id: "other",    label: "Other / Topical",     icon: "🩹" },
+] as const;
+
+type RxMedicineType = (typeof RX_MEDICINE_TYPES)[number]["id"];
+
+const RX_DOSE_SUGGESTIONS: Record<RxMedicineType, string[]> = {
+  tablet:  ["1 tablet", "2 tablets", "3 tablets", "½ tablet", "1 capsule", "2 capsules", "1 caplet"],
+  liquid:  ["2.5 mL", "5 mL (1 tsp)", "10 mL (2 tsp)", "15 mL (1 tbsp)", "20 mL", "30 mL"],
+  drops:   ["1 drop", "2 drops", "3 drops", "4 drops", "1-2 drops", "2-3 drops"],
+  inhaler: ["1 puff", "2 puffs", "3 puffs", "1 inhalation", "2 inhalations"],
+  sachet:  ["1 sachet", "2 sachets", "½ sachet", "1 packet", "1 scoop"],
+  other:   ["Apply thin layer", "Apply as directed", "1 patch", "1 suppository", "1 application"],
+};
+
+function getRxDoseUnit(type: RxMedicineType): string {
+  switch (type) {
+    case "tablet":  return "tablets/capsules";
+    case "liquid":  return "mL";
+    case "drops":   return "drops";
+    case "inhaler": return "puffs";
+    case "sachet":  return "sachets";
+    default:        return "dose(s)";
+  }
+}
+
+function parseRxFrequencyMultiplier(frequency: string): number {
+  const f = frequency.toUpperCase();
+  if (f.startsWith("BID"))             return 2;
+  if (f.startsWith("TID"))             return 3;
+  if (f.startsWith("QID"))             return 4;
+  if (f.startsWith("Q4H"))             return 6;
+  if (f.startsWith("Q6H"))             return 4;
+  if (f.startsWith("Q8H"))             return 3;
+  if (f.startsWith("QHS") || f.startsWith("QD") || f.startsWith("OD")) return 1;
+  if (f.startsWith("PRN"))             return 0; // as-needed, can't calc
+  return 1;
+}
+
+function parseRxDurationDays(duration: string): number {
+  if (!duration.trim()) return 0;
+  const d = duration.trim().toLowerCase();
+  const match = d.match(/(\d+(?:\.\d+)?)\s*(day|week|month)/);
+  if (!match) return 0;
+  const n = parseFloat(match[1]);
+  if (match[2].startsWith("week"))  return Math.round(n * 7);
+  if (match[2].startsWith("month")) return Math.round(n * 30);
+  return Math.round(n);
+}
+
+function parseRxDoseAmount(quantity: string, type: RxMedicineType): number {
+  if (!quantity.trim()) return 0;
+  const q = quantity.trim().toLowerCase();
+  // fraction support: ½ = 0.5
+  const clean = q.replace(/½/g, "0.5").replace(/¼/g, "0.25");
+  const match = clean.match(/(\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)/);
+  if (!match) return 0;
+  // If range like "1-2", use upper bound for dispensing safety
+  const parts = match[1].split("-").map((x) => parseFloat(x.trim()));
+  return Math.max(...parts);
+}
+
+function computeRxTotalSupply(
+  quantity: string,
+  frequency: string,
+  duration: string,
+  type: RxMedicineType
+): { amount: number; unit: string; label: string } | null {
+  const dose   = parseRxDoseAmount(quantity, type);
+  const times  = parseRxFrequencyMultiplier(frequency);
+  const days   = parseRxDurationDays(duration);
+  if (!dose || !times || !days) return null;
+  // For liquid, multiply mL directly
+  const totalNum = dose * times * days;
+  const unit = getRxDoseUnit(type);
+  const rounded = Math.ceil(totalNum * 10) / 10; // round up to 1 decimal
+  return {
+    amount: rounded,
+    unit,
+    label: `Total Supply: ${rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)} ${unit}`,
+  };
+}
+
 const RX_QUANTITY_SUGGESTIONS = [
   "1 tablet",
   "2 tablets",
@@ -164,6 +252,7 @@ function buildFormattedPrescription({
   timing,
   duration,
   instructions,
+  medicineType,
 }: {
   genericName: string;
   brandName: string;
@@ -173,6 +262,7 @@ function buildFormattedPrescription({
   timing: string;
   duration: string;
   instructions: string;
+  medicineType: RxMedicineType;
 }) {
   const parts: string[] = [];
 
@@ -184,20 +274,29 @@ function buildFormattedPrescription({
   if (medLine) {
     parts.push(`Medicine: ${medLine}`);
   }
+  const typeLabel = RX_MEDICINE_TYPES.find((t) => t.id === medicineType)?.label || "";
+  if (typeLabel) {
+    parts.push(`Form: ${typeLabel}`);
+  }
   if (dosage.trim()) {
-    parts.push(`Dosage: ${dosage.trim()}`);
+    parts.push(`Dosage / Strength: ${dosage.trim()}`);
   }
   if (quantity.trim()) {
-    parts.push(`Number of Consume / Dose: ${quantity.trim()}`);
+    parts.push(`Dose per Administration: ${quantity.trim()}`);
   }
   if (frequency.trim()) {
     parts.push(`Frequency: ${frequency.trim()}`);
   }
   if (timing.trim()) {
-    parts.push(`When to Consume: ${timing.trim()}`);
+    parts.push(`When to Take: ${timing.trim()}`);
   }
   if (duration.trim()) {
     parts.push(`Duration: ${duration.trim()}`);
+  }
+  // Compute and append total supply
+  const total = computeRxTotalSupply(quantity, frequency, duration, medicineType);
+  if (total) {
+    parts.push(total.label);
   }
   if (instructions.trim()) {
     parts.push(`Special Instructions: ${instructions.trim()}`);
@@ -1203,6 +1302,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
   const [rxGenericName, setRxGenericName] = useState("");
   const [rxBrandName, setRxBrandName] = useState("");
   const [rxDosage, setRxDosage] = useState("");
+  const [rxMedicineType, setRxMedicineType] = useState<RxMedicineType>("tablet");
   const [rxQuantity, setRxQuantity] = useState("1 tablet");
   const [rxFrequency, setRxFrequency] = useState(RX_FREQUENCY_OPTIONS[2] as string);
   const [rxTiming, setRxTiming] = useState(RX_TIMING_OPTIONS[0] as string);
@@ -1918,6 +2018,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
       timing: rxTiming,
       duration: rxDuration,
       instructions: rxInstructions,
+      medicineType: rxMedicineType,
     });
     const newItem = {
       id: `rx-${Date.now()}`,
@@ -1939,6 +2040,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     setRxGenericName("");
     setRxBrandName("");
     setRxDosage("");
+    setRxMedicineType("tablet");
     setRxQuantity("1 tablet");
     setRxFrequency(RX_FREQUENCY_OPTIONS[2] as string);
     setRxTiming(RX_TIMING_OPTIONS[0] as string);
@@ -1963,6 +2065,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     setRxGenericName("");
     setRxBrandName("");
     setRxDosage("");
+    setRxMedicineType("tablet");
     setRxQuantity("1 tablet");
     setRxFrequency(RX_FREQUENCY_OPTIONS[2] as string);
     setRxTiming(RX_TIMING_OPTIONS[0] as string);
@@ -2434,6 +2537,41 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                       </div>
                     </div>
 
+                    {/* Medicine Type Selector */}
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                        Medicine Form / Type *
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {RX_MEDICINE_TYPES.map((mt) => (
+                          <button
+                            key={mt.id}
+                            type="button"
+                            onClick={() => {
+                              setRxMedicineType(mt.id);
+                              // Pre-fill first suggestion for the type
+                              const suggestions = RX_DOSE_SUGGESTIONS[mt.id];
+                              if (suggestions && suggestions.length > 0) {
+                                setRxQuantity(suggestions[0] as string);
+                              }
+                            }}
+                            className={`flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] font-black transition ${
+                              rxMedicineType === mt.id
+                                ? isDark
+                                  ? "border-brand-teal bg-brand-teal/20 text-brand-teal"
+                                  : "border-brand-teal bg-brand-teal text-white"
+                                : isDark
+                                  ? "border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500"
+                                  : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                            }`}
+                          >
+                            <span>{mt.icon}</span>
+                            <span>{mt.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     {/* Dosage & Number to Consume */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div>
@@ -2444,7 +2582,12 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                           type="text"
                           value={rxDosage}
                           onChange={(e) => setRxDosage(e.target.value)}
-                          placeholder="e.g. 500 mg, 250 mg / 5 mL"
+                          placeholder={
+                            rxMedicineType === "liquid" ? "e.g. 250 mg/5 mL, 125 mg/5 mL"
+                            : rxMedicineType === "drops" ? "e.g. 0.5%, 1 mg/mL"
+                            : rxMedicineType === "inhaler" ? "e.g. 100 mcg/puff, 200 mcg"
+                            : "e.g. 500 mg, 250 mg"
+                          }
                           className={`w-full rounded-lg border px-2.5 py-1.5 text-xs outline-none transition focus:border-brand-teal ${
                             isDark ? "border-slate-800 bg-slate-900 text-white placeholder:text-slate-600" : "border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
                           }`}
@@ -2452,20 +2595,26 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                       </div>
                       <div>
                         <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-0.5">
-                          Number of Consume (Dose) *
+                          Dose per Administration ({getRxDoseUnit(rxMedicineType)}) *
                         </label>
                         <input
                           type="text"
                           list="rx-quantity-list"
                           value={rxQuantity}
                           onChange={(e) => setRxQuantity(e.target.value)}
-                          placeholder="e.g. 1 tablet, 2 capsules"
+                          placeholder={
+                            rxMedicineType === "liquid" ? "e.g. 5 mL (1 tsp), 10 mL"
+                            : rxMedicineType === "drops" ? "e.g. 2 drops, 1-2 drops"
+                            : rxMedicineType === "inhaler" ? "e.g. 2 puffs"
+                            : rxMedicineType === "sachet" ? "e.g. 1 sachet"
+                            : "e.g. 1 tablet, 2 capsules"
+                          }
                           className={`w-full rounded-lg border px-2.5 py-1.5 text-xs outline-none transition focus:border-brand-teal ${
                             isDark ? "border-slate-800 bg-slate-900 text-white placeholder:text-slate-600" : "border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
                           }`}
                         />
                         <datalist id="rx-quantity-list">
-                          {RX_QUANTITY_SUGGESTIONS.map((q) => (
+                          {RX_DOSE_SUGGESTIONS[rxMedicineType].map((q) => (
                             <option key={q} value={q} />
                           ))}
                         </datalist>
@@ -2520,13 +2669,45 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                           type="text"
                           value={rxDuration}
                           onChange={(e) => setRxDuration(e.target.value)}
-                          placeholder="e.g. 7 days, 14 days"
+                          placeholder="e.g. 7 days, 2 weeks, 1 month"
                           className={`w-full rounded-lg border px-2.5 py-1.5 text-xs outline-none transition focus:border-brand-teal ${
                             isDark ? "border-slate-800 bg-slate-900 text-white placeholder:text-slate-600" : "border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
                           }`}
                         />
                       </div>
                     </div>
+
+                    {/* Auto-calculated Total Supply Preview */}
+                    {(() => {
+                      const total = computeRxTotalSupply(rxQuantity, rxFrequency, rxDuration, rxMedicineType);
+                      if (!total) return null;
+                      const typeInfo = RX_MEDICINE_TYPES.find((t) => t.id === rxMedicineType);
+                      return (
+                        <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${
+                          isDark ? "border-emerald-800/60 bg-emerald-950/40" : "border-emerald-200 bg-emerald-50"
+                        }`}>
+                          <span className="text-sm">{typeInfo?.icon}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-[10px] font-black uppercase tracking-wider ${
+                              isDark ? "text-emerald-400" : "text-emerald-700"
+                            }`}>Auto-Calculated Total Supply</p>
+                            <p className={`text-xs font-black mt-0.5 ${
+                              isDark ? "text-emerald-200" : "text-emerald-900"
+                            }`}>
+                              {total.amount % 1 === 0 ? total.amount.toFixed(0) : total.amount.toFixed(1)} {total.unit}
+                              <span className={`ml-2 text-[10px] font-semibold ${
+                                isDark ? "text-emerald-400/80" : "text-emerald-600"
+                              }`}>
+                                ({rxQuantity} × {parseRxFrequencyMultiplier(rxFrequency)}x/day × {parseRxDurationDays(rxDuration)} days)
+                              </span>
+                            </p>
+                          </div>
+                          <span className={`shrink-0 rounded-md px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${
+                            isDark ? "bg-emerald-500/20 text-emerald-300" : "bg-emerald-100 text-emerald-800"
+                          }`}>Dispense</span>
+                        </div>
+                      );
+                    })()}
 
                     {/* Special Instructions */}
                     <div>
@@ -2537,7 +2718,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                         type="text"
                         value={rxInstructions}
                         onChange={(e) => setRxInstructions(e.target.value)}
-                        placeholder="e.g. Complete full course, Drink plenty of water"
+                        placeholder="e.g. Complete full course, Shake well before use, Apply to affected eye"
                         className={`w-full rounded-lg border px-2.5 py-1.5 text-xs outline-none transition focus:border-brand-teal ${
                           isDark ? "border-slate-800 bg-slate-900 text-white placeholder:text-slate-600" : "border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
                         }`}
