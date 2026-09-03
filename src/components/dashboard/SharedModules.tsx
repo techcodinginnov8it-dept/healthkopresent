@@ -637,12 +637,7 @@ function ConsultationVideoTile({
           </div>
         </div>
 
-        {showFeed ? (
-          <div className="mt-auto flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-950/30 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-100/80 backdrop-blur-sm">
-            <span>{muted ? "Local preview" : "Remote stream"}</span>
-            <span>{hasAudio ? "Audio active" : "Audio unavailable"}</span>
-          </div>
-        ) : (
+        {showFeed ? null : (
           <div className="mt-auto flex flex-1 items-center justify-center p-4 text-center">
             <div>
               <div
@@ -802,7 +797,6 @@ export function LiveConsultationPanel({
   const statusLabel = status === "connected" ? "Connected" : role === "doctor" ? "Waiting for Patient" : "Waiting room";
   const remoteVideoAvailable = Boolean(remoteStream?.getVideoTracks().length);
   const remoteVideoActive = remoteVideoAvailable && counterpartCameraOn;
-  const localPreviewStream = isScreenSharing && screenShareStream ? screenShareStream : localStream;
   const connectionLabel =
     connectionState === "connected"
       ? "Media connected"
@@ -873,45 +867,103 @@ export function LiveConsultationPanel({
             onRefreshDevices={onRefreshDevices}
           />
         </div>
-        <div className="grid min-h-[480px] gap-4 p-4 pb-28 md:grid-cols-2">
-          {/* Left: Your local camera preview */}
-          <div className="relative min-h-[420px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
-            <ConsultationVideoTile
-              stream={localPreviewStream}
-              label={isScreenSharing ? "Your presentation" : "Your stream"}
-              detail={isScreenSharing ? "Screen sharing" : isCameraOn ? "Local preview" : "Camera disabled"}
-              active={isScreenSharing ? Boolean(screenShareStream?.getVideoTracks().length) : isCameraOn}
-              cameraOn={isCameraOn}
-              micOn={isMicOn}
-              muted={true}
-              className="h-full min-h-[420px]"
-              tone="slate"
-            />
-          </div>
+        {isScreenSharing && screenShareStream ? (
+          <div className="flex flex-col gap-4 p-4 pb-28 min-h-[480px]">
+            {/* Minimized Camera Previews */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* Minimized Local Camera */}
+              <div className="relative h-[160px] sm:h-[180px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-md">
+                <ConsultationVideoTile
+                  stream={localStream}
+                  label="You (Camera)"
+                  detail={isCameraOn ? "Camera on" : "Camera off"}
+                  active={isCameraOn}
+                  cameraOn={isCameraOn}
+                  micOn={isMicOn}
+                  muted={true}
+                  className="h-full"
+                  tone="slate"
+                />
+              </div>
 
-          {/* Right: Counterpart remote feed */}
-          <div className="relative min-h-[420px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
-            <ConsultationVideoTile
-              stream={remoteStream}
-              label={counterpartName}
-              detail={
-                counterpartScreenSharing
-                  ? "Screen sharing"
-                  : counterpartCameraOn
-                    ? role === "doctor"
-                      ? "Patient stream"
-                      : "Doctor stream"
-                    : "Camera disabled"
-              }
-              active={Boolean(counterpartCameraOn)}
-              cameraOn={counterpartCameraOn}
-              micOn={counterpartMicOn}
-              muted={false}
-              className="h-full min-h-[420px]"
-              tone="teal"
-            />
+              {/* Minimized Counterpart Camera */}
+              <div className="relative h-[160px] sm:h-[180px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-md">
+                <ConsultationVideoTile
+                  stream={remoteStream}
+                  label={counterpartName}
+                  detail={
+                    counterpartCameraOn
+                      ? role === "doctor"
+                        ? "Patient stream"
+                        : "Doctor stream"
+                      : "Camera disabled"
+                  }
+                  active={Boolean(counterpartCameraOn)}
+                  cameraOn={counterpartCameraOn}
+                  micOn={counterpartMicOn}
+                  muted={false}
+                  className="h-full"
+                  tone="teal"
+                />
+              </div>
+            </div>
+
+            {/* Dedicated Screen Share Presentation Preview */}
+            <div className="relative min-h-[380px] md:min-h-[460px] overflow-hidden rounded-xl border-2 border-cyan-500/40 bg-slate-950 shadow-2xl">
+              <ConsultationVideoTile
+                stream={screenShareStream}
+                label="Your Screen Presentation"
+                detail="Presenting screen in real time"
+                active={true}
+                cameraOn={true}
+                micOn={isMicOn}
+                muted={true}
+                className="h-full min-h-[380px] md:min-h-[460px]"
+                tone="teal"
+              />
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="grid min-h-[480px] gap-4 p-4 pb-28 md:grid-cols-2">
+            {/* Left: Your local camera preview */}
+            <div className="relative min-h-[420px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+              <ConsultationVideoTile
+                stream={localStream}
+                label="Your stream"
+                detail={isCameraOn ? "Camera active" : "Camera disabled"}
+                active={isCameraOn}
+                cameraOn={isCameraOn}
+                micOn={isMicOn}
+                muted={true}
+                className="h-full min-h-[420px]"
+                tone="slate"
+              />
+            </div>
+
+            {/* Right: Counterpart remote feed */}
+            <div className="relative min-h-[420px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+              <ConsultationVideoTile
+                stream={remoteStream}
+                label={counterpartName}
+                detail={
+                  counterpartScreenSharing
+                    ? "Screen sharing"
+                    : counterpartCameraOn
+                      ? role === "doctor"
+                        ? "Patient stream"
+                        : "Doctor stream"
+                      : "Camera disabled"
+                }
+                active={Boolean(counterpartCameraOn)}
+                cameraOn={counterpartCameraOn}
+                micOn={counterpartMicOn}
+                muted={false}
+                className="h-full min-h-[420px]"
+                tone="teal"
+              />
+            </div>
+          </div>
+        )}
         <footer className="absolute bottom-5 left-1/2 flex -translate-x-1/2 flex-wrap items-center justify-center gap-4 rounded-full border border-white/10 bg-[rgba(24,24,27,0.7)] px-5 py-3 shadow-2xl shadow-black/30 backdrop-blur-[12px]">
           <div className="flex items-center gap-4">
             <button
