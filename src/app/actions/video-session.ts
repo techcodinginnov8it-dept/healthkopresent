@@ -44,8 +44,8 @@ export async function startVideoSession(consultationId: string): Promise<VideoSe
       select: { id: true, doctorId: true, status: true },
     });
 
-    if (!consultation || consultation.doctorId !== session.userId || consultation.status !== "CONFIRMED") {
-      return { success: false, error: "Only the assigned doctor can start a confirmed consultation." };
+    if (!consultation || consultation.doctorId !== session.userId || (consultation.status !== "CONFIRMED" && consultation.status !== "COMPLETED")) {
+      return { success: false, error: "Only the assigned doctor can start this consultation." };
     }
 
     // Reuse existing roomId if the session was already created (e.g. doctor reopened tab)
@@ -103,7 +103,7 @@ export async function authorizePatientVideoSession(consultationId: string): Prom
     if (
       !consultation ||
       consultation.patientId !== session.userId ||
-      consultation.status !== "CONFIRMED" ||
+      (consultation.status !== "CONFIRMED" && consultation.status !== "COMPLETED") ||
       consultation.videoSession?.status !== "STARTED"
     ) {
       return { success: false, error: "The doctor has not started this consultation yet." };

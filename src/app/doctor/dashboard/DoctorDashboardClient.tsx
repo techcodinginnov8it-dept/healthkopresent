@@ -119,6 +119,92 @@ const CONSULTATION_QUEUE_FILTERS: { id: ConsultationQueueFilter; label: string }
   { id: "completed", label: "Completed" },
 ];
 
+const RX_FREQUENCY_OPTIONS = [
+  "OD / QD — Once daily (Every 24 hours)",
+  "BID — Twice daily (Every 12 hours)",
+  "TID — Three times daily (Every 8 hours)",
+  "QID — Four times daily (Every 6 hours)",
+  "Q4H — Every 4 hours",
+  "Q6H — Every 6 hours",
+  "Q8H — Every 8 hours",
+  "QHS — At bedtime (Once nightly)",
+  "PRN — As needed for symptoms",
+] as const;
+
+const RX_TIMING_OPTIONS = [
+  "After meals (p.c. / Post Cibum)",
+  "Before meals (a.c. / Ante Cibum)",
+  "With meals / food",
+  "On an empty stomach (1h before or 2h after meals)",
+  "At bedtime (h.s. / Hora Somni)",
+  "As needed (PRN)",
+] as const;
+
+const RX_QUANTITY_SUGGESTIONS = [
+  "1 tablet",
+  "2 tablets",
+  "1 capsule",
+  "2 capsules",
+  "5 mL (1 teaspoon)",
+  "10 mL (2 teaspoons)",
+  "15 mL (1 tablespoon)",
+  "1 puff / inhalation",
+  "2 puffs / inhalations",
+  "1 sachet / packet",
+  "1-2 drops",
+] as const;
+
+function buildFormattedPrescription({
+  genericName,
+  brandName,
+  dosage,
+  quantity,
+  frequency,
+  timing,
+  duration,
+  instructions,
+}: {
+  genericName: string;
+  brandName: string;
+  dosage: string;
+  quantity: string;
+  frequency: string;
+  timing: string;
+  duration: string;
+  instructions: string;
+}) {
+  const parts: string[] = [];
+
+  const medLine = [
+    genericName.trim() ? `Generic: ${genericName.trim()}` : null,
+    brandName.trim() ? `Brand: ${brandName.trim()}` : null,
+  ].filter(Boolean).join(" | ");
+
+  if (medLine) {
+    parts.push(`Medicine: ${medLine}`);
+  }
+  if (dosage.trim()) {
+    parts.push(`Dosage: ${dosage.trim()}`);
+  }
+  if (quantity.trim()) {
+    parts.push(`Number of Consume / Dose: ${quantity.trim()}`);
+  }
+  if (frequency.trim()) {
+    parts.push(`Frequency: ${frequency.trim()}`);
+  }
+  if (timing.trim()) {
+    parts.push(`When to Consume: ${timing.trim()}`);
+  }
+  if (duration.trim()) {
+    parts.push(`Duration: ${duration.trim()}`);
+  }
+  if (instructions.trim()) {
+    parts.push(`Special Instructions: ${instructions.trim()}`);
+  }
+
+  return parts.join("\n");
+}
+
 function getPatientDisplayName(patient: Pick<DoctorAppointment["patient"], "firstName" | "lastName">) {
   return `${patient.firstName} ${patient.lastName}`.trim();
 }
@@ -1113,6 +1199,14 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
   const [clinicalNotes, setClinicalNotes] = useState("");
   const [prescriptionText, setPrescriptionText] = useState("");
   const [diagnosisText, setDiagnosisText] = useState("");
+  const [rxGenericName, setRxGenericName] = useState("");
+  const [rxBrandName, setRxBrandName] = useState("");
+  const [rxDosage, setRxDosage] = useState("");
+  const [rxQuantity, setRxQuantity] = useState("1 tablet");
+  const [rxFrequency, setRxFrequency] = useState("TID — Three times daily (Every 8 hours)");
+  const [rxTiming, setRxTiming] = useState("After meals (p.c. / Post Cibum)");
+  const [rxDuration, setRxDuration] = useState("7 days");
+  const [rxInstructions, setRxInstructions] = useState("");
   const [referralTargets, setReferralTargets] = useState<Record<string, string>>({});
   const [submitState, setSubmitState] = useState({ loading: false, error: "", success: "" });
   const [scheduleState, setScheduleState] = useState({ loading: false, error: "", success: "" });
@@ -1746,10 +1840,59 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     }
   };
 
+  const updatePrescriptionField = (updates: Partial<{
+    genericName: string;
+    brandName: string;
+    dosage: string;
+    quantity: string;
+    frequency: string;
+    timing: string;
+    duration: string;
+    instructions: string;
+  }>) => {
+    const nextGeneric = updates.genericName !== undefined ? updates.genericName : rxGenericName;
+    const nextBrand = updates.brandName !== undefined ? updates.brandName : rxBrandName;
+    const nextDosage = updates.dosage !== undefined ? updates.dosage : rxDosage;
+    const nextQuantity = updates.quantity !== undefined ? updates.quantity : rxQuantity;
+    const nextFrequency = updates.frequency !== undefined ? updates.frequency : rxFrequency;
+    const nextTiming = updates.timing !== undefined ? updates.timing : rxTiming;
+    const nextDuration = updates.duration !== undefined ? updates.duration : rxDuration;
+    const nextInstructions = updates.instructions !== undefined ? updates.instructions : rxInstructions;
+
+    if (updates.genericName !== undefined) setRxGenericName(updates.genericName);
+    if (updates.brandName !== undefined) setRxBrandName(updates.brandName);
+    if (updates.dosage !== undefined) setRxDosage(updates.dosage);
+    if (updates.quantity !== undefined) setRxQuantity(updates.quantity);
+    if (updates.frequency !== undefined) setRxFrequency(updates.frequency);
+    if (updates.timing !== undefined) setRxTiming(updates.timing);
+    if (updates.duration !== undefined) setRxDuration(updates.duration);
+    if (updates.instructions !== undefined) setRxInstructions(updates.instructions);
+
+    const formatted = buildFormattedPrescription({
+      genericName: nextGeneric,
+      brandName: nextBrand,
+      dosage: nextDosage,
+      quantity: nextQuantity,
+      frequency: nextFrequency,
+      timing: nextTiming,
+      duration: nextDuration,
+      instructions: nextInstructions,
+    });
+    setPrescriptionText(formatted);
+  };
+
   const startLiveSession = async (appointment: DoctorAppointment) => {
     setClinicalNotes(appointment.notes || "");
     setPrescriptionText(appointment.prescription || "");
     setDiagnosisText(appointment.reason || "");
+    setRxGenericName("");
+    setRxBrandName("");
+    setRxDosage("");
+    setRxQuantity("1 tablet");
+    setRxFrequency("TID — Three times daily (Every 8 hours)");
+    setRxTiming("After meals (p.c. / Post Cibum)");
+    setRxDuration("7 days");
+    setRxInstructions("");
     setActionLoadingId(appointment.id);
     const result = await startVideoSession(appointment.id);
     setActionLoadingId(null);
@@ -1800,13 +1943,20 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
       return;
     }
 
-    realtime.publish({ type: "appointment:updated", appointmentId: session.activeAppointment.id, actorRole: "doctor" });
-    showToast("success", "Consultation completed and patient portal updated.");
-    setSubmitState({ loading: false, error: "", success: "" });
-    if (session.roomId) {
-      realtime.endVideoRoom(session.roomId);
+    if (session.activeAppointment) {
+      session.activeAppointment.notes = clinicalNotes;
+      session.activeAppointment.prescription = prescriptionText;
+      if (diagnosisText) {
+        session.activeAppointment.reason = diagnosisText;
+      }
     }
-    session.endSession();
+
+    realtime.publish({ type: "appointment:updated", appointmentId: session.activeAppointment.id, actorRole: "doctor" });
+    showToast("success", "Consultation notes and prescription saved. Live call remains active.");
+    setSubmitState({ loading: false, error: "", success: "Prescription and notes saved." });
+
+    // Note: The call stays active so doctor and patient can continue speaking!
+    // The call can be ended when doctor clicks the red "End Call" button.
     router.refresh();
   };
 
@@ -2102,48 +2252,243 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
             screenShareSupported={webRTC.screenShareSupported}
             chat={<ChatPanel role="doctor" messages={session.messages} onSend={session.sendMessage} tone={tone} />}
             documentation={
-              <section className={`rounded-xl border p-4 transition-colors ${
+              <section className={`rounded-xl border p-4 transition-colors max-h-[calc(100vh-14rem)] overflow-y-auto ${
                 isDark ? "border-slate-800 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-900 shadow-xs"
               }`}>
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-brand-teal">Clinical Documentation</p>
-                <form onSubmit={handleComplete} className="mt-4 space-y-3">
+                <div className="flex items-center justify-between gap-2 border-b pb-3 mb-3 border-slate-100 dark:border-slate-800">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Clinical Documentation</p>
+                    <h3 className="text-sm font-black mt-0.5">Notes &amp; E-Prescription</h3>
+                  </div>
+                  <span className="rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider">
+                    Live Call Active
+                  </span>
+                </div>
+
+                <form onSubmit={handleComplete} className="space-y-4">
+                  {/* Patient notes section */}
                   {(() => {
                     const parsed = extractComplaintAndNotes(session.activeAppointment?.reason || diagnosisText);
                     return (
-                      <div className={`rounded-xl border border-l-4 p-4 transition-colors ${
+                      <div className={`rounded-xl border border-l-4 p-3 transition-colors ${
                         isDark
                           ? "border-amber-400/20 border-l-amber-300 bg-amber-300/10"
                           : "border-amber-200 border-l-amber-500 bg-amber-50/70"
                       }`}>
                         <p className={`text-[10px] font-black uppercase tracking-[0.2em] ${isDark ? "text-amber-200" : "text-amber-800"}`}>
-                          Patient Notes &amp; Suspected Causes
+                          Patient Complaint &amp; Suspected Causes
                         </p>
-                        <p className={`mt-2 text-sm font-semibold leading-relaxed ${isDark ? "text-amber-50" : "text-amber-950"}`}>
+                        <p className={`mt-1 text-xs font-semibold leading-relaxed ${isDark ? "text-amber-50" : "text-amber-950"}`}>
                           {parsed.complaint || "No notes were provided for this appointment."}
                         </p>
                       </div>
                     );
                   })()}
-                  <textarea
-                    value={clinicalNotes}
-                    onChange={(event) => setClinicalNotes(event.target.value)}
-                    rows={4}
-                    placeholder="Consultation notes"
-                    className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-brand-teal ${
-                      isDark ? "border-slate-800 bg-slate-950 text-white placeholder:text-slate-600" : "border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400"
-                    }`}
-                  />
-                  <input
-                    value={prescriptionText}
-                    onChange={(event) => setPrescriptionText(event.target.value)}
-                    placeholder="Prescription"
-                    className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-brand-teal ${
-                      isDark ? "border-slate-800 bg-slate-950 text-white placeholder:text-slate-600" : "border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400"
-                    }`}
-                  />
-                  <button type="submit" disabled={submitState.loading} className="w-full rounded-lg bg-brand-teal px-4 py-2.5 text-xs font-black text-white disabled:bg-slate-800">
-                    {submitState.loading ? "Saving..." : "Complete & Issue Prescription"}
-                  </button>
+
+                  {/* Consultation Notes */}
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                      Consultation Notes / Clinical Observations
+                    </label>
+                    <textarea
+                      value={clinicalNotes}
+                      onChange={(event) => setClinicalNotes(event.target.value)}
+                      rows={3}
+                      placeholder="Doctor's clinical assessment, diagnosis, patient findings..."
+                      className={`w-full rounded-lg border px-3 py-2 text-xs outline-none transition focus:border-brand-teal ${
+                        isDark ? "border-slate-800 bg-slate-950 text-white placeholder:text-slate-600" : "border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400"
+                      }`}
+                    />
+                  </div>
+
+                  {/* Structured Prescription Builder */}
+                  <div className={`rounded-xl border p-3 space-y-3 ${
+                    isDark ? "border-slate-800 bg-slate-950/60" : "border-slate-200 bg-slate-50/70"
+                  }`}>
+                    <div className="flex items-center justify-between gap-2 border-b pb-2 border-slate-200/60 dark:border-slate-800/80">
+                      <div className="flex items-center gap-1.5">
+                        <span className="grid h-5 w-5 place-items-center rounded bg-brand-teal/20 text-brand-teal text-[10px] font-black">
+                          Rx
+                        </span>
+                        <p className="text-xs font-black uppercase tracking-wide">Prescription Details</p>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-semibold">Standard Format</span>
+                    </div>
+
+                    {/* Generic & Brand Name */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-0.5">
+                          Generic Name *
+                        </label>
+                        <input
+                          type="text"
+                          value={rxGenericName}
+                          onChange={(e) => updatePrescriptionField({ genericName: e.target.value })}
+                          placeholder="e.g. Amoxicillin, Paracetamol"
+                          className={`w-full rounded-lg border px-2.5 py-1.5 text-xs outline-none transition focus:border-brand-teal ${
+                            isDark ? "border-slate-800 bg-slate-900 text-white placeholder:text-slate-600" : "border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
+                          }`}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-0.5">
+                          Brand Name
+                        </label>
+                        <input
+                          type="text"
+                          value={rxBrandName}
+                          onChange={(e) => updatePrescriptionField({ brandName: e.target.value })}
+                          placeholder="e.g. Amoxil, Biogesic"
+                          className={`w-full rounded-lg border px-2.5 py-1.5 text-xs outline-none transition focus:border-brand-teal ${
+                            isDark ? "border-slate-800 bg-slate-900 text-white placeholder:text-slate-600" : "border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
+                          }`}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Dosage & Number to Consume */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-0.5">
+                          Dosage / Strength *
+                        </label>
+                        <input
+                          type="text"
+                          value={rxDosage}
+                          onChange={(e) => updatePrescriptionField({ dosage: e.target.value })}
+                          placeholder="e.g. 500 mg, 250 mg / 5 mL"
+                          className={`w-full rounded-lg border px-2.5 py-1.5 text-xs outline-none transition focus:border-brand-teal ${
+                            isDark ? "border-slate-800 bg-slate-900 text-white placeholder:text-slate-600" : "border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
+                          }`}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-0.5">
+                          Number of Consume (Dose) *
+                        </label>
+                        <input
+                          type="text"
+                          list="rx-quantity-list"
+                          value={rxQuantity}
+                          onChange={(e) => updatePrescriptionField({ quantity: e.target.value })}
+                          placeholder="e.g. 1 tablet, 2 capsules"
+                          className={`w-full rounded-lg border px-2.5 py-1.5 text-xs outline-none transition focus:border-brand-teal ${
+                            isDark ? "border-slate-800 bg-slate-900 text-white placeholder:text-slate-600" : "border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
+                          }`}
+                        />
+                        <datalist id="rx-quantity-list">
+                          {RX_QUANTITY_SUGGESTIONS.map((q) => (
+                            <option key={q} value={q} />
+                          ))}
+                        </datalist>
+                      </div>
+                    </div>
+
+                    {/* Frequency (How many times a day - Medical Terms) */}
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-0.5">
+                        Frequency (How many times a day - Medical Terms) *
+                      </label>
+                      <select
+                        value={rxFrequency}
+                        onChange={(e) => updatePrescriptionField({ frequency: e.target.value })}
+                        className={`w-full rounded-lg border px-2.5 py-1.5 text-xs outline-none transition focus:border-brand-teal ${
+                          isDark ? "border-slate-800 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-900"
+                        }`}
+                      >
+                        {RX_FREQUENCY_OPTIONS.map((f) => (
+                          <option key={f} value={f}>
+                            {f}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* When to Consume (Timing) & Duration */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-0.5">
+                          When to Consume (Timing) *
+                        </label>
+                        <select
+                          value={rxTiming}
+                          onChange={(e) => updatePrescriptionField({ timing: e.target.value })}
+                          className={`w-full rounded-lg border px-2.5 py-1.5 text-xs outline-none transition focus:border-brand-teal ${
+                            isDark ? "border-slate-800 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-900"
+                          }`}
+                        >
+                          {RX_TIMING_OPTIONS.map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-0.5">
+                          Duration
+                        </label>
+                        <input
+                          type="text"
+                          value={rxDuration}
+                          onChange={(e) => updatePrescriptionField({ duration: e.target.value })}
+                          placeholder="e.g. 7 days, 14 days"
+                          className={`w-full rounded-lg border px-2.5 py-1.5 text-xs outline-none transition focus:border-brand-teal ${
+                            isDark ? "border-slate-800 bg-slate-900 text-white placeholder:text-slate-600" : "border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
+                          }`}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Special Instructions */}
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-0.5">
+                        Special Instructions (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={rxInstructions}
+                        onChange={(e) => updatePrescriptionField({ instructions: e.target.value })}
+                        placeholder="e.g. Complete full course, Drink plenty of water"
+                        className={`w-full rounded-lg border px-2.5 py-1.5 text-xs outline-none transition focus:border-brand-teal ${
+                          isDark ? "border-slate-800 bg-slate-900 text-white placeholder:text-slate-600" : "border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
+                        }`}
+                      />
+                    </div>
+
+                    {/* Compiled Prescription Preview & Direct Edit */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                          Compiled Prescription (Editable Preview)
+                        </label>
+                        <span className="text-[9px] text-brand-teal font-black uppercase">Official Rx Record</span>
+                      </div>
+                      <textarea
+                        value={prescriptionText}
+                        onChange={(event) => setPrescriptionText(event.target.value)}
+                        rows={4}
+                        placeholder="Structured prescription will compile here automatically..."
+                        className={`w-full rounded-lg border px-3 py-2 text-xs font-mono leading-relaxed outline-none transition focus:border-brand-teal ${
+                          isDark ? "border-slate-800 bg-slate-950 text-emerald-300 placeholder:text-slate-600" : "border-slate-200 bg-slate-50 text-emerald-950 placeholder:text-slate-400"
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 pt-1">
+                    <button
+                      type="submit"
+                      disabled={submitState.loading}
+                      className="w-full rounded-xl bg-brand-teal px-4 py-3 text-xs font-black text-white shadow-md transition hover:bg-brand-teal/90 active:scale-[0.99] disabled:bg-slate-800 disabled:cursor-not-allowed"
+                    >
+                      {submitState.loading ? "Saving Documentation..." : "Save Prescription & Consultation Notes"}
+                    </button>
+                    <p className={`text-center text-[10px] font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                      ✓ Saves status and updates patient portal without ending your live video call.
+                    </p>
+                  </div>
                 </form>
               </section>
             }
