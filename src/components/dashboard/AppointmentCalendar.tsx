@@ -142,6 +142,7 @@ function AppointmentBlock({
   const confirmed = appointment.status === "CONFIRMED";
   const pending = appointment.status === "PENDING";
   const completed = appointment.status === "COMPLETED";
+  const cancelled = appointment.status === "CANCELLED";
   const dark = tone === "dark";
 
   const statusColor = confirmed
@@ -156,9 +157,13 @@ function AppointmentBlock({
         ? dark
           ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100 hover:border-emerald-400/60 hover:bg-emerald-500/25"
           : "border-emerald-300 bg-emerald-50/90 text-emerald-950 shadow-2xs hover:border-emerald-400 hover:bg-emerald-100"
-        : dark
-          ? "border-slate-700 bg-slate-800 text-slate-100 hover:bg-slate-750"
-          : "border-slate-200 bg-slate-100 text-slate-800 hover:bg-slate-200/70";
+        : cancelled
+          ? dark
+            ? "border-rose-400/30 bg-rose-500/15 text-rose-100 hover:border-rose-400/60 hover:bg-rose-500/25"
+            : "border-rose-300 bg-rose-50/90 text-rose-950 shadow-2xs hover:border-rose-400 hover:bg-rose-100"
+          : dark
+            ? "border-slate-700 bg-slate-800 text-slate-100 hover:bg-slate-750"
+            : "border-slate-200 bg-slate-100 text-slate-800 hover:bg-slate-200/70";
 
   const badgeColor = confirmed
     ? dark
@@ -172,9 +177,13 @@ function AppointmentBlock({
         ? dark
           ? "bg-emerald-400/20 text-emerald-200 border-emerald-400/30"
           : "bg-emerald-100 text-emerald-800 border-emerald-300"
-        : dark
-          ? "bg-slate-700 text-slate-300 border-slate-600"
-          : "bg-slate-200 text-slate-700 border-slate-300";
+        : cancelled
+          ? dark
+            ? "bg-rose-400/20 text-rose-200 border-rose-400/30"
+            : "bg-rose-100 text-rose-800 border-rose-300"
+          : dark
+            ? "bg-slate-700 text-slate-300 border-slate-600"
+            : "bg-slate-200 text-slate-700 border-slate-300";
 
   const subtitleColor = confirmed
     ? dark ? "text-sky-300/80" : "text-sky-800/80"
@@ -182,13 +191,15 @@ function AppointmentBlock({
       ? dark ? "text-amber-300/80" : "text-amber-800/80"
       : completed
         ? dark ? "text-emerald-300/80" : "text-emerald-800/80"
-        : dark ? "text-slate-400" : "text-slate-600";
+        : cancelled
+          ? dark ? "text-rose-300/80" : "text-rose-800/80"
+          : dark ? "text-slate-400" : "text-slate-600";
 
-  const badgeLabel = confirmed ? "CNF" : pending ? "REQ" : completed ? "CMP" : appointment.status.slice(0, 3);
+  const badgeLabel = confirmed ? "CNF" : pending ? "REQ" : completed ? "CMP" : cancelled ? "CAN" : appointment.status.slice(0, 3);
 
   return (
     <article
-      draggable={editable && !completed}
+      draggable={editable && !completed && !cancelled}
       onDragStart={(event) => event.dataTransfer.setData("text/plain", appointment.id)}
       onClick={(event) => {
         event.stopPropagation();
@@ -230,6 +241,7 @@ function AppointmentActionPopup({
   const confirmed = appointment.status === "CONFIRMED";
   const pending = appointment.status === "PENDING";
   const completed = appointment.status === "COMPLETED";
+  const cancelled = appointment.status === "CANCELLED";
   const dark = tone === "dark";
 
   const popupRef = useRef<HTMLDivElement>(null);
@@ -272,9 +284,9 @@ function AppointmentActionPopup({
     };
   }, [onClose]);
 
-  const statusLabel = confirmed ? "Confirmed" : pending ? "Pending Request" : completed ? "Completed" : appointment.status;
-  const statusColor = confirmed ? "text-sky-400" : pending ? "text-amber-400" : completed ? "text-emerald-400" : "text-slate-400";
-  const statusDot = confirmed ? "bg-sky-400" : pending ? "bg-amber-400" : completed ? "bg-emerald-400" : "bg-slate-500";
+  const statusLabel = confirmed ? "Confirmed" : pending ? "Pending Request" : completed ? "Completed" : cancelled ? "Cancelled" : appointment.status;
+  const statusColor = confirmed ? "text-sky-400" : pending ? "text-amber-400" : completed ? "text-emerald-400" : cancelled ? "text-rose-400" : "text-slate-400";
+  const statusDot = confirmed ? "bg-sky-400" : pending ? "bg-amber-400" : completed ? "bg-emerald-400" : cancelled ? "bg-rose-400" : "bg-slate-500";
 
   // Arrow pointing from popover toward the anchor element
   const arrowTop = Math.max(12, Math.min(anchorRect.top + anchorRect.height / 2 - top - 6, 200));
@@ -510,6 +522,7 @@ export function AppointmentCalendar({
             <span className={`rounded-full px-2.5 py-1 ${dark ? "bg-sky-400/15 text-sky-200 border border-sky-400/30" : "border border-sky-300 bg-sky-50 text-sky-800"}`}>Confirmed</span>
             <span className={`rounded-full px-2.5 py-1 ${dark ? "bg-amber-400/15 text-amber-200 border border-amber-400/30" : "border border-amber-300 bg-amber-50 text-amber-800"}`}>Pending</span>
             <span className={`rounded-full px-2.5 py-1 ${dark ? "bg-emerald-400/15 text-emerald-200 border border-emerald-400/30" : "border border-emerald-300 bg-emerald-50 text-emerald-800"}`}>Completed</span>
+            <span className={`rounded-full px-2.5 py-1 ${dark ? "bg-rose-400/15 text-rose-200 border border-rose-400/30" : "border border-rose-300 bg-rose-50 text-rose-800"}`}>Cancelled</span>
           </div>
         )}
       </div>

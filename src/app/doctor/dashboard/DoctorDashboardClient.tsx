@@ -1281,6 +1281,13 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
         .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()),
     [doctor.bookings]
   );
+  const cancelledAppointments = useMemo(
+    () =>
+      doctor.bookings
+        .filter((booking) => booking.status === "CANCELLED")
+        .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()),
+    [doctor.bookings]
+  );
   const consultationQueue = useMemo(
     () =>
       doctor.bookings
@@ -1550,14 +1557,14 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
       end.setDate(start.getDate() + 7);
     }
 
-    // Include completed appointments so they remain visible and clickable on the calendar
-    return [...pendingAppointments, ...confirmedAppointments, ...completedConsultations]
+    // Include completed and cancelled appointments so they remain visible and clickable on the calendar
+    return [...pendingAppointments, ...confirmedAppointments, ...completedConsultations, ...cancelledAppointments]
       .filter((booking) => {
         const scheduledAt = new Date(booking.scheduledAt);
         return scheduledAt >= start && scheduledAt < end;
       })
       .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime());
-  }, [calendarAnchorDate, calendarView, confirmedAppointments, pendingAppointments, completedConsultations]);
+  }, [calendarAnchorDate, calendarView, confirmedAppointments, pendingAppointments, completedConsultations, cancelledAppointments]);
 
   const navItems: DashboardNavItem<DoctorModuleId>[] = [
     { id: "overview", label: "Overview" },
