@@ -24,6 +24,9 @@ const PATIENT_BOOKINGS_SELECT = {
         id: true,
         name: true,
         specialty: true,
+        licenseNumber: true,
+        licenseState: true,
+        npi: true,
       },
     },
     // Include active video session so the patient dashboard can hydrate

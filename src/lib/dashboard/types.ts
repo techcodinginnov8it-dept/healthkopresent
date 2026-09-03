@@ -102,6 +102,9 @@ export type PatientAppointment = {
     id?: string;
     name: string;
     specialty: string;
+    licenseNumber?: string | null;
+    licenseState?: string | null;
+    npi?: string | null;
   };
   videoSession?: {
     roomId: string;

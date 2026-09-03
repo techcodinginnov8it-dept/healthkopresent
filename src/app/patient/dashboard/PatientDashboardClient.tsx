@@ -24,6 +24,7 @@ import { useDashboardNotifications } from "@/hooks/useDashboardNotifications";
 import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
 import { useWebRTC } from "@/hooks/useWebRTC";
 import { formatDateTime } from "@/lib/dashboard/format";
+import { downloadPrescriptionPdf } from "@/lib/prescription-pdf";
 import { createDashboardNotification } from "@/lib/dashboard/notifications";
 import { DEFAULT_DURATION_MINUTES, getScheduleConflict, parseAvailability } from "@/lib/scheduling";
 import type {
@@ -204,59 +205,29 @@ function isDoctorFollowUp(appointment: PatientAppointment) {
   return appointment.reason?.toLowerCase().startsWith("follow-up") || appointment.notes?.includes("Follow-up requested by doctor");
 }
 
-function escapePdfText(value: string) {
-  return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
-}
+function downloadMedicalReport(appointment: PatientAppointment, patient?: DashboardPatient) {
+  const patientName = patient ? `${patient.firstName} ${patient.lastName}`.trim() : "Patient";
+  const patientAge = patient?.dob
+    ? Math.floor((Date.now() - new Date(patient.dob).getTime()) / (365.25 * 24 * 3600 * 1000))
+    : "Adult";
 
-function downloadMedicalReport(appointment: PatientAppointment) {
-  const reportLines = [
-    "Healthko Medical Report",
-    "",
-    `Doctor: ${appointment.doctor.name}`,
-    `Specialization: ${appointment.doctor.specialty}`,
-    `Consultation Date: ${formatDateTime(appointment.scheduledAt)}`,
-    `Status: ${appointment.status}`,
-    "",
-    "Chief Complaint",
-    appointment.reason || "No chief complaint recorded.",
-    "",
-    "Doctor Assessment and Plan",
-    appointment.notes || "No doctor assessment recorded.",
-    "",
-    "Prescription",
-    appointment.prescription || "No prescription issued.",
-  ];
-  const textStream = reportLines
-    .slice(0, 34)
-    .map((line, index) => `BT /F1 11 Tf 54 ${760 - index * 18} Td (${escapePdfText(line)}) Tj ET`)
-    .join("\n");
-  const objects = [
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    `<< /Length ${textStream.length} >>\nstream\n${textStream}\nendstream`,
-  ];
-  let pdf = "%PDF-1.4\n";
-  const offsets = [0];
-  objects.forEach((object, index) => {
-    offsets.push(pdf.length);
-    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  downloadPrescriptionPdf({
+    appointmentId: appointment.id,
+    doctorName: appointment.doctor.name,
+    doctorSpecialty: appointment.doctor.specialty,
+    doctorLicense: appointment.doctor.licenseNumber,
+    doctorNpi: appointment.doctor.npi,
+    clinicName: `CLINIC OF DR. ${appointment.doctor.name.toUpperCase().replace(/^DR\.?\s+/i, "")}, MD`,
+    patientName,
+    patientAge,
+    patientGender: patient?.gender,
+    patientAddress: patient?.address ? `${patient.address}, ${patient.city || ""}` : undefined,
+    date: appointment.scheduledAt,
+    diagnosis: appointment.reason,
+    prescription:
+      appointment.prescription ||
+      (appointment.notes ? `Clinical Assessment & Plan:\n${appointment.notes}` : "Consultation completed - No prescription issued."),
   });
-  const xrefOffset = pdf.length;
-  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  offsets.slice(1).forEach((offset) => {
-    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
-  });
-  pdf += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-  const blob = new Blob([pdf], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-
-  link.href = url;
-  link.download = `healthko-medical-report-${appointment.id}.pdf`;
-  link.click();
-  URL.revokeObjectURL(url);
 }
 
 function startOfMonth(date: Date) {
@@ -2415,7 +2386,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                         )}
                         {consultationHubTab === "documents" && (
                           <div className="grid gap-3 md:grid-cols-2">
-                            <button type="button" onClick={() => downloadMedicalReport(selectedAppointment)} className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-left text-sm font-black text-slate-950">
+                            <button type="button" onClick={() => downloadMedicalReport(selectedAppointment, patient)} className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-left text-sm font-black text-slate-950">
                               Download consultation report
                             </button>
                             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -2506,7 +2477,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                     </div>
                     <button
                       type="button"
-                      onClick={() => downloadMedicalReport(selectedMedicalAppointment)}
+                      onClick={() => downloadMedicalReport(selectedMedicalAppointment, patient)}
                       className="rounded-lg bg-slate-950 px-4 py-3 text-xs font-black text-white"
                     >
                       Download PDF Report
@@ -2603,13 +2574,25 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       {activeModule === "prescriptions" && (
         <PrescriptionList
           role="patient"
-          items={appointments.map((booking) => ({
-            id: booking.id,
-            prescription: booking.prescription,
-            reason: booking.reason,
-            scheduledAt: booking.scheduledAt,
-            owner: booking.doctor.name,
-          }))}
+          items={appointments.map((booking) => {
+            const patAge = patient.dob ? Math.floor((Date.now() - new Date(patient.dob).getTime()) / (365.25 * 24 * 3600 * 1000)) : "Adult";
+            return {
+              id: booking.id,
+              prescription: booking.prescription,
+              reason: booking.reason,
+              scheduledAt: booking.scheduledAt,
+              owner: booking.doctor.name,
+              doctorName: booking.doctor.name,
+              doctorSpecialty: booking.doctor.specialty,
+              doctorLicense: booking.doctor.licenseNumber,
+              doctorNpi: booking.doctor.npi,
+              clinicName: `CLINIC OF DR. ${booking.doctor.name.toUpperCase().replace(/^DR\.?\s+/i, "")}, MD`,
+              patientName: `${patient.firstName} ${patient.lastName}`,
+              patientAge: patAge,
+              patientGender: patient.gender,
+              patientAddress: patient.address ? `${patient.address}, ${patient.city || ""}` : undefined,
+            };
+          })}
         />
       )}
 

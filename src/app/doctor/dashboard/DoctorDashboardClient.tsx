@@ -28,6 +28,7 @@ import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
 import { useWebRTC } from "@/hooks/useWebRTC";
 import { getTabButtonClassName } from "@/components/dashboard/tabStyles";
 import { formatDateTime } from "@/lib/dashboard/format";
+import { downloadPrescriptionPdf } from "@/lib/prescription-pdf";
 import { createDashboardNotification } from "@/lib/dashboard/notifications";
 import type {
   ChatAttachment,
@@ -1203,10 +1204,22 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
   const [rxBrandName, setRxBrandName] = useState("");
   const [rxDosage, setRxDosage] = useState("");
   const [rxQuantity, setRxQuantity] = useState("1 tablet");
-  const [rxFrequency, setRxFrequency] = useState("TID — Three times daily (Every 8 hours)");
-  const [rxTiming, setRxTiming] = useState("After meals (p.c. / Post Cibum)");
+  const [rxFrequency, setRxFrequency] = useState(RX_FREQUENCY_OPTIONS[2] as string);
+  const [rxTiming, setRxTiming] = useState(RX_TIMING_OPTIONS[0] as string);
   const [rxDuration, setRxDuration] = useState("7 days");
   const [rxInstructions, setRxInstructions] = useState("");
+  const [rxItems, setRxItems] = useState<Array<{
+    id: string;
+    genericName: string;
+    brandName: string;
+    dosage: string;
+    quantity: string;
+    frequency: string;
+    timing: string;
+    duration: string;
+    instructions: string;
+    formatted: string;
+  }>>([]);
   const [referralTargets, setReferralTargets] = useState<Record<string, string>>({});
   const [submitState, setSubmitState] = useState({ loading: false, error: "", success: "" });
   const [scheduleState, setScheduleState] = useState({ loading: false, error: "", success: "" });
@@ -1217,6 +1230,8 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
   const [isFollowUpModalOpen, setIsFollowUpModalOpen] = useState(false);
   const [isPatientDataModalOpen, setIsPatientDataModalOpen] = useState(false);
   const [noShowConfirmAppt, setNoShowConfirmAppt] = useState<DoctorAppointment | null>(null);
+  const [showEndCallConfirm, setShowEndCallConfirm] = useState(false);
+  const [isEndCallLoading, setIsEndCallLoading] = useState(false);
   const [waitingStartedAt, setWaitingStartedAt] = useState<number | null>(null);
   const [calendarView, setCalendarView] = useState<CalendarViewMode>("week");
   const [patientSearch, setPatientSearch] = useState("");
@@ -1866,45 +1881,56 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     }
   };
 
-  const updatePrescriptionField = (updates: Partial<{
-    genericName: string;
-    brandName: string;
-    dosage: string;
-    quantity: string;
-    frequency: string;
-    timing: string;
-    duration: string;
-    instructions: string;
-  }>) => {
-    const nextGeneric = updates.genericName !== undefined ? updates.genericName : rxGenericName;
-    const nextBrand = updates.brandName !== undefined ? updates.brandName : rxBrandName;
-    const nextDosage = updates.dosage !== undefined ? updates.dosage : rxDosage;
-    const nextQuantity = updates.quantity !== undefined ? updates.quantity : rxQuantity;
-    const nextFrequency = updates.frequency !== undefined ? updates.frequency : rxFrequency;
-    const nextTiming = updates.timing !== undefined ? updates.timing : rxTiming;
-    const nextDuration = updates.duration !== undefined ? updates.duration : rxDuration;
-    const nextInstructions = updates.instructions !== undefined ? updates.instructions : rxInstructions;
-
-    if (updates.genericName !== undefined) setRxGenericName(updates.genericName);
-    if (updates.brandName !== undefined) setRxBrandName(updates.brandName);
-    if (updates.dosage !== undefined) setRxDosage(updates.dosage);
-    if (updates.quantity !== undefined) setRxQuantity(updates.quantity);
-    if (updates.frequency !== undefined) setRxFrequency(updates.frequency);
-    if (updates.timing !== undefined) setRxTiming(updates.timing);
-    if (updates.duration !== undefined) setRxDuration(updates.duration);
-    if (updates.instructions !== undefined) setRxInstructions(updates.instructions);
-
+  const addRxItem = () => {
+    if (!rxGenericName.trim() && !rxBrandName.trim()) {
+      showToast("error", "Please fill in at least a Generic Name or Brand Name.");
+      return;
+    }
     const formatted = buildFormattedPrescription({
-      genericName: nextGeneric,
-      brandName: nextBrand,
-      dosage: nextDosage,
-      quantity: nextQuantity,
-      frequency: nextFrequency,
-      timing: nextTiming,
-      duration: nextDuration,
-      instructions: nextInstructions,
+      genericName: rxGenericName,
+      brandName: rxBrandName,
+      dosage: rxDosage,
+      quantity: rxQuantity,
+      frequency: rxFrequency,
+      timing: rxTiming,
+      duration: rxDuration,
+      instructions: rxInstructions,
     });
-    setPrescriptionText(formatted);
+    const newItem = {
+      id: `rx-${Date.now()}`,
+      genericName: rxGenericName,
+      brandName: rxBrandName,
+      dosage: rxDosage,
+      quantity: rxQuantity,
+      frequency: rxFrequency,
+      timing: rxTiming,
+      duration: rxDuration,
+      instructions: rxInstructions,
+      formatted,
+    };
+    const updatedItems = [...rxItems, newItem];
+    setRxItems(updatedItems);
+    // Compile full prescription from all items
+    setPrescriptionText(updatedItems.map((item, i) => `--- Medicine ${i + 1} ---\n${item.formatted}`).join("\n\n"));
+    // Reset draft fields
+    setRxGenericName("");
+    setRxBrandName("");
+    setRxDosage("");
+    setRxQuantity("1 tablet");
+    setRxFrequency(RX_FREQUENCY_OPTIONS[2] as string);
+    setRxTiming(RX_TIMING_OPTIONS[0] as string);
+    setRxDuration("7 days");
+    setRxInstructions("");
+  };
+
+  const removeRxItem = (id: string) => {
+    const updatedItems = rxItems.filter((item) => item.id !== id);
+    setRxItems(updatedItems);
+    setPrescriptionText(
+      updatedItems.length
+        ? updatedItems.map((item, i) => `--- Medicine ${i + 1} ---\n${item.formatted}`).join("\n\n")
+        : ""
+    );
   };
 
   const startLiveSession = async (appointment: DoctorAppointment) => {
@@ -1915,10 +1941,11 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     setRxBrandName("");
     setRxDosage("");
     setRxQuantity("1 tablet");
-    setRxFrequency("TID — Three times daily (Every 8 hours)");
-    setRxTiming("After meals (p.c. / Post Cibum)");
+    setRxFrequency(RX_FREQUENCY_OPTIONS[2] as string);
+    setRxTiming(RX_TIMING_OPTIONS[0] as string);
     setRxDuration("7 days");
     setRxInstructions("");
+    setRxItems([]);
     setActionLoadingId(appointment.id);
     const result = await startVideoSession(appointment.id);
     setActionLoadingId(null);
@@ -2101,7 +2128,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
           onToggleCamera={session.toggleCamera}
           onToggleMic={session.toggleMic}
           onToggleScreenShare={handleToggleScreenShare}
-          onEnd={handleEndSession}
+          onEnd={() => setShowEndCallConfirm(true)}
           onOpen={() => setActiveModule("live")}
           localStream={webRTC.localStream}
           screenShareStream={webRTC.screenShareStream}
@@ -2269,7 +2296,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
             onToggleCamera={session.toggleCamera}
             onToggleMic={session.toggleMic}
             onToggleScreenShare={handleToggleScreenShare}
-            onEnd={handleEndSession}
+            onEnd={() => setShowEndCallConfirm(true)}
             localStream={webRTC.localStream}
             screenShareStream={webRTC.screenShareStream}
             remoteStream={webRTC.remoteStream}
@@ -2350,7 +2377,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                         <input
                           type="text"
                           value={rxGenericName}
-                          onChange={(e) => updatePrescriptionField({ genericName: e.target.value })}
+                          onChange={(e) => setRxGenericName(e.target.value)}
                           placeholder="e.g. Amoxicillin, Paracetamol"
                           className={`w-full rounded-lg border px-2.5 py-1.5 text-xs outline-none transition focus:border-brand-teal ${
                             isDark ? "border-slate-800 bg-slate-900 text-white placeholder:text-slate-600" : "border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
@@ -2364,7 +2391,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                         <input
                           type="text"
                           value={rxBrandName}
-                          onChange={(e) => updatePrescriptionField({ brandName: e.target.value })}
+                          onChange={(e) => setRxBrandName(e.target.value)}
                           placeholder="e.g. Amoxil, Biogesic"
                           className={`w-full rounded-lg border px-2.5 py-1.5 text-xs outline-none transition focus:border-brand-teal ${
                             isDark ? "border-slate-800 bg-slate-900 text-white placeholder:text-slate-600" : "border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
@@ -2382,7 +2409,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                         <input
                           type="text"
                           value={rxDosage}
-                          onChange={(e) => updatePrescriptionField({ dosage: e.target.value })}
+                          onChange={(e) => setRxDosage(e.target.value)}
                           placeholder="e.g. 500 mg, 250 mg / 5 mL"
                           className={`w-full rounded-lg border px-2.5 py-1.5 text-xs outline-none transition focus:border-brand-teal ${
                             isDark ? "border-slate-800 bg-slate-900 text-white placeholder:text-slate-600" : "border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
@@ -2397,7 +2424,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                           type="text"
                           list="rx-quantity-list"
                           value={rxQuantity}
-                          onChange={(e) => updatePrescriptionField({ quantity: e.target.value })}
+                          onChange={(e) => setRxQuantity(e.target.value)}
                           placeholder="e.g. 1 tablet, 2 capsules"
                           className={`w-full rounded-lg border px-2.5 py-1.5 text-xs outline-none transition focus:border-brand-teal ${
                             isDark ? "border-slate-800 bg-slate-900 text-white placeholder:text-slate-600" : "border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
@@ -2418,7 +2445,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                       </label>
                       <select
                         value={rxFrequency}
-                        onChange={(e) => updatePrescriptionField({ frequency: e.target.value })}
+                        onChange={(e) => setRxFrequency(e.target.value)}
                         className={`w-full rounded-lg border px-2.5 py-1.5 text-xs outline-none transition focus:border-brand-teal ${
                           isDark ? "border-slate-800 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-900"
                         }`}
@@ -2439,7 +2466,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                         </label>
                         <select
                           value={rxTiming}
-                          onChange={(e) => updatePrescriptionField({ timing: e.target.value })}
+                          onChange={(e) => setRxTiming(e.target.value)}
                           className={`w-full rounded-lg border px-2.5 py-1.5 text-xs outline-none transition focus:border-brand-teal ${
                             isDark ? "border-slate-800 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-900"
                           }`}
@@ -2458,7 +2485,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                         <input
                           type="text"
                           value={rxDuration}
-                          onChange={(e) => updatePrescriptionField({ duration: e.target.value })}
+                          onChange={(e) => setRxDuration(e.target.value)}
                           placeholder="e.g. 7 days, 14 days"
                           className={`w-full rounded-lg border px-2.5 py-1.5 text-xs outline-none transition focus:border-brand-teal ${
                             isDark ? "border-slate-800 bg-slate-900 text-white placeholder:text-slate-600" : "border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
@@ -2475,7 +2502,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                       <input
                         type="text"
                         value={rxInstructions}
-                        onChange={(e) => updatePrescriptionField({ instructions: e.target.value })}
+                        onChange={(e) => setRxInstructions(e.target.value)}
                         placeholder="e.g. Complete full course, Drink plenty of water"
                         className={`w-full rounded-lg border px-2.5 py-1.5 text-xs outline-none transition focus:border-brand-teal ${
                           isDark ? "border-slate-800 bg-slate-900 text-white placeholder:text-slate-600" : "border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
@@ -2483,24 +2510,66 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                       />
                     </div>
 
-                    {/* Compiled Prescription Preview & Direct Edit */}
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                          Compiled Prescription (Editable Preview)
-                        </label>
-                        <span className="text-[9px] text-brand-teal font-black uppercase">Official Rx Record</span>
+                    {/* Add Medicine Button */}
+                    <button
+                      type="button"
+                      onClick={addRxItem}
+                      className={`w-full rounded-lg border border-dashed px-4 py-2.5 text-xs font-black transition ${
+                        isDark
+                          ? "border-brand-teal/50 text-brand-teal hover:bg-brand-teal/10"
+                          : "border-brand-teal/60 text-brand-teal hover:bg-brand-teal/5"
+                      }`}
+                    >
+                      + Add Medicine to Prescription
+                    </button>
+
+                    {/* Compiled Prescription – Medicine Cards */}
+                    {rxItems.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                            Prescription List ({rxItems.length} medicine{rxItems.length !== 1 ? "s" : ""})
+                          </p>
+                          <span className="text-[9px] text-brand-teal font-black uppercase">Official Rx Record</span>
+                        </div>
+                        {rxItems.map((item, index) => (
+                          <div
+                            key={item.id}
+                            className={`rounded-xl border p-3 space-y-1 relative ${
+                              isDark ? "border-emerald-900/60 bg-emerald-950/30" : "border-emerald-200 bg-emerald-50/60"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`grid h-5 w-5 shrink-0 place-items-center rounded text-[9px] font-black ${isDark ? "bg-brand-teal/20 text-brand-teal" : "bg-brand-teal text-white"}`}>
+                                  {index + 1}
+                                </span>
+                                <p className={`text-xs font-black truncate ${isDark ? "text-white" : "text-slate-900"}`}>
+                                  {[item.genericName, item.brandName].filter(Boolean).join(" / ")}
+                                  {item.dosage ? ` — ${item.dosage}` : ""}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removeRxItem(item.id)}
+                                className={`shrink-0 rounded p-0.5 text-[10px] font-black transition ${
+                                  isDark ? "text-rose-400 hover:bg-rose-500/15" : "text-rose-500 hover:bg-rose-50"
+                                }`}
+                                title="Remove medicine"
+                                aria-label="Remove medicine"
+                              >
+                                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                                </svg>
+                              </button>
+                            </div>
+                            <pre className={`text-[10px] font-mono leading-relaxed whitespace-pre-wrap pl-6.5 ${isDark ? "text-emerald-200/80" : "text-emerald-900/80"}`}>
+                              {item.formatted}
+                            </pre>
+                          </div>
+                        ))}
                       </div>
-                      <textarea
-                        value={prescriptionText}
-                        onChange={(event) => setPrescriptionText(event.target.value)}
-                        rows={4}
-                        placeholder="Structured prescription will compile here automatically..."
-                        className={`w-full rounded-lg border px-3 py-2 text-xs font-mono leading-relaxed outline-none transition focus:border-brand-teal ${
-                          isDark ? "border-slate-800 bg-slate-950 text-emerald-300 placeholder:text-slate-600" : "border-slate-200 bg-slate-50 text-emerald-950 placeholder:text-slate-400"
-                        }`}
-                      />
-                    </div>
+                    )}
                   </div>
 
                   <div className="space-y-1.5 pt-1">
@@ -2511,6 +2580,47 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                     >
                       {submitState.loading ? "Saving Documentation..." : "Save Prescription & Consultation Notes"}
                     </button>
+                    {prescriptionText.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const apt = session.activeAppointment;
+                          const pat = apt?.patient;
+                          const patientName = pat
+                            ? `${pat.firstName} ${pat.lastName}`.trim()
+                            : "Patient";
+                          downloadPrescriptionPdf({
+                            appointmentId: apt?.id,
+                            doctorName: doctor.name,
+                            doctorSpecialty: doctor.specialty,
+                            doctorLicense: doctor.licenseNumber,
+                            doctorNpi: doctor.npi,
+                            clinicName: `CLINIC OF DR. ${doctor.name.toUpperCase().replace(/^DR\.?\s+/i, "")}, MD`,
+                            patientName,
+                            patientAge: pat?.dob
+                              ? Math.floor((Date.now() - new Date(pat.dob).getTime()) / (365.25 * 24 * 3600 * 1000))
+                              : "Adult",
+                            patientGender: pat?.gender,
+                            patientAddress: pat?.address ? `${pat.address}, ${pat.city || ""}` : undefined,
+                            date: new Date(),
+                            diagnosis: clinicalNotes || apt?.reason || "Clinical Telehealth Encounter",
+                            prescription: prescriptionText,
+                          });
+                        }}
+                        className={`flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-black transition ${
+                          isDark
+                            ? "border-teal-500/40 bg-teal-500/15 text-teal-300 hover:bg-teal-500/25"
+                            : "border-teal-600/30 bg-teal-50 text-teal-800 hover:bg-teal-100"
+                        }`}
+                      >
+                        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                          <line x1="12" x2="12" y1="15" y2="3" />
+                        </svg>
+                        Download Rx PDF (E-Signed)
+                      </button>
+                    )}
                     <p className={`text-center text-[10px] font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                       ✓ Saves status and updates patient portal without ending your live video call.
                     </p>
@@ -2951,13 +3061,26 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
         <PrescriptionList
           role="doctor"
           tone={tone}
-          items={doctor.bookings.map((booking) => ({
-            id: booking.id,
-            prescription: booking.prescription,
-            reason: booking.reason,
-            scheduledAt: booking.scheduledAt,
-            owner: `${booking.patient.firstName} ${booking.patient.lastName}`,
-          }))}
+          items={doctor.bookings.map((booking) => {
+            const pat = booking.patient;
+            const patAge = pat?.dob ? Math.floor((Date.now() - new Date(pat.dob).getTime()) / (365.25 * 24 * 3600 * 1000)) : "Adult";
+            return {
+              id: booking.id,
+              prescription: booking.prescription,
+              reason: booking.reason,
+              scheduledAt: booking.scheduledAt,
+              owner: `${pat.firstName} ${pat.lastName}`,
+              doctorName: doctor.name,
+              doctorSpecialty: doctor.specialty,
+              doctorLicense: doctor.licenseNumber,
+              doctorNpi: doctor.npi,
+              clinicName: `CLINIC OF DR. ${doctor.name.toUpperCase().replace(/^DR\.?\s+/i, "")}, MD`,
+              patientName: `${pat.firstName} ${pat.lastName}`,
+              patientAge: patAge,
+              patientGender: pat.gender,
+              patientAddress: pat.address ? `${pat.address}, ${pat.city || ""}` : undefined,
+            };
+          })}
         />
       )}
 
@@ -3225,7 +3348,117 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
         </div>
       )}
 
-      {/* Patient Data Popup Modal */}
+      {/* End Call Confirmation Modal */}
+      {showEndCallConfirm && (
+        <div
+          className="fixed inset-0 z-[270] flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-fadeIn"
+          onClick={() => { if (!isEndCallLoading) setShowEndCallConfirm(false); }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="End consultation call"
+        >
+          <div
+            className={`w-full max-w-sm rounded-2xl border p-6 text-center shadow-2xl ${
+              isDark ? "border-slate-700 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-950"
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Icon */}
+            <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-2xl ${
+              isDark ? "bg-rose-500/15 text-rose-300" : "bg-rose-100 text-rose-600"
+            }`}>
+              <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07C9.44 17.25 7.76 15.59 6.4 13.68a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 5.11 3h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11z" />
+                <line x1="23" y1="1" x2="1" y2="23" />
+              </svg>
+            </div>
+
+            <p className="mt-4 text-[10px] font-black uppercase tracking-[0.25em] text-rose-500">End Consultation</p>
+            <h3 className={`mt-1 text-xl font-black ${isDark ? "text-white" : "text-slate-950"}`}>
+              End Call?
+            </h3>
+            <p className={`mt-3 text-xs leading-relaxed font-semibold ${
+              isDark ? "text-slate-300" : "text-slate-600"
+            }`}>
+              Choose how to end this consultation with{" "}
+              <strong className={isDark ? "text-white" : "text-slate-900"}>
+                {session.activeAppointment
+                  ? `${session.activeAppointment.patient.firstName} ${session.activeAppointment.patient.lastName}`
+                  : "this patient"}
+              </strong>.
+            </p>
+
+            <div className="mt-6 flex flex-col gap-2.5">
+              {/* End & Complete */}
+              <button
+                type="button"
+                disabled={isEndCallLoading}
+                onClick={async () => {
+                  if (!session.activeAppointment) return;
+                  setIsEndCallLoading(true);
+                  // Mark as completed first
+                  const consultationId = session.activeAppointment.id;
+                  await completeConsultation({
+                    consultationId,
+                    notes: clinicalNotes || session.activeAppointment.notes || undefined,
+                    prescription: prescriptionText || session.activeAppointment.prescription || undefined,
+                    reason: diagnosisText || session.activeAppointment.reason || undefined,
+                  });
+                  realtime.publish({
+                    type: "appointment:updated",
+                    appointmentId: consultationId,
+                    actorRole: "doctor",
+                    title: "Consultation completed",
+                    body: `Your consultation with Dr. ${doctor.name} has been completed.`,
+                  });
+                  // Then end the call
+                  await handleEndSession();
+                  setShowEndCallConfirm(false);
+                  setIsEndCallLoading(false);
+                  showToast("success", "Call ended. Consultation marked as completed.");
+                }}
+                className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 px-5 py-3 text-xs font-black text-white shadow-md transition disabled:opacity-60"
+              >
+                {isEndCallLoading ? "Ending..." : "✓ End Call & Mark as Completed"}
+              </button>
+
+              {/* End call only */}
+              <button
+                type="button"
+                disabled={isEndCallLoading}
+                onClick={async () => {
+                  setIsEndCallLoading(true);
+                  await handleEndSession();
+                  setShowEndCallConfirm(false);
+                  setIsEndCallLoading(false);
+                }}
+                className={`w-full rounded-xl border px-5 py-2.5 text-xs font-black transition disabled:opacity-60 ${
+                  isDark
+                    ? "border-slate-700 bg-slate-800 text-rose-300 hover:bg-slate-700"
+                    : "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+                }`}
+              >
+                End Call Only (keep status)
+              </button>
+
+              {/* Cancel */}
+              <button
+                type="button"
+                disabled={isEndCallLoading}
+                onClick={() => setShowEndCallConfirm(false)}
+                className={`w-full rounded-xl border px-5 py-2 text-xs font-black transition disabled:opacity-50 ${
+                  isDark
+                    ? "border-slate-700 bg-transparent text-slate-400 hover:text-slate-200"
+                    : "border-slate-200 bg-transparent text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                Cancel — Keep Call Active
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isPatientDataModalOpen && selectedLiveAppointment && (
         <div
           className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn"

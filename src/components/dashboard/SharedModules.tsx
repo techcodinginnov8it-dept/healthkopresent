@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChatAttachment, ChatMessage, DashboardRole } from "@/lib/dashboard/types";
 import { formatDate, formatDateTime } from "@/lib/dashboard/format";
+import { downloadPrescriptionPdf } from "@/lib/prescription-pdf";
 
 function VideoControlIcon({ off = false }: { off?: boolean }) {
   return (
@@ -1226,41 +1227,111 @@ export function FloatingConsultationCall({
   );
 }
 
+export type PrescriptionListItem = {
+  id: string;
+  prescription: string | null;
+  reason?: string | null;
+  scheduledAt: Date | string;
+  owner: string;
+  doctorName?: string;
+  doctorSpecialty?: string;
+  doctorLicense?: string | null;
+  doctorNpi?: string | null;
+  clinicName?: string;
+  patientName?: string;
+  patientAge?: string | number;
+  patientGender?: string | null;
+  patientAddress?: string | null;
+};
+
 export function PrescriptionList({
   items,
   role,
   tone = "light",
+  onDownloadPdf,
 }: {
-  items: { id: string; prescription: string | null; reason?: string | null; scheduledAt: Date | string; owner: string }[];
+  items: PrescriptionListItem[];
   role: DashboardRole;
   tone?: "light" | "dark";
+  onDownloadPdf?: (item: PrescriptionListItem) => void;
 }) {
   const active = items.filter((item) => item.prescription);
+
+  const handleDownload = (item: PrescriptionListItem) => {
+    if (onDownloadPdf) {
+      onDownloadPdf(item);
+      return;
+    }
+    const docName = item.doctorName || (role === "patient" ? item.owner : "Medical Doctor");
+    const patName = item.patientName || (role === "doctor" ? item.owner : "Patient");
+
+    downloadPrescriptionPdf({
+      appointmentId: item.id,
+      doctorName: docName,
+      doctorSpecialty: item.doctorSpecialty || "General & Specialty Practice",
+      doctorLicense: item.doctorLicense,
+      doctorNpi: item.doctorNpi,
+      clinicName: item.clinicName,
+      patientName: patName,
+      patientAge: item.patientAge,
+      patientGender: item.patientGender,
+      patientAddress: item.patientAddress,
+      date: item.scheduledAt,
+      diagnosis: item.reason,
+      prescription: item.prescription || "No prescription recorded.",
+    });
+  };
 
   return active.length ? (
     <div className="grid gap-4 md:grid-cols-2">
       {active.map((item) => (
         <article
           key={item.id}
-          className={`rounded-xl border p-4 transition-colors ${
+          className={`rounded-xl border p-5 transition-colors ${
             tone === "dark"
-              ? "border-brand-red/30 bg-slate-900 text-white shadow-xs"
-              : "border-brand-red/20 bg-white text-slate-950 shadow-2xs"
+              ? "border-teal-500/30 bg-slate-900 text-white shadow-xs"
+              : "border-teal-600/20 bg-white text-slate-950 shadow-2xs"
           }`}
         >
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-red">Prescription</p>
-          <h3 className={`mt-2 text-sm font-black ${tone === "dark" ? "text-white" : "text-slate-950"}`}>{item.prescription}</h3>
-          <p className={`mt-1 text-xs font-semibold ${tone === "dark" ? "text-slate-400" : "text-slate-500"}`}>{role === "doctor" ? "Patient" : "Doctor"}: {item.owner}</p>
-          <p className={`mt-3 text-xs ${tone === "dark" ? "text-slate-400" : "text-slate-500"}`}>{formatDate(item.scheduledAt)} · {item.reason || "Clinical encounter"}</p>
+          <div className="flex items-center justify-between gap-2">
+            <span className="inline-flex items-center gap-1 rounded-md bg-teal-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.2em] text-teal-600 dark:text-teal-400">
+              Official Rx
+            </span>
+            <span className={`text-[11px] font-semibold ${tone === "dark" ? "text-slate-400" : "text-slate-500"}`}>
+              {formatDate(item.scheduledAt)}
+            </span>
+          </div>
+
+          <p className={`mt-3 text-xs font-semibold ${tone === "dark" ? "text-slate-400" : "text-slate-500"}`}>
+            {role === "doctor" ? "Patient" : "Physician"}: <span className="font-bold text-slate-900 dark:text-white">{item.owner}</span>
+          </p>
+          {item.reason && (
+            <p className={`mt-1 text-xs ${tone === "dark" ? "text-slate-400" : "text-slate-500"}`}>
+              Diagnosis / Reason: <span className="font-semibold">{item.reason}</span>
+            </p>
+          )}
+
+          <div className={`mt-3 max-h-40 overflow-y-auto rounded-lg p-3 text-xs leading-relaxed whitespace-pre-line ${
+            tone === "dark" ? "bg-slate-800/80 text-slate-200 border border-slate-700" : "bg-slate-50 text-slate-800 border border-slate-200"
+          }`}>
+            {item.prescription}
+          </div>
+
           <button
             type="button"
-            className={`mt-4 w-full rounded-lg border px-3 py-2 text-xs font-black transition-colors ${
+            onClick={() => handleDownload(item)}
+            className={`mt-4 flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-xs font-black transition-colors ${
               tone === "dark"
-                ? "border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
-                : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+                ? "border-teal-500/40 bg-teal-500/20 text-teal-200 hover:bg-teal-500/30"
+                : "border-teal-600/30 bg-teal-50 text-teal-800 hover:bg-teal-100"
             }`}
           >
-            Download PDF
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" x2="12" y1="15" y2="3" />
+            </svg>
+            Download Rx PDF
           </button>
         </article>
       ))}
