@@ -1270,9 +1270,9 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
   const confirmedAppointments = useMemo(
     () =>
       doctor.bookings
-        .filter((booking) => booking.status === "CONFIRMED" && new Date(booking.scheduledAt).getTime() >= patientReferenceTime)
+        .filter((booking) => booking.status === "CONFIRMED")
         .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()),
-    [doctor.bookings, patientReferenceTime]
+    [doctor.bookings]
   );
   const completedConsultations = useMemo(
     () =>
@@ -1542,29 +1542,11 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
   });
 
   const visibleScheduleAppointments = useMemo(() => {
-    const start = new Date(calendarAnchorDate);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(start);
-
-    if (calendarView === "day") {
-      end.setDate(start.getDate() + 1);
-    } else if (calendarView === "month") {
-      start.setDate(1);
-      end.setMonth(start.getMonth() + 1, 1);
-    } else {
-      start.setDate(start.getDate() - start.getDay());
-      end.setTime(start.getTime());
-      end.setDate(start.getDate() + 7);
-    }
-
-    // Include completed and cancelled appointments so they remain visible and clickable on the calendar
-    return [...pendingAppointments, ...confirmedAppointments, ...completedConsultations, ...cancelledAppointments]
-      .filter((booking) => {
-        const scheduledAt = new Date(booking.scheduledAt);
-        return scheduledAt >= start && scheduledAt < end;
-      })
-      .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime());
-  }, [calendarAnchorDate, calendarView, confirmedAppointments, pendingAppointments, completedConsultations, cancelledAppointments]);
+    // Pass all doctor bookings so AppointmentCalendar can map them to the active day/week/month view
+    return [...doctor.bookings].sort(
+      (a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()
+    );
+  }, [doctor.bookings]);
 
   const navItems: DashboardNavItem<DoctorModuleId>[] = [
     { id: "overview", label: "Overview" },
