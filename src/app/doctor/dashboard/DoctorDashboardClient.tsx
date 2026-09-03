@@ -2503,6 +2503,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
             anchorDate={calendarAnchorDate}
             onAnchorDateChange={setCalendarAnchorDate}
             availability={doctorAvailability}
+            onConfirmAppointment={(appointment) => handleAccept(appointment.id)}
             onStartConsultation={handleStartConsultationFromCalendar}
             onFollowUpConsultation={handleFollowUpFromCalendar}
             appointments={visibleScheduleAppointments.map((booking) => ({

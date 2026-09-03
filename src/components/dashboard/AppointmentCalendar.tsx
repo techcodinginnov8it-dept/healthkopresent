@@ -227,6 +227,7 @@ function AppointmentActionPopup({
   appointment,
   anchorRect,
   onClose,
+  onConfirmAppointment,
   onStartConsultation,
   onFollowUpConsultation,
   tone = "light",
@@ -234,6 +235,7 @@ function AppointmentActionPopup({
   appointment: CalendarAppointment;
   anchorRect: DOMRect;
   onClose: () => void;
+  onConfirmAppointment?: (appointment: CalendarAppointment) => void;
   onStartConsultation?: (appointment: CalendarAppointment) => void;
   onFollowUpConsultation?: (appointment: CalendarAppointment) => void;
   tone?: "light" | "dark";
@@ -359,7 +361,32 @@ function AppointmentActionPopup({
 
         {/* Actions */}
         <div className="p-2 space-y-0.5">
-          {(confirmed || pending) && (
+          {pending && (
+            <button
+              type="button"
+              className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-semibold transition ${
+                dark
+                  ? "text-emerald-200 hover:bg-emerald-500/20 hover:text-white"
+                  : "text-emerald-800 hover:bg-emerald-50 hover:text-emerald-950"
+              }`}
+              onClick={() => {
+                onClose();
+                onConfirmAppointment?.(appointment);
+              }}
+            >
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-500/20 text-emerald-400">
+                <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </span>
+              <span>
+                <span className="block font-black">Confirm Appointment</span>
+                <span className={`block text-[10px] font-medium ${dark ? "text-slate-400" : "text-slate-500"}`}>Accept and confirm booking</span>
+              </span>
+            </button>
+          )}
+
+          {confirmed && (
             <button
               type="button"
               className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-semibold transition ${
@@ -419,6 +446,7 @@ export function AppointmentCalendar({
   tone = "light",
   editable = false,
   onReschedule,
+  onConfirmAppointment,
   onStartConsultation,
   onFollowUpConsultation,
   variant = "standard",
@@ -432,6 +460,7 @@ export function AppointmentCalendar({
   tone?: "light" | "dark";
   editable?: boolean;
   onReschedule?: (appointmentId: string, scheduledAt: string) => void;
+  onConfirmAppointment?: (appointment: CalendarAppointment) => void;
   onStartConsultation?: (appointment: CalendarAppointment) => void;
   onFollowUpConsultation?: (appointment: CalendarAppointment) => void;
   variant?: "standard" | "stage";
@@ -717,6 +746,7 @@ export function AppointmentCalendar({
           appointment={selectedEntry.appointment}
           anchorRect={selectedEntry.rect}
           onClose={() => setSelectedEntry(null)}
+          onConfirmAppointment={onConfirmAppointment}
           onStartConsultation={onStartConsultation}
           onFollowUpConsultation={onFollowUpConsultation}
           tone={tone}
