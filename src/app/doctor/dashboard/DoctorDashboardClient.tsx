@@ -1285,25 +1285,6 @@ function PatientOperationsHub({
                       />
                     </div>
                   )}
-
-                  {/* Focused Encounter Context Box */}
-                  {selectedConsultation && (
-                    <div className={`mt-5 rounded-2xl border p-4 transition-colors ${isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-slate-50"}`}>
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Selected Encounter Detail</p>
-                        <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-black uppercase ${getStatusClasses(selectedConsultation.status)}`}>
-                          {selectedConsultation.status}
-                        </span>
-                      </div>
-                      <div className="rounded-xl border border-amber-300/20 border-l-4 border-l-amber-300 bg-amber-300/10 p-3.5">
-                        <p className="text-[10px] font-black uppercase tracking-wider text-amber-200">Patient Notes &amp; Suspected Causes</p>
-                        <p className="mt-1 text-xs font-semibold text-amber-50">
-                          {extractComplaintAndNotes(selectedConsultation.reason).complaint || "No notes captured."}
-                        </p>
-                        <p className="mt-2 text-[10px] font-bold text-amber-200/80">{formatDateTime(selectedConsultation.scheduledAt)}</p>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
