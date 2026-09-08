@@ -48,125 +48,103 @@
 
 ## 🚀 Detailed Changelog & Task Breakdown
 
-### 1. Multi-Page Prescription PDF Pagination & Overflow Fix
+### 1. Multi-Page Prescription PDF Pagination
 * **Commit**: `744e7b5`
 * **Timestamp**: `2026-09-08 21:35:20 +0800`
 * **Duration**: ~35 minutes
-* **Key Changes**:
-  - **Auto-Chunking & Pagination**: Updated `src/lib/prescription-pdf.ts` using `jsPDF` to compute dynamic item heights and split long lists of prescribed medicines across multiple pages cleanly.
-  - **Overflow Protection**: Added automatic text wrapping for complex dosing regimens and instructions to prevent cutting off text.
-  - **Document Structure**: Preserved clinic branding and patient summary on Page 1, placing doctor credentials, official e-signature block, and page indicators (`Page X of Y`) on the final page.
+* **Updates & Changes**:
+  - Automatically splits long lists of prescribed medicines across multiple pages when needed.
+  - Formatted text wrapping for instructions and dosages to prevent text from overflowing or being cut off.
+  - Kept clinic branding and patient summary on Page 1, placing doctor credentials, official electronic signature, and page numbers on the final page.
 
 ---
 
-### 2. "Consultation Results" Tab & Medical Notes PDF Integration
+### 2. "Consultation Results" Tab & Medical Notes Download
 * **Commit**: `b202526`
 * **Timestamp**: `2026-09-08 22:07:53 +0800`
 * **Duration**: ~32 minutes
-* **Key Changes**:
-  - **Terminology Standardization**: Replaced the ambiguous `"RX"` tab in patient encounter views with the clinical label **"Consultation Results"**.
-  - **Clinical Notes Display**: Added doctor consultation notes, differential assessment findings, and follow-up guidance in the consultation details card.
-  - **Direct Rx Download**: Embedded a one-click **"Download Prescription PDF"** action button in the consultation modal.
+* **Updates & Changes**:
+  - Renamed the prescription tab to "Consultation Results" for clearer medical workflow.
+  - Added doctor consultation notes, assessment findings, and follow-up guidance to the consultation summary.
+  - Added a direct "Download Prescription PDF" button in the consultation view.
 
 ---
 
-### 3. Removal of "Selected Encounter Detail"
+### 3. Removal of "Selected Encounter Detail" Side Card
 * **Commit**: `2fe14c8`
 * **Timestamp**: `2026-09-08 22:13:28 +0800`
 * **Duration**: ~6 minutes
-* **Key Changes**:
-  - **Layout Cleanup**: Removed the redundant static `"Selected Encounter Detail"` box in `DoctorDashboardClient.tsx`.
-  - **Usability**: Allowed the active consultation tab to occupy the full modal width for improved legibility.
+* **Updates & Changes**:
+  - Removed the redundant side panel in the encounter modal to maximize screen space for consultation notes and patient data.
+  - Expanded the active consultation tab to full width for better readability.
 
 ---
 
-### 4. Patient Information Spacing & Density Adjustment
+### 4. Patient Directory Spacing & Density Adjustment
 * **Commit**: `01dc612`
 * **Timestamp**: `2026-09-08 22:29:38 +0800`
 * **Duration**: ~16 minutes
-* **Key Changes**:
-  - **Whitespace Reduction**: Removed unnatural empty space between the **"Patient Information"** column and **"Status"** column.
-  - **Tightened Density**: Adjusted padding and grid gaps (`gap-4`, `px-3 py-3.5`) across table rows.
+* **Updates & Changes**:
+  - Reduced excess blank space between patient details and status columns.
+  - Compacted row padding and spacing to display patient information cleanly without unnecessary gaps.
 
 ---
 
-### 5. Patient Directory Table Even Column Width Distribution
+### 5. Patient Directory Table Column Width Distribution
 * **Commit**: `bd545c3`
 * **Timestamp**: `2026-09-08 22:31:24 +0800`
 * **Duration**: ~2 minutes
-* **Key Changes**:
-  - **Proportional Grid**: Configured a `grid-cols-12` distribution across all 4 key columns:
-    - **Patient Information**: `col-span-4`
-    - **Status**: `col-span-2`
-    - **Next / Recent Visit**: `col-span-4`
-    - **Actions**: `col-span-2`
-  - **Visual Balance**: Eliminated lopsided spacing between visit details and row action buttons.
+* **Updates & Changes**:
+  - Evenly distributed column widths across Patient Information, Status, Next/Recent Visit, and Action buttons.
+  - Created a balanced, comfortable layout across desktop and laptop screens.
 
 ---
 
-### 6. Clinical CRM: Streamlining & Removal of "RX" Elements
+### 6. Clinical CRM: Streamlining & Removal of Prescription Elements
 * **Commit**: `e64b7dc`
 * **Timestamp**: `2026-09-08 22:55:23 +0800`
 * **Duration**: ~24 minutes
-* **Key Changes**:
-  - **Filter Bar**: Removed the `"Needs Rx"` toggle button from the CRM patient search bar.
-  - **Row Tags**: Removed the `"Active Rx"` badge pill next to patient identifiers.
-  - **Analytics Cards**: Removed the third stat card in CRM analytics highlighting prescription counts, refocusing the dashboard on patient continuity and appointment management.
+* **Updates & Changes**:
+  - Removed the prescription toggle filter from the search toolbar.
+  - Removed prescription badge tags from patient list entries.
+  - Removed the prescription statistics card to keep the CRM focused on patient continuity and visit management.
 
 ---
 
-### 7. [CURRENT TASK] Doctor Blogs & Research Hub + Physician Peer Network
+### 7. Doctor Blogs & Research Hub + Physician Peer Network
 * **Commit**: `7c7bb2a`
-* **Timestamp**: `2026-09-08 23:19:26 +0800` (Verification finalized at `23:28:00 +0800`)
-* **Duration**: **~33 minutes**
-* **Key Changes**:
-  1. **New Navigation Item**:
-     - Added **"Blogs & Research"** to the Doctor Dashboard sidebar/header with a custom journal publication icon in `DashboardShell.tsx`.
-     - Added routing via `?module=research` in `DoctorDashboardClient.tsx` and validated in `src/app/doctor/dashboard/page.tsx`.
-  2. **Two Dedicated Tabs**:
-     - **"My Publications"**:
-       - Manage personal clinical guides, health tips, practice announcements, and clinical research.
-       - Readership metrics summary (Total Articles, Clinical Guides, Research Papers, Total Views).
-       - **"+ Write Guide / Article"** composer modal with dynamic key takeaway points builder, target audience selector, and `localStorage` persistence.
-     - **"Physician Network"**:
-       - Peer doctor collaboration hub where doctors browse, read, like, and bookmark articles published by other physicians.
-       - Quick specialty filters (Cardiology, Endocrinology, Neurology, Telemedicine, Primary Care).
-       - Displays author credentials, NPI, verified badge, and specialty tags.
-  3. **Search & Category Filters**:
-     - Instant real-time search across titles, summaries, tags, and author names.
-     - Filter pills: **All**, **Clinical Guides**, **Health Tips**, **Medical Research**, and **Practice Updates**.
-  4. **Full-Screen Article Reader Modal**:
-     - Displays formatted key clinical takeaways callout box, full body markdown text, interactive like and bookmark counters, and author profile cards.
+* **Timestamp**: `2026-09-08 23:19:26 +0800`
+* **Duration**: ~33 minutes
+* **Updates & Changes**:
+  - Added a new "Blogs & Research" tab to the Doctor Dashboard navigation.
+  - Created "My Publications" tab where doctors can write and publish medical guides, health tips, and clinical updates with key takeaways.
+  - Created "Physician Network" tab where doctors can browse, read, like, and bookmark articles shared by other physicians.
+  - Added search and category filters (Clinical Guides, Health Tips, Medical Research, Practice Updates).
+  - Added full-screen reader modal displaying complete article contents and author details.
 
 ---
 
-### Task 8: Blog Media & Figures Upload + SSR Hydration Hardening (00:05)
-- **Time Spent**: ~30 mins
-- **Key Changes**:
-  1. **Cover & Thumbnail Upload**:
-     - Added dedicated Thumbnail/Cover photo upload in article creation form with real-time base64 image preview and removal action.
-  2. **Medical Figures & Diagram Attachments**:
-     - Multi-file image uploader allowing doctors to attach high-resolution clinical scans, ECG strips, diagrams, and figures with customizable captions.
-  3. **SSR Hydration Fix**:
-     - Resolved React SSR hydration mismatch by deferring client-side `localStorage` initialization to `useEffect`, rendering SSR-safe skeleton loaders during initial mount.
+### 8. Blog Media Uploads & Thumbnail Covers
+* **Commit**: `3d0cd3f` & `a2389b0`
+* **Timestamp**: `2026-09-08 23:55:00 +0800`
+* **Duration**: ~30 minutes
+* **Updates & Changes**:
+  - Added image upload for article covers and thumbnails with instant preview.
+  - Included quick medical photo presets (Cardiology, Consultation, Nutrition, Telemedicine, Labs) for instant cover selection.
+  - Added multi-image upload for attaching clinical scans, diagrams, and figures with custom captions.
+  - Resolved page rendering consistency so articles and saved data load smoothly on refresh.
 
 ---
 
-### Task 9: Automated Live Consultation Transcription & Dual-Dashboard Transcript PDF (00:15)
-- **Time Spent**: ~40 mins
-- **Key Changes**:
-  1. **Official Clinical Transcript PDF Engine** (`src/lib/consultation-transcript-pdf.ts`):
-     - Built standalone, HIPAA/DOH-compliant vector PDF generator without third-party runtime bloat.
-     - Formats synchronous clinical dialogues with clinic branding, doctor license/NPI, patient demographics, clinical assessment & plan, dialogue speech turns (speaker, role, timestamps), auto-pagination (`Page X of Y`), and electronic signature block.
-  2. **Doctor Dashboard Integration** (`src/app/doctor/dashboard/DoctorDashboardClient.tsx`):
-     - Added **"Download Transcript PDF"** button in **Consultation Results** placed directly beside the existing **"Download Prescription PDF"** button.
-     - Pulls live speech dialogue or persists encounter transcript records linked to the patient's appointment.
-  3. **Patient Dashboard Integration** (`src/app/patient/dashboard/PatientDashboardClient.tsx`):
-     - Added **"Download Transcript PDF"** button in the **Medical Access** header directly beside **"Download PDF Report"**.
-     - Added a dedicated **"Transcript"** tab within Medical Access with an interactive session card, speaker turns view, and instant download.
-  4. **Live Consultation Panel Integration** (`src/components/dashboard/SharedModules.tsx`):
-     - Added live speech transcription toggle `[CC]` in the call control toolbar.
-     - Added floating live dialogue drawer with real-time dialogue logging and in-call transcript download capability.
+### 9. Automated Live Consultation Transcription & Dual-Dashboard PDF Download
+* **Commit**: `f48e2fb` & `10a4ba0`
+* **Timestamp**: `2026-09-09 00:15:00 +0800`
+* **Duration**: ~40 minutes
+* **Updates & Changes**:
+  - Created official consultation transcript document containing doctor credentials, patient demographics, clinical assessment, and full dialogue turn logs.
+  - Added "Download Transcript PDF" button on the Doctor Dashboard in Consultation Results, placed directly beside the "Download Prescription PDF" button.
+  - Added "Download Transcript PDF" button on the Patient Dashboard in Medical Access, plus a dedicated "Transcript" tab to review session dialogue anytime.
+  - Added live transcription toggle and floating dialogue drawer during active video consultations, allowing instant download during or after the call.
 
 ---
 
