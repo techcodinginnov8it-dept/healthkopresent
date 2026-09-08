@@ -64,6 +64,17 @@ const PRESET_THUMBNAILS = [
   },
 ];
 
+// SSR-safe deterministic date formatter
+function formatPublishDate(isoDate: string): string {
+  try {
+    const d = new Date(isoDate);
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return `${months[d.getUTCMonth()]} ${d.getUTCDate()}`;
+  } catch {
+    return "";
+  }
+}
+
 function getInitialCuratedArticles(doctor: DashboardDoctor): DoctorArticle[] {
   const doctorName = doctor.name || "Dr. Medical Doctor";
   const doctorSpecialty = doctor.specialty || "Internal Medicine";
@@ -94,7 +105,7 @@ Aim for less than 2,000 mg of sodium per day (roughly one level teaspoon of salt
         "Log measurements in the HealthKo patient tracker before every follow-up consultation.",
       ],
       readTimeMinutes: 4,
-      publishedAt: new Date(Date.now() - 3 * 86400000).toISOString(),
+      publishedAt: "2026-09-05T08:00:00.000Z",
       authorId: doctor.id,
       authorName: doctorName,
       authorSpecialty: doctorSpecialty,
@@ -127,7 +138,7 @@ While acute inflammation is the body's natural response to tissue injury or infe
         "Replace processed seed oils with extra-virgin olive oil for cooking and salads.",
       ],
       readTimeMinutes: 3,
-      publishedAt: new Date(Date.now() - 7 * 86400000).toISOString(),
+      publishedAt: "2026-09-01T08:00:00.000Z",
       authorId: doctor.id,
       authorName: doctorName,
       authorSpecialty: doctorSpecialty,
@@ -162,7 +173,7 @@ A retrospective chart review of 1,200 adult patients attending scheduled telecon
         "Short 10-minute check-ins sustain clinical engagement between major quarterly evaluations.",
       ],
       readTimeMinutes: 6,
-      publishedAt: new Date(Date.now() - 14 * 86400000).toISOString(),
+      publishedAt: "2026-08-25T08:00:00.000Z",
       authorId: doctor.id,
       authorName: doctorName,
       authorSpecialty: doctorSpecialty,
@@ -195,7 +206,7 @@ Occasional extra beats (premature ventricular or atrial contractions) are very c
         "Benign ectopic beats are transient; sustained irregular tachycardia requires urgent formal ECG.",
       ],
       readTimeMinutes: 5,
-      publishedAt: new Date(Date.now() - 2 * 86400000).toISOString(),
+      publishedAt: "2026-09-06T08:00:00.000Z",
       authorId: "doc-peer-1",
       authorName: "Dr. Alejandro Gomez, MD",
       authorSpecialty: "Cardiology",
@@ -230,7 +241,7 @@ Always calculate medication dosage according to the child's weight in kilograms 
         "Focus on the child's alertness and hydration rather than just the number on the thermometer.",
       ],
       readTimeMinutes: 4,
-      publishedAt: new Date(Date.now() - 5 * 86400000).toISOString(),
+      publishedAt: "2026-09-03T08:00:00.000Z",
       authorId: "doc-peer-2",
       authorName: "Dr. Patricia Reyes, MD, FPPS",
       authorSpecialty: "Pediatrics",
@@ -258,7 +269,7 @@ In a real-world multi-center registry of 320 refractory migraineurs, patients de
         "Regular monitoring of blood pressure is prudent during the initial titration phase.",
       ],
       readTimeMinutes: 6,
-      publishedAt: new Date(Date.now() - 9 * 86400000).toISOString(),
+      publishedAt: "2026-08-30T08:00:00.000Z",
       authorId: "doc-peer-3",
       authorName: "Dr. Roberto Tan, MD, FPNA",
       authorSpecialty: "Neurology",
@@ -289,7 +300,7 @@ Atopic eczema is fundamentally characterized by epidermal barrier dysfunction, o
         "Avoid scented washes, harsh detergents, and wool fabrics directly against the skin.",
       ],
       readTimeMinutes: 4,
-      publishedAt: new Date(Date.now() - 11 * 86400000).toISOString(),
+      publishedAt: "2026-08-28T08:00:00.000Z",
       authorId: "doc-peer-4",
       authorName: "Dr. Camille Santos, MD, FPDS",
       authorSpecialty: "Dermatology",
@@ -314,20 +325,38 @@ export function DoctorResearchModule({
   // Persistent storage key
   const storageKey = `healthko:doctor:articles:${doctor.id || "default"}`;
 
-  const [articles, setArticles] = useState<DoctorArticle[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem(storageKey);
-        if (saved) return JSON.parse(saved);
-      } catch {
-        // Fallback
-      }
-    }
-    return getInitialCuratedArticles(doctor);
-  });
+  const isLoadedFromStorageRef = useRef(false);
 
-  // Save to localStorage
+  // Initialize deterministically so SSR and initial client render match exactly
+  const [articles, setArticles] = useState<DoctorArticle[]>(() => getInitialCuratedArticles(doctor));
+
+  // Sync from localStorage after client mount to prevent SSR hydration mismatches
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed: DoctorArticle[] = JSON.parse(saved);
+        const initialMap = new Map(getInitialCuratedArticles(doctor).map((a) => [a.id, a]));
+        const merged = parsed.map((a) => {
+          const initial = initialMap.get(a.id);
+          // If cached article is missing thumbnail, hydrate with initial thumbnail
+          if (initial && !a.thumbnailUrl && initial.thumbnailUrl) {
+            return { ...a, thumbnailUrl: initial.thumbnailUrl };
+          }
+          return a;
+        });
+        setArticles(merged);
+      }
+    } catch {
+      // Fallback
+    } finally {
+      isLoadedFromStorageRef.current = true;
+    }
+  }, [storageKey, doctor]);
+
+  // Save to localStorage only after client mount load is complete
+  useEffect(() => {
+    if (!isLoadedFromStorageRef.current) return;
     try {
       localStorage.setItem(storageKey, JSON.stringify(articles));
     } catch {
@@ -430,7 +459,6 @@ export function DoctorResearchModule({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check size limit (max 6MB)
     if (file.size > 6 * 1024 * 1024) {
       alert("Image file size is too large. Please select an image under 6MB.");
       return;
@@ -921,7 +949,7 @@ export function DoctorResearchModule({
                   style={{ borderColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }}
                 >
                   <span className={`text-[10px] font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                    {article.readTimeMinutes} min read • {new Date(article.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    {article.readTimeMinutes} min read • {formatPublishDate(article.publishedAt)}
                   </span>
 
                   <div className="flex items-center gap-2">
@@ -1284,7 +1312,7 @@ export function DoctorResearchModule({
 
                 {formImages.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    {formImages.map((img, idx) => (
+                    {formImages.map((img) => (
                       <div
                         key={img.id}
                         className={`rounded-xl border p-2.5 flex items-start gap-3 ${
@@ -1471,7 +1499,7 @@ export function DoctorResearchModule({
 
                 <div className="text-right text-[11px] font-semibold text-slate-400">
                   <p>{activeReaderArticle.readTimeMinutes} min read</p>
-                  <p>{new Date(activeReaderArticle.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
+                  <p>{formatPublishDate(activeReaderArticle.publishedAt)}</p>
                 </div>
               </div>
 
