@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import type { DashboardDoctor, DoctorArticle, DoctorArticleCategory } from "@/lib/dashboard/types";
 
 type ViewTab = "my_publications" | "peer_network";
@@ -41,6 +41,29 @@ const AUDIENCE_META = {
   general: { label: "General Healthcare", badge: "bg-slate-500/10 text-slate-600 border-slate-500/20" },
 };
 
+const PRESET_THUMBNAILS = [
+  {
+    name: "Consultation & Vitals",
+    url: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&w=900&q=80",
+  },
+  {
+    name: "Cardiology & ECG",
+    url: "https://images.unsplash.com/photo-1628348068343-c6a848d2b6dd?auto=format&fit=crop&w=900&q=80",
+  },
+  {
+    name: "Nutrition & Lifestyle",
+    url: "https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&w=900&q=80",
+  },
+  {
+    name: "Telemedicine & Digital",
+    url: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=900&q=80",
+  },
+  {
+    name: "Laboratory & Biotech",
+    url: "https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?auto=format&fit=crop&w=900&q=80",
+  },
+];
+
 function getInitialCuratedArticles(doctor: DashboardDoctor): DoctorArticle[] {
   const doctorName = doctor.name || "Dr. Medical Doctor";
   const doctorSpecialty = doctor.specialty || "Internal Medicine";
@@ -54,7 +77,17 @@ function getInitialCuratedArticles(doctor: DashboardDoctor): DoctorArticle[] {
       category: "guide",
       targetAudience: "patients",
       summary: "A practical, evidence-based guide for patients managing stage 1 and stage 2 hypertension outside clinical consultations.",
-      content: `### Objective & Patient Guidelines\nHypertension is often called the silent condition because it rarely causes noticeable symptoms until complications develop. Effective long-term control relies heavily on structured home blood pressure monitoring (HBPM) combined with steady lifestyle modifications.\n\n### Proper Technique for Blood Pressure Measurement\n1. **Rest**: Sit quietly for at least 5 minutes in a comfortable chair with back support before taking a measurement.\n2. **Arm Position**: Rest your bare arm on a flat surface (such as a table) at heart level.\n3. **Cuff Placement**: Ensure the lower edge of the cuff sits 2–3 cm above the bend of the elbow.\n4. **Timing**: Measure twice daily—once in the morning before breakfast and medication, and once in the evening before dinner.\n\n### Sodium Restriction and The DASH Framework\nAim for less than 2,000 mg of sodium per day (roughly one level teaspoon of salt). Prioritize potassium-rich foods (bananas, spinach, sweet potatoes) unless contraindicated by chronic renal disease. Regular aerobic exercise (30 minutes brisk walking daily) has been shown to reduce systolic pressure by 5–8 mmHg.`,
+      content: `### Objective & Patient Guidelines
+Hypertension is often called the silent condition because it rarely causes noticeable symptoms until complications develop. Effective long-term control relies heavily on structured home blood pressure monitoring (HBPM) combined with steady lifestyle modifications.
+
+### Proper Technique for Blood Pressure Measurement
+1. **Rest**: Sit quietly for at least 5 minutes in a comfortable chair with back support before taking a measurement.
+2. **Arm Position**: Rest your bare arm on a flat surface (such as a table) at heart level.
+3. **Cuff Placement**: Ensure the lower edge of the cuff sits 2–3 cm above the bend of the elbow.
+4. **Timing**: Measure twice daily—once in the morning before breakfast and medication, and once in the evening before dinner.
+
+### Sodium Restriction and The DASH Framework
+Aim for less than 2,000 mg of sodium per day (roughly one level teaspoon of salt). Prioritize potassium-rich foods (bananas, spinach, sweet potatoes) unless contraindicated by chronic renal disease. Regular aerobic exercise (30 minutes brisk walking daily) has been shown to reduce systolic pressure by 5–8 mmHg.`,
       keyTakeaways: [
         "Take morning and evening readings at least 5 minutes after resting.",
         "Keep daily sodium intake below 2,000 mg using herbs and spices instead of table salt.",
@@ -66,6 +99,7 @@ function getInitialCuratedArticles(doctor: DashboardDoctor): DoctorArticle[] {
       authorName: doctorName,
       authorSpecialty: doctorSpecialty,
       authorNpi: doctor.npi,
+      thumbnailUrl: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&w=900&q=80",
       tags: ["Hypertension", "Cardiovascular", "HomeMonitoring", "PreventiveHealth"],
       viewsCount: 342,
       likesCount: 28,
@@ -79,7 +113,14 @@ function getInitialCuratedArticles(doctor: DashboardDoctor): DoctorArticle[] {
       category: "tip",
       targetAudience: "patients",
       summary: "Actionable dietary and sleep tips to modulate inflammatory markers and reduce cardiovascular fatigue.",
-      content: `### Understanding Low-Grade Chronic Inflammation\nWhile acute inflammation is the body's natural response to tissue injury or infection, chronic low-grade systemic inflammation contributes to insulin resistance, endothelial dysfunction, and accelerated vascular aging.\n\n### High-Impact Daily Adjustments\n- **Consistent Circadian Sleep**: Maintaining a 7-8 hour sleep window synchronized with natural daylight cycles directly down-regulates interleukin-6 (IL-6) and C-reactive protein (CRP).\n- **Polyphenol-Dense Nutrition**: Green tea, extra virgin olive oil, and dark berries deliver potent bioflavonoids.\n- **Post-Meal Ambulation**: A light 10-minute walk after lunch and dinner blunts glucose spikes, mitigating postprandial inflammatory cascades.\n- **Stress De-escalation**: 5 minutes of box breathing (4s inhale, 4s hold, 4s exhale, 4s hold) reduces sympathetic tone.`,
+      content: `### Understanding Low-Grade Chronic Inflammation
+While acute inflammation is the body's natural response to tissue injury or infection, chronic low-grade systemic inflammation contributes to insulin resistance, endothelial dysfunction, and accelerated vascular aging.
+
+### High-Impact Daily Adjustments
+- **Consistent Circadian Sleep**: Maintaining a 7-8 hour sleep window synchronized with natural daylight cycles directly down-regulates interleukin-6 (IL-6) and C-reactive protein (CRP).
+- **Polyphenol-Dense Nutrition**: Green tea, extra virgin olive oil, and dark berries deliver potent bioflavonoids.
+- **Post-Meal Ambulation**: A light 10-minute walk after lunch and dinner blunts glucose spikes, mitigating postprandial inflammatory cascades.
+- **Stress De-escalation**: 5 minutes of box breathing (4s inhale, 4s hold, 4s exhale, 4s hold) reduces sympathetic tone.`,
       keyTakeaways: [
         "Target consistent sleep hours to maintain baseline immune stability.",
         "Incorporate a 10-minute walk immediately following your heaviest daily meal.",
@@ -91,6 +132,7 @@ function getInitialCuratedArticles(doctor: DashboardDoctor): DoctorArticle[] {
       authorName: doctorName,
       authorSpecialty: doctorSpecialty,
       authorNpi: doctor.npi,
+      thumbnailUrl: "https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&w=900&q=80",
       tags: ["Wellness", "Nutrition", "Inflammation", "HealthyAging"],
       viewsCount: 520,
       likesCount: 46,
@@ -104,7 +146,16 @@ function getInitialCuratedArticles(doctor: DashboardDoctor): DoctorArticle[] {
       category: "research",
       targetAudience: "physicians",
       summary: "Observational clinical study examining 180-day prescription refill compliance and follow-up attendance across 1,200 remote consultations.",
-      content: `### Abstract & Clinical Context\nWith the rapid institutionalization of synchronous audiovisual telehealth, assessing treatment persistence and follow-up reliability is vital for clinical governance. We conducted an observational cohort assessment evaluating prescription adherence and scheduled review completions.\n\n### Methodology & Observed Cohort\nA retrospective chart review of 1,200 adult patients attending scheduled teleconsultations revealed a 34% reduction in appointment no-show rates compared to traditional brick-and-mortar visits (p < 0.001).\n\n### Primary Clinical Findings\n- Prescription fulfillment rates increased from 71.4% to 88.2% when electronic prescriptions were generated instantly during the video session.\n- Patients reported higher satisfaction with digital treatment plan documentation and direct downloadable prescription summaries.\n- Blood pressure normalization targets were reached an average of 18 days faster due to expedited titration check-ins.`,
+      content: `### Abstract & Clinical Context
+With the rapid institutionalization of synchronous audiovisual telehealth, assessing treatment persistence and follow-up reliability is vital for clinical governance. We conducted an observational cohort assessment evaluating prescription adherence and scheduled review completions.
+
+### Methodology & Observed Cohort
+A retrospective chart review of 1,200 adult patients attending scheduled teleconsultations revealed a 34% reduction in appointment no-show rates compared to traditional brick-and-mortar visits (p < 0.001).
+
+### Primary Clinical Findings
+- Prescription fulfillment rates increased from 71.4% to 88.2% when electronic prescriptions were generated instantly during the video session.
+- Patients reported higher satisfaction with digital treatment plan documentation and direct downloadable prescription summaries.
+- Blood pressure normalization targets were reached an average of 18 days faster due to expedited titration check-ins.`,
       keyTakeaways: [
         "Digital follow-ups decrease patient drop-off and improve chronic disease titration speed.",
         "Real-time electronic prescription delivery improves pharmacy fulfillment by over 16%.",
@@ -116,6 +167,7 @@ function getInitialCuratedArticles(doctor: DashboardDoctor): DoctorArticle[] {
       authorName: doctorName,
       authorSpecialty: doctorSpecialty,
       authorNpi: doctor.npi,
+      thumbnailUrl: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=900&q=80",
       tags: ["Telemedicine", "ClinicalOutcomes", "Adherence", "DigitalHealth"],
       viewsCount: 890,
       likesCount: 63,
@@ -129,7 +181,15 @@ function getInitialCuratedArticles(doctor: DashboardDoctor): DoctorArticle[] {
       category: "guide",
       targetAudience: "patients",
       summary: "Cardiologist guide on distinguishing benign palpitations from sustained arrhythmias using home wearables.",
-      content: `### Introduction from Cardiology\nConsumer smartwatches and wearable pulse monitors have revolutionized the detection of intermittent cardiac rhythm irregularities. However, interpreting notifications requires clinical discernment.\n\n### When to Seek Evaluation\nOccasional extra beats (premature ventricular or atrial contractions) are very common. In contrast, an irregularly irregular pulse with no discernible pattern, coupled with fatigue or mild dyspnea, warrants an immediate 12-lead ECG.\n\n### Wearable Recording Tips\n- Avoid moving or speaking while recording single-lead smartwatch ECG strips.\n- Export recordings as PDF and bring them to your telehealth session for board-certified cardiology review.`,
+      content: `### Introduction from Cardiology
+Consumer smartwatches and wearable pulse monitors have revolutionized the detection of intermittent cardiac rhythm irregularities. However, interpreting notifications requires clinical discernment.
+
+### When to Seek Evaluation
+Occasional extra beats (premature ventricular or atrial contractions) are very common. In contrast, an irregularly irregular pulse with no discernible pattern, coupled with fatigue or mild dyspnea, warrants an immediate 12-lead ECG.
+
+### Wearable Recording Tips
+- Avoid moving or speaking while recording single-lead smartwatch ECG strips.
+- Export recordings as PDF and bring them to your telehealth session for board-certified cardiology review.`,
       keyTakeaways: [
         "Export single-lead wearable ECG traces as PDF for your physician to inspect rhythm strips.",
         "Benign ectopic beats are transient; sustained irregular tachycardia requires urgent formal ECG.",
@@ -139,6 +199,7 @@ function getInitialCuratedArticles(doctor: DashboardDoctor): DoctorArticle[] {
       authorId: "doc-peer-1",
       authorName: "Dr. Alejandro Gomez, MD",
       authorSpecialty: "Cardiology",
+      thumbnailUrl: "https://images.unsplash.com/photo-1628348068343-c6a848d2b6dd?auto=format&fit=crop&w=900&q=80",
       tags: ["Cardiology", "Arrhythmia", "Wearables", "ECG"],
       viewsCount: 640,
       likesCount: 52,
@@ -152,7 +213,17 @@ function getInitialCuratedArticles(doctor: DashboardDoctor): DoctorArticle[] {
       category: "tip",
       targetAudience: "patients",
       summary: "Pediatrician's protocol on paracetamol and ibuprofen weight-based dosing and when urgent hospital referral is needed.",
-      content: `### Pediatric Fever Demystified\nFever is a normal, protective physiologic response to infection. Treating fever in children is aimed at improving the child's comfort, hydration, and alertness, rather than achieving a completely normal thermometer reading.\n\n### Weight-Based Dosing Over Age-Based Dosing\nAlways calculate medication dosage according to the child's weight in kilograms rather than their age on the bottle label. Paracetamol is 10–15 mg/kg every 4–6 hours (max 4 doses in 24 hours). Ibuprofen is 5–10 mg/kg every 6–8 hours.\n\n### Red Flag Symptoms Requiring Immediate Emergency Care\n- Infant younger than 3 months with temperature ≥ 38.0°C (100.4°F).\n- Difficulty breathing, grunting, or severe chest retractions.\n- Inability to hold down oral fluids or signs of severe dehydration (no tears, dry diapers > 8 hours).\n- Lethargy, extreme floppiness, or non-blanching petechial rash.`,
+      content: `### Pediatric Fever Demystified
+Fever is a normal, protective physiologic response to infection. Treating fever in children is aimed at improving the child's comfort, hydration, and alertness, rather than achieving a completely normal thermometer reading.
+
+### Weight-Based Dosing Over Age-Based Dosing
+Always calculate medication dosage according to the child's weight in kilograms rather than their age on the bottle label. Paracetamol is 10–15 mg/kg every 4–6 hours (max 4 doses in 24 hours). Ibuprofen is 5–10 mg/kg every 6–8 hours.
+
+### Red Flag Symptoms Requiring Immediate Emergency Care
+- Infant younger than 3 months with temperature ≥ 38.0°C (100.4°F).
+- Difficulty breathing, grunting, or severe chest retractions.
+- Inability to hold down oral fluids or signs of severe dehydration (no tears, dry diapers > 8 hours).
+- Lethargy, extreme floppiness, or non-blanching petechial rash.`,
       keyTakeaways: [
         "Always dose fever reducers by weight in kilograms, never age alone.",
         "Infants under 3 months with a fever need urgent clinical evaluation.",
@@ -163,6 +234,7 @@ function getInitialCuratedArticles(doctor: DashboardDoctor): DoctorArticle[] {
       authorId: "doc-peer-2",
       authorName: "Dr. Patricia Reyes, MD, FPPS",
       authorSpecialty: "Pediatrics",
+      thumbnailUrl: "https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&w=900&q=80",
       tags: ["Pediatrics", "ChildHealth", "FeverManagement", "Parenting"],
       viewsCount: 1120,
       likesCount: 94,
@@ -176,7 +248,11 @@ function getInitialCuratedArticles(doctor: DashboardDoctor): DoctorArticle[] {
       category: "research",
       targetAudience: "physicians",
       summary: "Comprehensive multi-center review of calcitonin gene-related peptide receptor antagonists in refractory chronic migraine.",
-      content: `### Background\nChronic migraine represents a disabling neurovascular disorder. The advent of monoclonal antibodies and small-molecule CGRP antagonists has provided targeted prophylactic interventions with improved tolerability profiles over traditional beta-blockers or antiepileptics.\n\n### Clinical Observations\nIn a real-world multi-center registry of 320 refractory migraineurs, patients demonstrated an average reduction of 6.2 monthly migraine days (MMDs) within 12 weeks of initiation. Adverse effect withdrawal rates remained below 4%, with constipation and mild injection-site erythema being the most frequent observations.`,
+      content: `### Background
+Chronic migraine represents a disabling neurovascular disorder. The advent of monoclonal antibodies and small-molecule CGRP antagonists has provided targeted prophylactic interventions with improved tolerability profiles over traditional beta-blockers or antiepileptics.
+
+### Clinical Observations
+In a real-world multi-center registry of 320 refractory migraineurs, patients demonstrated an average reduction of 6.2 monthly migraine days (MMDs) within 12 weeks of initiation. Adverse effect withdrawal rates remained below 4%, with constipation and mild injection-site erythema being the most frequent observations.`,
       keyTakeaways: [
         "CGRP inhibitors demonstrate high tolerability and rapid onset in treatment-resistant migraine.",
         "Regular monitoring of blood pressure is prudent during the initial titration phase.",
@@ -186,6 +262,7 @@ function getInitialCuratedArticles(doctor: DashboardDoctor): DoctorArticle[] {
       authorId: "doc-peer-3",
       authorName: "Dr. Roberto Tan, MD, FPNA",
       authorSpecialty: "Neurology",
+      thumbnailUrl: "https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?auto=format&fit=crop&w=900&q=80",
       tags: ["Neurology", "Migraine", "Pharmacotherapy", "ClinicalTrial"],
       viewsCount: 480,
       likesCount: 39,
@@ -199,7 +276,14 @@ function getInitialCuratedArticles(doctor: DashboardDoctor): DoctorArticle[] {
       category: "guide",
       targetAudience: "patients",
       summary: "Dermatologist guidelines for restoring the stratum corneum and safely applying topical corticosteroids and calcineurin inhibitors.",
-      content: `### The Skin Barrier Defect\nAtopic eczema is fundamentally characterized by epidermal barrier dysfunction, often tied to filaggrin mutations and ceramides deficiency, leading to transepidermal water loss and allergen penetration.\n\n### The 'Soak and Seal' Method\n1. Bathe or shower in lukewarm water for no more than 5–10 minutes.\n2. Gently pat skin with a soft towel, leaving it slightly damp.\n3. Apply prescribed topical anti-inflammatory ointments only to active lesions.\n4. Within 3 minutes of bathing, generously apply a thick ceramide-containing emollient across the entire body.`,
+      content: `### The Skin Barrier Defect
+Atopic eczema is fundamentally characterized by epidermal barrier dysfunction, often tied to filaggrin mutations and ceramides deficiency, leading to transepidermal water loss and allergen penetration.
+
+### The 'Soak and Seal' Method
+1. Bathe or shower in lukewarm water for no more than 5–10 minutes.
+2. Gently pat skin with a soft towel, leaving it slightly damp.
+3. Apply prescribed topical anti-inflammatory ointments only to active lesions.
+4. Within 3 minutes of bathing, generously apply a thick ceramide-containing emollient across the entire body.`,
       keyTakeaways: [
         "Apply emollient within 3 minutes of bathing to lock in stratum corneum hydration.",
         "Avoid scented washes, harsh detergents, and wool fabrics directly against the skin.",
@@ -209,6 +293,7 @@ function getInitialCuratedArticles(doctor: DashboardDoctor): DoctorArticle[] {
       authorId: "doc-peer-4",
       authorName: "Dr. Camille Santos, MD, FPDS",
       authorSpecialty: "Dermatology",
+      thumbnailUrl: "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=900&q=80",
       tags: ["Dermatology", "Eczema", "Skincare", "Allergy"],
       viewsCount: 790,
       likesCount: 68,
@@ -270,6 +355,12 @@ export function DoctorResearchModule({
   const [formReadTime, setFormReadTime] = useState("4");
   const [formTags, setFormTags] = useState("");
   const [takeawayInputs, setTakeawayInputs] = useState<string[]>([""]);
+
+  // Media & Thumbnail State
+  const [formThumbnail, setFormThumbnail] = useState<string>("");
+  const [formImages, setFormImages] = useState<{ id: string; url: string; caption?: string }[]>([]);
+  const thumbnailInputRef = useRef<HTMLInputElement>(null);
+  const articleImagesInputRef = useRef<HTMLInputElement>(null);
 
   // Available Peer Specialties for Filtering
   const peerSpecialties = useMemo(() => {
@@ -334,6 +425,60 @@ export function DoctorResearchModule({
     setBookmarkedArticles((prev) => ({ ...prev, [articleId]: !prev[articleId] }));
   };
 
+  // Handle Thumbnail File Upload
+  const handleThumbnailFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check size limit (max 6MB)
+    if (file.size > 6 * 1024 * 1024) {
+      alert("Image file size is too large. Please select an image under 6MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (loadEvent) => {
+      const dataUrl = loadEvent.target?.result as string;
+      if (dataUrl) {
+        setFormThumbnail(dataUrl);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle Multiple Article Images / Figures Upload
+  const handleArticleImagesFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    files.forEach((file) => {
+      if (file.size > 6 * 1024 * 1024) return;
+      const reader = new FileReader();
+      reader.onload = (loadEvent) => {
+        const dataUrl = loadEvent.target?.result as string;
+        if (dataUrl) {
+          const defaultCaption = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+          setFormImages((prev) => [
+            ...prev,
+            {
+              id: `img-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+              url: dataUrl,
+              caption: defaultCaption,
+            },
+          ]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Insert image markdown tag into article content
+  const handleInsertImageIntoContent = (imgUrl: string, caption?: string) => {
+    const label = caption || "Figure";
+    const markdown = `\n\n![${label}](${imgUrl})\n*${label}*\n\n`;
+    setFormContent((prev) => prev + markdown);
+  };
+
   // Handle Publish New Article
   const handlePublishArticle = (e: React.FormEvent) => {
     e.preventDefault();
@@ -355,6 +500,9 @@ export function DoctorResearchModule({
       authorSpecialty: doctor.specialty || "General Practice",
       authorNpi: doctor.npi,
       authorLicense: doctor.licenseNumber,
+      thumbnailUrl: formThumbnail || undefined,
+      coverImageUrl: formThumbnail || undefined,
+      images: formImages.length > 0 ? formImages : undefined,
       tags: formTags
         .split(",")
         .map((t) => t.trim().replace(/^#/, ""))
@@ -376,6 +524,8 @@ export function DoctorResearchModule({
     setFormReadTime("4");
     setFormTags("");
     setTakeawayInputs([""]);
+    setFormThumbnail("");
+    setFormImages([]);
   };
 
   // Handle Delete Article
@@ -404,7 +554,7 @@ export function DoctorResearchModule({
             </div>
             <h2 className={`mt-1 text-2xl font-black ${isDark ? "text-white" : "text-slate-900"}`}>Blogs, Guides & Research Hub</h2>
             <p className={`mt-1 text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-              Publish patient health tips, clinical protocols, and explore evidence-based research shared across the HealthKo medical community.
+              Publish patient health tips, clinical protocols with rich imagery, and explore evidence-based research shared across the HealthKo medical community.
             </p>
           </div>
 
@@ -451,51 +601,70 @@ export function DoctorResearchModule({
                 setActiveTab("my_publications");
                 setSelectedSpecialty("all");
               }}
-              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-black transition-all ${
+              className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition-all ${
                 activeTab === "my_publications"
                   ? "bg-brand-teal text-white shadow-xs"
                   : isDark
-                    ? "bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                    ? "bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900"
               }`}
             >
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-              </svg>
-              My Publications ({myArticlesCount})
+              <span>👤</span>
+              <span>My Publications</span>
+              <span
+                className={`ml-1 rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                  activeTab === "my_publications"
+                    ? "bg-white/20 text-white"
+                    : isDark
+                      ? "bg-slate-700 text-slate-300"
+                      : "bg-slate-200 text-slate-700"
+                }`}
+              >
+                {myArticlesCount}
+              </span>
             </button>
 
             <button
               type="button"
-              onClick={() => setActiveTab("peer_network")}
-              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-black transition-all ${
+              onClick={() => {
+                setActiveTab("peer_network");
+              }}
+              className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition-all ${
                 activeTab === "peer_network"
                   ? "bg-brand-teal text-white shadow-xs"
                   : isDark
-                    ? "bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                    ? "bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900"
               }`}
             >
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-              Physician Network ({peerArticlesCount})
+              <span>🌐</span>
+              <span>Physician Network</span>
+              <span
+                className={`ml-1 rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                  activeTab === "peer_network"
+                    ? "bg-white/20 text-white"
+                    : isDark
+                      ? "bg-slate-700 text-slate-300"
+                      : "bg-slate-200 text-slate-700"
+                }`}
+              >
+                {peerArticlesCount}
+              </span>
             </button>
           </div>
 
           {/* Search Box */}
-          <div className={`flex items-center gap-2 rounded-xl border px-3.5 py-2 transition-colors w-full sm:w-72 ${
-            isDark ? "border-slate-700 bg-slate-950 focus-within:border-brand-teal" : "border-slate-200 bg-slate-50 focus-within:border-brand-teal"
-          }`}>
-            <svg className={`h-4 w-4 shrink-0 ${isDark ? "text-slate-500" : "text-slate-400"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <div
+            className={`flex items-center gap-2 rounded-xl border px-3 py-2 transition-colors sm:w-72 ${
+              isDark ? "border-slate-700 bg-slate-950" : "border-slate-200 bg-slate-50/80"
+            }`}
+          >
+            <svg className="h-4 w-4 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.35-4.35" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
             <input
+              type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search topic, title, doctor…"
@@ -590,7 +759,7 @@ export function DoctorResearchModule({
             {searchQuery
               ? "Try adjusting your search terms or clearing the active category filters."
               : activeTab === "my_publications"
-                ? "Share your medical knowledge, patient guides, and health tips by publishing your first post today."
+                ? "Share your medical knowledge, patient guides, and health tips with photos and infographics today."
                 : "Explore other specialties or categories to find articles published by peer physicians."}
           </p>
           {activeTab === "my_publications" && (
@@ -614,94 +783,141 @@ export function DoctorResearchModule({
             return (
               <article
                 key={article.id}
-                className={`rounded-2xl border flex flex-col justify-between p-5 transition-all duration-150 hover:shadow-md ${
-                  isDark ? "border-slate-800 bg-slate-900/90 hover:border-slate-700" : "border-slate-200 bg-white hover:border-slate-300 shadow-2xs"
+                className={`group rounded-2xl border flex flex-col justify-between overflow-hidden transition-all duration-200 hover:shadow-lg ${
+                  isDark ? "border-slate-800 bg-slate-900/95 hover:border-slate-700" : "border-slate-200 bg-white hover:border-slate-300 shadow-2xs"
                 }`}
               >
                 <div>
-                  {/* Top Badges */}
-                  <div className="flex items-center justify-between gap-2 pb-3">
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
-                        isDark ? catInfo.darkBadge : catInfo.lightBadge
-                      }`}
-                    >
-                      <span>{catInfo.icon}</span>
-                      {catInfo.label}
-                    </span>
-
-                    <span className={`rounded-md border px-2 py-0.5 text-[9px] font-bold ${audInfo.badge}`}>
-                      {audInfo.label}
-                    </span>
-                  </div>
-
-                  {/* Title */}
-                  <h3
-                    onClick={() => setActiveReaderArticle(article)}
-                    className={`text-base font-black leading-snug cursor-pointer transition-colors line-clamp-2 ${
-                      isDark ? "text-white hover:text-brand-teal" : "text-slate-900 hover:text-brand-teal"
-                    }`}
-                  >
-                    {article.title}
-                  </h3>
-
-                  {/* Author Meta */}
-                  <div className="mt-2.5 flex items-center gap-2.5">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-teal/15 text-brand-teal text-xs font-black">
-                      {article.authorName.replace(/^Dr\.\s*/i, "").charAt(0) || "D"}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className={`text-xs font-black truncate ${isDark ? "text-slate-200" : "text-slate-800"}`}>
-                        {article.authorName}
-                      </p>
-                      <p className={`text-[10px] truncate ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                        {article.authorSpecialty}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Summary */}
-                  <p className={`mt-3 text-xs leading-relaxed line-clamp-3 ${isDark ? "text-slate-300" : "text-slate-600"}`}>
-                    {article.summary}
-                  </p>
-
-                  {/* Key Takeaways Preview */}
-                  {article.keyTakeaways && article.keyTakeaways.length > 0 && (
+                  {/* Article Thumbnail Header */}
+                  {article.thumbnailUrl ? (
                     <div
-                      className={`mt-3.5 rounded-xl border p-2.5 text-[11px] space-y-1.5 ${
-                        isDark ? "border-slate-800 bg-slate-950/70 text-slate-300" : "border-slate-100 bg-slate-50 text-slate-700"
-                      }`}
+                      onClick={() => setActiveReaderArticle(article)}
+                      className="relative h-44 w-full overflow-hidden bg-slate-100 dark:bg-slate-950 cursor-pointer"
                     >
-                      <p className="text-[9px] font-black uppercase tracking-wider text-brand-teal">Key Takeaways:</p>
-                      {article.keyTakeaways.slice(0, 2).map((takeaway, idx) => (
-                        <div key={idx} className="flex items-start gap-1.5 line-clamp-1">
-                          <span className="text-emerald-500 font-bold shrink-0">✓</span>
-                          <span className="truncate">{takeaway}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                      <img
+                        src={article.thumbnailUrl}
+                        alt={article.title}
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        loading="lazy"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
 
-                  {/* Tags */}
-                  {article.tags.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {article.tags.slice(0, 3).map((tag) => (
+                      {/* Overlaid Badges */}
+                      <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
                         <span
-                          key={tag}
-                          className={`rounded-md px-1.5 py-0.5 text-[9px] font-semibold ${
-                            isDark ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-500"
+                          className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider backdrop-blur-md shadow-xs ${catInfo.lightBadge}`}
+                        >
+                          <span>{catInfo.icon}</span>
+                          {catInfo.label}
+                        </span>
+
+                        <span className={`rounded-lg border px-2 py-0.5 text-[9px] font-black backdrop-blur-md ${audInfo.badge} bg-white/90 dark:bg-slate-900/90`}>
+                          {audInfo.label}
+                        </span>
+                      </div>
+
+                      {/* Thumbnail Image indicator if there are more figures */}
+                      {article.images && article.images.length > 0 && (
+                        <div className="absolute bottom-2.5 right-3 flex items-center gap-1 rounded-md bg-black/60 backdrop-blur-xs px-2 py-0.5 text-[10px] font-bold text-white">
+                          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                            <circle cx="9" cy="9" r="2" />
+                            <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                          </svg>
+                          <span>+{article.images.length}</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* Stylized Header if no image uploaded */
+                    <div className="p-5 pb-0">
+                      <div className="flex items-center justify-between gap-2 pb-3">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                            isDark ? catInfo.darkBadge : catInfo.lightBadge
                           }`}
                         >
-                          #{tag}
+                          <span>{catInfo.icon}</span>
+                          {catInfo.label}
                         </span>
-                      ))}
+
+                        <span className={`rounded-md border px-2 py-0.5 text-[9px] font-bold ${audInfo.badge}`}>
+                          {audInfo.label}
+                        </span>
+                      </div>
                     </div>
                   )}
+
+                  {/* Content Container */}
+                  <div className="p-5">
+                    {/* Title */}
+                    <h3
+                      onClick={() => setActiveReaderArticle(article)}
+                      className={`text-base font-black leading-snug cursor-pointer transition-colors line-clamp-2 ${
+                        isDark ? "text-white group-hover:text-brand-teal" : "text-slate-900 group-hover:text-brand-teal"
+                      }`}
+                    >
+                      {article.title}
+                    </h3>
+
+                    {/* Author Meta */}
+                    <div className="mt-2.5 flex items-center gap-2.5">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-teal/15 text-brand-teal text-xs font-black">
+                        {article.authorName.replace(/^Dr\.\s*/i, "").charAt(0) || "D"}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-xs font-black truncate ${isDark ? "text-slate-200" : "text-slate-800"}`}>
+                          {article.authorName}
+                        </p>
+                        <p className={`text-[10px] truncate ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                          {article.authorSpecialty}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Summary */}
+                    <p className={`mt-3 text-xs leading-relaxed line-clamp-3 ${isDark ? "text-slate-300" : "text-slate-600"}`}>
+                      {article.summary}
+                    </p>
+
+                    {/* Key Takeaways Preview */}
+                    {article.keyTakeaways && article.keyTakeaways.length > 0 && (
+                      <div
+                        className={`mt-3.5 rounded-xl border p-2.5 text-[11px] space-y-1.5 ${
+                          isDark ? "border-slate-800 bg-slate-950/70 text-slate-300" : "border-slate-100 bg-slate-50 text-slate-700"
+                        }`}
+                      >
+                        <p className="text-[9px] font-black uppercase tracking-wider text-brand-teal">Key Takeaways:</p>
+                        {article.keyTakeaways.slice(0, 2).map((takeaway, idx) => (
+                          <div key={idx} className="flex items-start gap-1.5 line-clamp-1">
+                            <span className="text-emerald-500 font-bold shrink-0">✓</span>
+                            <span className="truncate">{takeaway}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Tags */}
+                    {article.tags.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {article.tags.slice(0, 3).map((tag) => (
+                          <span
+                            key={tag}
+                            className={`rounded-md px-1.5 py-0.5 text-[9px] font-semibold ${
+                              isDark ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Footer Actions */}
                 <div
-                  className="mt-4 flex items-center justify-between border-t pt-3"
+                  className="px-5 pb-4 pt-3 flex items-center justify-between border-t"
                   style={{ borderColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }}
                 >
                   <span className={`text-[10px] font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
@@ -781,7 +997,7 @@ export function DoctorResearchModule({
       {isComposerOpen && (
         <div className="fixed inset-0 z-[260] flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs animate-fadeIn">
           <div
-            className={`relative w-full max-w-3xl max-h-[90vh] flex flex-col rounded-3xl border shadow-2xl transition-all ${
+            className={`relative w-full max-w-3xl max-h-[92vh] flex flex-col rounded-3xl border shadow-2xl transition-all ${
               isDark ? "border-slate-800 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-900"
             }`}
             onClick={(e) => e.stopPropagation()}
@@ -807,7 +1023,7 @@ export function DoctorResearchModule({
             </div>
 
             {/* Modal Scrollable Form */}
-            <form onSubmit={handlePublishArticle} className="overflow-y-auto p-6 space-y-4 max-h-[calc(90vh-10rem)]">
+            <form onSubmit={handlePublishArticle} className="overflow-y-auto p-6 space-y-5 max-h-[calc(92vh-10rem)]">
               {/* Title */}
               <div>
                 <label className={`block text-xs font-black uppercase tracking-wider mb-1.5 ${isDark ? "text-slate-300" : "text-slate-700"}`}>
@@ -822,6 +1038,102 @@ export function DoctorResearchModule({
                     isDark ? "border-slate-700 bg-slate-950 text-white focus:border-brand-teal" : "border-slate-200 bg-slate-50 text-slate-900 focus:border-brand-teal"
                   }`}
                 />
+              </div>
+
+              {/* ── THUMBNAIL UPLOAD SECTION ──────────────────────── */}
+              <div className={`rounded-2xl border p-4.5 space-y-3 ${isDark ? "border-slate-800 bg-slate-950/70" : "border-slate-200 bg-slate-50/60"}`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className={`text-xs font-black uppercase tracking-wider ${isDark ? "text-slate-200" : "text-slate-800"}`}>
+                      Article Thumbnail / Cover Image
+                    </label>
+                    <p className={`text-[11px] font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                      Upload a header image from your device or select a clinical preset.
+                    </p>
+                  </div>
+                  {formThumbnail && (
+                    <button
+                      type="button"
+                      onClick={() => setFormThumbnail("")}
+                      className="text-[11px] font-black text-rose-500 hover:underline"
+                    >
+                      Remove Thumbnail
+                    </button>
+                  )}
+                </div>
+
+                {/* Hidden File Input for Thumbnail */}
+                <input
+                  type="file"
+                  ref={thumbnailInputRef}
+                  accept="image/*"
+                  onChange={handleThumbnailFileChange}
+                  className="hidden"
+                />
+
+                {formThumbnail ? (
+                  <div className="relative h-44 w-full rounded-xl overflow-hidden border border-brand-teal/40 group">
+                    <img src={formThumbnail} alt="Thumbnail Preview" className="h-full w-full object-cover" />
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={() => thumbnailInputRef.current?.click()}
+                        className="rounded-xl bg-white/90 px-4 py-2 text-xs font-black text-slate-900 shadow-lg hover:bg-white transition"
+                      >
+                        Change Image
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => thumbnailInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all hover:border-brand-teal ${
+                      isDark ? "border-slate-700 bg-slate-900/50 hover:bg-slate-900" : "border-slate-300 bg-white hover:bg-teal-50/30"
+                    }`}
+                  >
+                    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-brand-teal/15 text-brand-teal mb-2">
+                      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+                        <circle cx="9" cy="9" r="2" />
+                        <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                      </svg>
+                    </div>
+                    <p className={`text-xs font-bold ${isDark ? "text-slate-200" : "text-slate-800"}`}>
+                      Click to upload cover thumbnail
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      PNG, JPG, WebP or GIF up to 6MB
+                    </p>
+                  </div>
+                )}
+
+                {/* Preset Themes Selector */}
+                <div>
+                  <p className={`text-[10px] font-black uppercase tracking-wider mb-2 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                    Or choose a medical theme preset:
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    {PRESET_THUMBNAILS.map((preset) => (
+                      <button
+                        key={preset.name}
+                        type="button"
+                        onClick={() => setFormThumbnail(preset.url)}
+                        className={`relative rounded-lg overflow-hidden border text-left p-1 transition-all ${
+                          formThumbnail === preset.url
+                            ? "border-brand-teal ring-2 ring-brand-teal"
+                            : isDark
+                              ? "border-slate-800 hover:border-slate-600"
+                              : "border-slate-200 hover:border-slate-400"
+                        }`}
+                      >
+                        <img src={preset.url} alt={preset.name} className="h-12 w-full object-cover rounded-md" />
+                        <p className={`mt-1 text-[9px] font-bold truncate px-0.5 ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                          {preset.name}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {/* Category & Audience Row */}
@@ -936,6 +1248,93 @@ export function DoctorResearchModule({
                 </div>
               </div>
 
+              {/* ── ADDITIONAL FIGURES / DIAGRAMS SECTION ───────────── */}
+              <div className={`rounded-2xl border p-4.5 space-y-3 ${isDark ? "border-slate-800 bg-slate-950/70" : "border-slate-200 bg-slate-50/60"}`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className={`text-xs font-black uppercase tracking-wider ${isDark ? "text-slate-200" : "text-slate-800"}`}>
+                      Article Figures, Charts & Infographics
+                    </label>
+                    <p className={`text-[11px] font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                      Upload clinical diagrams, lab charts, or patient education illustrations.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => articleImagesInputRef.current?.click()}
+                    className="flex items-center gap-1.5 rounded-lg bg-brand-teal/15 px-3 py-1.5 text-xs font-black text-brand-teal hover:bg-brand-teal/25 transition"
+                  >
+                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    Upload Figure
+                  </button>
+                </div>
+
+                {/* Hidden File Input for Multiple Article Images */}
+                <input
+                  type="file"
+                  ref={articleImagesInputRef}
+                  accept="image/*"
+                  multiple
+                  onChange={handleArticleImagesFileChange}
+                  className="hidden"
+                />
+
+                {formImages.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    {formImages.map((img, idx) => (
+                      <div
+                        key={img.id}
+                        className={`rounded-xl border p-2.5 flex items-start gap-3 ${
+                          isDark ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"
+                        }`}
+                      >
+                        <img src={img.url} alt="Figure" className="h-16 w-16 shrink-0 object-cover rounded-lg border border-slate-700/30" />
+                        <div className="min-w-0 flex-1 space-y-1.5">
+                          <input
+                            type="text"
+                            value={img.caption || ""}
+                            onChange={(e) => {
+                              const newCaption = e.target.value;
+                              setFormImages((prev) =>
+                                prev.map((item) => (item.id === img.id ? { ...item, caption: newCaption } : item))
+                              );
+                            }}
+                            placeholder="Figure caption..."
+                            className={`w-full rounded-md border px-2 py-1 text-[11px] font-semibold outline-none ${
+                              isDark ? "border-slate-700 bg-slate-950 text-white" : "border-slate-200 bg-slate-50 text-slate-900"
+                            }`}
+                          />
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleInsertImageIntoContent(img.url, img.caption)}
+                              className="text-[10px] font-black text-brand-teal hover:underline"
+                            >
+                              + Insert in Content
+                            </button>
+                            <span className="text-slate-400 text-[10px]">•</span>
+                            <button
+                              type="button"
+                              onClick={() => setFormImages((prev) => prev.filter((item) => item.id !== img.id))}
+                              className="text-[10px] font-bold text-rose-500 hover:underline"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 italic">
+                    No figures attached yet. Click &quot;Upload Figure&quot; to add charts or medical illustrations.
+                  </p>
+                )}
+              </div>
+
               {/* Main Content */}
               <div>
                 <label className={`block text-xs font-black uppercase tracking-wider mb-1.5 ${isDark ? "text-slate-300" : "text-slate-700"}`}>
@@ -995,7 +1394,7 @@ export function DoctorResearchModule({
       {activeReaderArticle && (
         <div className="fixed inset-0 z-[260] flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs animate-fadeIn">
           <div
-            className={`relative w-full max-w-3xl max-h-[90vh] flex flex-col rounded-3xl border shadow-2xl transition-all ${
+            className={`relative w-full max-w-3xl max-h-[92vh] flex flex-col rounded-3xl border shadow-2xl transition-all ${
               isDark ? "border-slate-800 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-900"
             }`}
             onClick={(e) => e.stopPropagation()}
@@ -1032,7 +1431,18 @@ export function DoctorResearchModule({
             </div>
 
             {/* Reader Body */}
-            <div className="overflow-y-auto p-6 space-y-5 max-h-[calc(90vh-12rem)]">
+            <div className="overflow-y-auto p-6 space-y-5 max-h-[calc(92vh-12rem)]">
+              {/* Cover Banner if present */}
+              {activeReaderArticle.thumbnailUrl && (
+                <div className="relative h-56 sm:h-72 w-full rounded-2xl overflow-hidden border border-slate-700/20 shadow-xs">
+                  <img
+                    src={activeReaderArticle.thumbnailUrl}
+                    alt={activeReaderArticle.title}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              )}
+
               {/* Author Strip */}
               <div
                 className={`rounded-2xl border p-4 flex items-center justify-between ${
@@ -1089,7 +1499,7 @@ export function DoctorResearchModule({
                 </div>
               )}
 
-              {/* Formatted Content */}
+              {/* Formatted Content with Markdown & Inline Images */}
               <div
                 className={`text-sm leading-relaxed space-y-4 whitespace-pre-line ${
                   isDark ? "text-slate-200" : "text-slate-800"
@@ -1097,6 +1507,29 @@ export function DoctorResearchModule({
               >
                 {activeReaderArticle.content}
               </div>
+
+              {/* Attached Clinical Figures / Diagram Gallery in Reader */}
+              {activeReaderArticle.images && activeReaderArticle.images.length > 0 && (
+                <div className={`rounded-2xl border p-4.5 space-y-3 ${isDark ? "border-slate-800 bg-slate-950/70" : "border-slate-200 bg-slate-50/80"}`}>
+                  <p className="text-xs font-black uppercase tracking-wider text-brand-teal">
+                    Attached Clinical Figures & Charts ({activeReaderArticle.images.length})
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {activeReaderArticle.images.map((fig, i) => (
+                      <div key={fig.id || i} className="space-y-1.5">
+                        <div className="h-44 w-full rounded-xl overflow-hidden border border-slate-700/20 bg-black/10">
+                          <img src={fig.url} alt={fig.caption || `Figure ${i + 1}`} className="h-full w-full object-cover hover:scale-105 transition-transform duration-200" />
+                        </div>
+                        {fig.caption && (
+                          <p className={`text-[11px] font-semibold italic ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                            {fig.caption}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Tags Strip */}
               {activeReaderArticle.tags.length > 0 && (

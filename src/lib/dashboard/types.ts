@@ -235,6 +235,8 @@ export type DoctorArticle = {
   authorNpi?: string | null;
   authorLicense?: string | null;
   coverImageUrl?: string;
+  thumbnailUrl?: string;
+  images?: { id: string; url: string; caption?: string }[];
   tags: string[];
   viewsCount: number;
   likesCount: number;
