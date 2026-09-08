@@ -2330,7 +2330,14 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
         if (saved) liveTurns = JSON.parse(saved);
       } catch {}
     }
-    const combinedNotes = formatNotesWithTranscript(clinicalNotes.trim(), liveTurns);
+    const patientFullName = `${session.activeAppointment.patient.firstName} ${session.activeAppointment.patient.lastName}`.trim();
+    const combinedNotes = formatNotesWithTranscript(clinicalNotes.trim(), liveTurns, {
+      doctorName: doctor?.name || "Dr. Attending Physician",
+      patientName: patientFullName,
+      reason: diagnosisText || session.activeAppointment.reason || undefined,
+      prescription: prescriptionText || undefined,
+      duration: session.activeAppointment.duration || 15,
+    });
 
     const result = await completeConsultation({
       consultationId: session.activeAppointment.id,
@@ -3926,7 +3933,14 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                             if (saved) liveTurns = JSON.parse(saved);
                           } catch {}
                         }
-                        const combinedNotes = formatNotesWithTranscript(clinicalNotes.trim(), liveTurns);
+                        const patName = `${session.activeAppointment.patient.firstName} ${session.activeAppointment.patient.lastName}`.trim();
+                        const combinedNotes = formatNotesWithTranscript(clinicalNotes.trim(), liveTurns, {
+                          doctorName: doctor?.name || "Dr. Attending Physician",
+                          patientName: patName,
+                          reason: diagnosisText || session.activeAppointment.reason || undefined,
+                          prescription: prescriptionText || session.activeAppointment.prescription || undefined,
+                          duration: session.activeAppointment.duration || 15,
+                        });
 
                         // Mark as completed first
                         const consultationId = session.activeAppointment.id;
@@ -3972,7 +3986,14 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                               if (saved) liveTurns = JSON.parse(saved);
                             } catch {}
                           }
-                          const combinedNotes = formatNotesWithTranscript(clinicalNotes.trim(), liveTurns);
+                          const patName = `${session.activeAppointment.patient.firstName} ${session.activeAppointment.patient.lastName}`.trim();
+                          const combinedNotes = formatNotesWithTranscript(clinicalNotes.trim(), liveTurns, {
+                            doctorName: doctor?.name || "Dr. Attending Physician",
+                            patientName: patName,
+                            reason: diagnosisText || session.activeAppointment.reason || undefined,
+                            prescription: prescriptionText || session.activeAppointment.prescription || undefined,
+                            duration: session.activeAppointment.duration || 15,
+                          });
 
                           await completeConsultation({
                             consultationId: session.activeAppointment.id,

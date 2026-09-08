@@ -935,6 +935,7 @@ export function LiveConsultationPanel({
 
   const [interimText, setInterimText] = useState("");
   const [speechStatus, setSpeechStatus] = useState<"idle" | "listening" | "hearing" | "unsupported" | "error">("idle");
+  const [quickRemark, setQuickRemark] = useState("");
   const pendingInterimRef = useRef("");
   const silenceTimerRef = useRef<any>(null);
   const recognitionRef = useRef<any>(null);
@@ -965,6 +966,13 @@ export function LiveConsultationPanel({
     },
     [callDuration, role, doctorName, patientName, counterpartName, onNewTranscriptTurn]
   );
+
+  const handleAddQuickRemark = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickRemark.trim()) return;
+    commitTurn(quickRemark.trim());
+    setQuickRemark("");
+  };
 
   // Background Web Speech Recognition (listens automatically while connected & unmuted)
   useEffect(() => {
@@ -1429,6 +1437,24 @@ export function LiveConsultationPanel({
               ))}
             </div>
           )}
+
+          {/* Quick Dialogue Entry Bar */}
+          <form onSubmit={handleAddQuickRemark} className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex gap-2">
+            <input
+              type="text"
+              value={quickRemark}
+              onChange={(e) => setQuickRemark(e.target.value)}
+              placeholder={role === "doctor" ? "Log verbal remark or advice..." : "Log verbal question or symptom..."}
+              className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-teal"
+            />
+            <button
+              type="submit"
+              disabled={!quickRemark.trim()}
+              className="rounded-lg bg-brand-teal px-3 py-1.5 text-xs font-black text-white hover:bg-teal-600 transition disabled:opacity-40 shrink-0"
+            >
+              + Add
+            </button>
+          </form>
         </section>
       </div>
 
