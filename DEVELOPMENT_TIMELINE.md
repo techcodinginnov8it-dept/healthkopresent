@@ -194,10 +194,23 @@
 
 ---
 
+### 13. Patient End Call Confirmation & Disconnect Warning Modal
+* **Commit**: `d5fa35f`
+* **Timestamp**: `2026-09-09 02:50:00 +0800`
+* **Duration**: ~10 minutes
+* **Updates & Changes**:
+  - Added an intentional confirmation popup warning modal when patients click the End Call button during an active consultation.
+  - Warns the patient before terminating the video session, showing the attending doctor's name and explaining that leaving will disconnect the live call.
+  - Reassures patients that their consultation notes, messages, and encounter history remain safely saved.
+  - Provided two clear actions: a prominent button to cancel and remain in the live call, and a confirmation button with an active loading indicator to safely end and leave the consultation.
+
+---
+
 ## 📊 Summary Table of Commits
 
 | Commit | Time (+0800) | Area | Summary of Updates |
 | :--- | :--- | :--- | :--- |
+| `d5fa35f` | 02:50 | **Patient Dashboard** | Disconnect warning modal & leave confirmation for active consultations |
 | `f3102f0` | 02:35 | **Live Telehealth** | Dynamic live conversation capture & database archives for doctor and patient |
 | `545e649` | 02:05 | **Consultation EHR** | Display notes-only results in Consultation Results & silent background transcript PDF |
 | `89e4454` | 01:36 | **Clinical Compliance** | Enforce non-empty clinical notes before doctor can end consultation |
