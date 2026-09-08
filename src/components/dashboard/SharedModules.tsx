@@ -863,16 +863,7 @@ export function LiveConsultationPanel({
     onExtendCall?.(selectedExtensionMins, newTotal);
   };
 
-  // ── Live Audio Web Speech Recognition Engine ──────────────────────────────
-  const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [isSpeechSupported, setIsSpeechSupported] = useState(true);
-  const [interimText, setInterimText] = useState("");
-  const [speechNotice, setSpeechNotice] = useState<string | null>(null);
-  const [manualInput, setManualInput] = useState("");
-  const recognitionRef = useRef<any>(null);
-  const isSpeechActiveRef = useRef(false);
-
+  // ── Background Audio Speech Recognition Engine ───────────────────────────
   const [transcriptTurns, setTranscriptTurns] = useState<
     { id: string; speaker: string; role: "doctor" | "patient" | "system"; text: string; timestamp: string }[]
   >(() => {
@@ -910,7 +901,7 @@ export function LiveConsultationPanel({
     ];
   });
 
-  // Persist transcript turns to localStorage whenever updated
+  // Automatically sync transcript turns to localStorage for this appointment
   useEffect(() => {
     if (typeof window === "undefined" || !appointmentId) return;
     try {
@@ -918,17 +909,16 @@ export function LiveConsultationPanel({
     } catch {}
   }, [appointmentId, transcriptTurns]);
 
-  // Web Speech Recognition Hook (Chrome, Edge, Safari Web Speech API)
+  const recognitionRef = useRef<any>(null);
+  const isSpeechActiveRef = useRef(false);
+
+  // Background Web Speech Recognition (listens automatically while connected & unmuted)
   useEffect(() => {
     if (typeof window === "undefined") return;
     const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRec) {
-      setIsSpeechSupported(false);
-      return;
-    }
-    setIsSpeechSupported(true);
+    if (!SpeechRec) return;
 
-    const shouldListen = status === "connected" && isMicOn && isTranscriptOpen;
+    const shouldListen = status === "connected" && isMicOn;
     isSpeechActiveRef.current = shouldListen;
 
     if (!shouldListen) {
@@ -938,8 +928,6 @@ export function LiveConsultationPanel({
         } catch {}
         recognitionRef.current = null;
       }
-      setIsListening(false);
-      setInterimText("");
       return;
     }
 
@@ -947,16 +935,10 @@ export function LiveConsultationPanel({
     try {
       recognition = new SpeechRec();
       recognition.continuous = true;
-      recognition.interimResults = true;
+      recognition.interimResults = false;
       recognition.lang = "en-US";
 
-      recognition.onstart = () => {
-        setIsListening(true);
-        setSpeechNotice(null);
-      };
-
       recognition.onresult = (event: any) => {
-        let liveInterim = "";
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           const result = event.results[i];
           const text = result[0]?.transcript?.trim();
@@ -977,23 +959,13 @@ export function LiveConsultationPanel({
                 text,
               },
             ]);
-            setInterimText("");
-          } else if (text) {
-            liveInterim += text + " ";
           }
-        }
-        if (liveInterim) {
-          setInterimText(liveInterim.trim());
         }
       };
 
       recognition.onerror = (event: any) => {
-        if (event.error === "no-speech") {
-          return;
-        }
-        if (event.error === "not-allowed") {
-          setSpeechNotice("Microphone permission required for speech recognition.");
-        }
+        // Ignore temporary pauses or silence
+        if (event.error === "no-speech") return;
       };
 
       recognition.onend = () => {
@@ -1001,15 +973,13 @@ export function LiveConsultationPanel({
           try {
             recognition.start();
           } catch {}
-        } else {
-          setIsListening(false);
         }
       };
 
       recognition.start();
       recognitionRef.current = recognition;
     } catch {
-      setIsListening(false);
+      // Graceful fallback if unsupported
     }
 
     return () => {
@@ -1020,49 +990,8 @@ export function LiveConsultationPanel({
         } catch {}
       }
       recognitionRef.current = null;
-      setIsListening(false);
     };
-  }, [status, isMicOn, isTranscriptOpen, role, counterpartName, doctorName, patientName, callDuration]);
-
-  const handleAddManualTurn = () => {
-    const text = manualInput.trim();
-    if (!text) return;
-    const timestamp = callDuration || "00:00";
-    const speakerName =
-      role === "doctor"
-        ? (doctorName || "Dr. Attending Physician")
-        : (patientName || counterpartName || "Patient");
-    const turnRole: "doctor" | "patient" = role === "doctor" ? "doctor" : "patient";
-    setTranscriptTurns((prev) => [
-      ...prev,
-      {
-        id: `manual-${Date.now()}`,
-        speaker: speakerName,
-        role: turnRole,
-        timestamp,
-        text,
-      },
-    ]);
-    setManualInput("");
-  };
-
-  const handleClearTranscript = () => {
-    setTranscriptTurns([]);
-    setInterimText("");
-  };
-
-  const handleDownloadLiveTranscript = () => {
-    downloadConsultationTranscriptPdf({
-      appointmentId,
-      doctorName: role === "doctor" ? (doctorName || "Dr. Attending Physician, MD") : counterpartName,
-      patientName: role === "patient" ? (patientName || "Patient") : counterpartName,
-      date: new Date(),
-      durationMinutes: Math.max(5, Math.ceil(elapsedSeconds / 60) || 20),
-      reasonForVisit: "Synchronous Telehealth Consultation",
-      clinicalAssessment: "Synchronous consultation audio speech transcript recorded in real-time via Web Speech Engine.",
-      transcript: transcriptTurns,
-    });
-  };
+  }, [status, isMicOn, role, counterpartName, doctorName, patientName, callDuration]);
 
   return (
     <div className="grid gap-4 xl:grid-cols-12">
@@ -1302,20 +1231,6 @@ export function LiveConsultationPanel({
             >
               <ScreenShareIcon off={!isScreenSharing} />
             </button>
-            {/* Live Audio Transcription Toggle (CC) */}
-            <button
-              type="button"
-              onClick={() => setIsTranscriptOpen((prev) => !prev)}
-              aria-label={isTranscriptOpen ? "Hide Live Transcription" : "Show Live Transcription"}
-              title="Real-time speech-to-text consultation transcript"
-              className={`grid h-12 w-12 place-items-center rounded-full border transition focus:outline-none focus:ring-4 ${
-                isTranscriptOpen
-                  ? "border-emerald-400/60 bg-emerald-500/25 text-emerald-200 focus:ring-emerald-400/20"
-                  : "border-white/15 bg-white/10 text-white hover:bg-white/15 focus:ring-white/20"
-              }`}
-            >
-              <span className="text-[11px] font-black tracking-wider">CC</span>
-            </button>
           </div>
           <div className="relative">
             <button
@@ -1345,141 +1260,6 @@ export function LiveConsultationPanel({
             )}
           </div>
         </footer>
-
-        {/* ── Live Transcript Overlay Drawer ── */}
-        {isTranscriptOpen && (
-          <div className="absolute top-16 right-4 z-40 w-80 sm:w-96 max-h-[calc(100%-7rem)] flex flex-col rounded-2xl border border-white/20 bg-slate-950/95 backdrop-blur-md shadow-2xl p-4 text-white animate-fadeIn">
-            {/* Header & Status */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
-              <div className="flex items-center gap-2">
-                <span
-                  className={`flex h-2.5 w-2.5 rounded-full ${
-                    isListening
-                      ? "bg-emerald-400 animate-ping"
-                      : isMicOn
-                        ? "bg-amber-400"
-                        : "bg-rose-500"
-                  }`}
-                />
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-wider text-emerald-300">
-                    Live Audio Transcription
-                  </p>
-                  <p className="text-[9px] font-semibold text-slate-400">
-                    {isListening
-                      ? "Actively listening & transcribing speech..."
-                      : !isMicOn
-                        ? "Microphone muted (unmute to transcribe)"
-                        : !isSpeechSupported
-                          ? "Web Speech API not supported in browser"
-                          : "Paused"}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsTranscriptOpen(false)}
-                className="text-slate-400 hover:text-white text-xs font-black p-1"
-                aria-label="Close transcript"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Error or permission notice */}
-            {speechNotice && (
-              <div className="mt-2 rounded-lg bg-amber-500/15 border border-amber-500/30 px-2.5 py-1.5 text-[10px] font-semibold text-amber-200">
-                ⚠️ {speechNotice}
-              </div>
-            )}
-
-            {/* Live Interim Speech Bubble */}
-            {interimText && (
-              <div className="mt-2.5 flex items-start gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/15 p-2 text-xs text-emerald-100 animate-pulse">
-                <span className="text-emerald-300 text-xs font-black shrink-0">🎤</span>
-                <p className="text-[11px] leading-snug">
-                  <span className="font-bold text-emerald-200">Speaking:</span> {interimText}...
-                </p>
-              </div>
-            )}
-
-            {/* Scrollable Dialogue List */}
-            <div className="mt-3 flex-1 overflow-y-auto space-y-2 pr-1 text-xs max-h-56">
-              {transcriptTurns.length === 0 ? (
-                <div className="py-8 text-center text-slate-500">
-                  <p className="text-xs">No dialogue recorded yet.</p>
-                  <p className="text-[10px] mt-1">Speak into the microphone or type below.</p>
-                </div>
-              ) : (
-                transcriptTurns.map((turn) => (
-                  <div
-                    key={turn.id}
-                    className={`rounded-xl p-2.5 space-y-1 ${
-                      turn.role === "doctor"
-                        ? "bg-brand-teal/20 border border-brand-teal/30"
-                        : "bg-white/10 border border-white/10"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between text-[10px] font-black">
-                      <span className={turn.role === "doctor" ? "text-brand-teal" : "text-slate-300"}>
-                        [{turn.timestamp}] {turn.speaker}
-                      </span>
-                    </div>
-                    <p className="text-[11px] leading-relaxed text-slate-200">{turn.text}</p>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Manual Dialogue Turn Quick-Entry Bar */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleAddManualTurn();
-              }}
-              className="mt-2.5 flex gap-1.5 border-t border-white/10 pt-2"
-            >
-              <input
-                type="text"
-                value={manualInput}
-                onChange={(e) => setManualInput(e.target.value)}
-                placeholder="Type note or spoken dialogue..."
-                className="flex-1 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1.5 text-xs text-white placeholder:text-slate-500 outline-none focus:border-brand-teal"
-              />
-              <button
-                type="submit"
-                disabled={!manualInput.trim()}
-                className="rounded-lg bg-white/10 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-white hover:bg-brand-teal transition disabled:opacity-40"
-              >
-                + Add
-              </button>
-            </form>
-
-            {/* Bottom Actions */}
-            <div className="mt-2.5 border-t border-white/10 pt-2 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={handleClearTranscript}
-                disabled={transcriptTurns.length === 0}
-                className="text-[10px] text-slate-400 hover:text-red-400 transition disabled:opacity-30"
-              >
-                Clear
-              </button>
-              <button
-                type="button"
-                onClick={handleDownloadLiveTranscript}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-brand-teal px-3 py-1.5 text-[11px] font-black text-white hover:bg-teal-600 transition shadow-xs"
-              >
-                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                Download (.PDF)
-              </button>
-            </div>
-          </div>
-        )}
       </section>
 
       <div className="space-y-4 xl:col-span-5">

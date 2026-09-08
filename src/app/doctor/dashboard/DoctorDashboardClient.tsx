@@ -1206,11 +1206,12 @@ function PatientOperationsHub({
                     <div className="space-y-3">
                       {selectedPatient.prescriptions.length ? (
                         selectedPatient.prescriptions.map((appointment) => {
-                          const rxFirstLine = appointment.prescription
-                            ? appointment.prescription.startsWith("---")
-                              ? appointment.prescription.split("\n").find((l) => l.startsWith("Medicine:"))?.replace(/^Medicine:\s*/i, "") || "Prescription Order"
-                              : appointment.prescription.split("\n")[0]
-                            : "Prescription";
+                          const hasPrescription = Boolean(appointment.prescription && appointment.prescription.trim());
+                          const rxFirstLine = hasPrescription
+                            ? appointment.prescription!.startsWith("---")
+                              ? appointment.prescription!.split("\n").find((l) => l.startsWith("Medicine:"))?.replace(/^Medicine:\s*/i, "") || "Prescription Order"
+                              : appointment.prescription!.split("\n")[0]
+                            : (appointment.reason || "Consultation Encounter & Clinical Assessment");
 
                           return (
                             <article
@@ -1230,6 +1231,15 @@ function PatientOperationsHub({
                                     <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${getStatusClasses(appointment.status)}`}>
                                       {appointment.status}
                                     </span>
+                                    {hasPrescription ? (
+                                      <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400">
+                                        Rx Issued
+                                      </span>
+                                    ) : (
+                                      <span className="rounded-full border border-teal-500/30 bg-teal-500/10 px-2 py-0.5 text-[10px] font-black uppercase text-teal-600 dark:text-teal-400">
+                                        Clinical Notes &amp; Observations
+                                      </span>
+                                    )}
                                   </div>
                                   <p className="mt-0.5 text-xs font-bold tracking-wide text-brand-teal">
                                     {getPatientDisplayName(selectedPatient)}
@@ -1247,7 +1257,7 @@ function PatientOperationsHub({
                                 </div>
                               </div>
 
-                              {/* Doctor's Medical Note on that session */}
+                              {/* Doctor's Consultation Notes & Clinical Observations */}
                               <div className={`mt-3 rounded-xl border p-3 ${
                                 isDark ? "border-slate-800/90 bg-slate-950/60" : "border-slate-200/70 bg-slate-50/80"
                               }`}>
@@ -1259,13 +1269,44 @@ function PatientOperationsHub({
                                     <line x1="16" y1="17" x2="8" y2="17" />
                                   </svg>
                                   <p className="text-[10px] font-black uppercase tracking-wider text-brand-teal">
-                                    Doctor&apos;s Medical Note
+                                    Consultation Notes &amp; Clinical Observations
                                   </p>
                                 </div>
                                 <p className={`text-xs leading-relaxed whitespace-pre-wrap ${isDark ? "text-slate-200" : "text-slate-700"}`}>
-                                  {appointment.notes?.trim() || "No additional doctor notes recorded for this session."}
+                                  {appointment.notes?.trim() || "Consultation encounter documented. No additional clinical notes recorded."}
                                 </p>
                               </div>
+
+                              {/* Prescribed medication details if available, otherwise non-pharmacological note */}
+                              {hasPrescription ? (
+                                <div className={`mt-2.5 rounded-xl border p-3 ${
+                                  isDark ? "border-slate-800/60 bg-slate-950/40" : "border-slate-200/50 bg-slate-50/50"
+                                }`}>
+                                  <div className="flex items-center gap-1.5 mb-1">
+                                    <svg className="h-3 w-3 text-emerald-600 dark:text-emerald-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M10.5 20.5 3 13a9 9 0 0 1 12.73-12.73l7.5 7.5a9 9 0 0 1-12.73 12.73Z" />
+                                      <path d="m8.5 8.5 7 7" />
+                                    </svg>
+                                    <p className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                                      Prescription Order
+                                    </p>
+                                  </div>
+                                  <p className={`text-xs leading-relaxed whitespace-pre-wrap ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                                    {appointment.prescription}
+                                  </p>
+                                </div>
+                              ) : (
+                                <div className={`mt-2.5 rounded-lg border px-3 py-2 text-xs flex items-center gap-2 ${
+                                  isDark ? "border-slate-800/70 bg-slate-800/30 text-slate-400" : "border-slate-200/60 bg-slate-100/60 text-slate-600"
+                                }`}>
+                                  <svg className="h-3.5 w-3.5 shrink-0 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="12" cy="12" r="10" />
+                                    <line x1="12" y1="8" x2="12" y2="12" />
+                                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                                  </svg>
+                                  <span>No prescription medication issued for this encounter (Non-pharmacological clinical management).</span>
+                                </div>
+                              )}
 
                               {/* Consultation Documents & Actions (Transcript + Prescription) */}
                               <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pt-1">
@@ -1274,7 +1315,7 @@ function PatientOperationsHub({
                                     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                                     <polyline points="22 4 12 14.01 9 11.01" />
                                   </svg>
-                                  <span>{appointment.prescription ? "Clinical Documentation & Rx" : "Consultation Documented"}</span>
+                                  <span>{hasPrescription ? "Clinical Documentation & Rx" : "Clinical Documentation Complete"}</span>
                                 </div>
 
                                 <div className="flex flex-wrap items-center gap-2">
@@ -1296,7 +1337,7 @@ function PatientOperationsHub({
                                   </button>
 
                                   {/* Download Prescription PDF Button */}
-                                  {appointment.prescription && (
+                                  {hasPrescription && (
                                     <button
                                       type="button"
                                       onClick={() => handleDownloadRx(appointment)}
@@ -1316,7 +1357,7 @@ function PatientOperationsHub({
                           );
                         })
                       ) : (
-                        <EmptyState tone={tone} title="No consultation results" body="Consultations with clinical documentation and prescriptions appear here." />
+                        <EmptyState tone={tone} title="No consultation results" body="Consultations with clinical documentation and notes appear here." />
                       )}
                     </div>
                   )}
@@ -1775,7 +1816,12 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
         profile.completed.push(booking);
       }
 
-      if (booking.prescription) {
+      if (
+        booking.prescription ||
+        booking.notes ||
+        booking.status === "COMPLETED" ||
+        (typeof window !== "undefined" && Boolean(localStorage.getItem(`healthko:transcript:${booking.id}`)))
+      ) {
         profile.prescriptions.push(booking);
       }
 

@@ -167,10 +167,25 @@
 
 ---
 
+### 11. Consultation Results Display Without Prescription & Background Call Transcription PDF
+* **Commit**: `Pending`
+* **Timestamp**: `2026-09-09 02:05:00 +0800`
+* **Duration**: ~25 minutes
+* **Updates & Changes**:
+  - Updated the Consultation Results section on the Doctor Dashboard to display all documented consultations, even when no prescription medication was prescribed.
+  - Formatted the consultation card to clearly display the doctor's Consultation Notes and Clinical Observations with an encounter status badge.
+  - Added a non-pharmacological clinical management notice when no prescription was needed for the visit.
+  - Maintained the "Download Transcript PDF" button on all consultation encounters, allowing both doctors and patients to download the full call transcript and summary as a PDF.
+  - Removed the in-call CC toggle button and floating overlay drawer from the video screen to eliminate visual clutter, since the live chat panel is already available.
+  - Set speech recognition to run silently in the background during active unmuted calls, automatically recording and saving spoken dialogue to the appointment's downloadable PDF transcript.
+
+---
+
 ## 📊 Summary Table of Commits
 
 | Commit | Time (+0800) | Area | Summary of Updates |
 | :--- | :--- | :--- | :--- |
+| `Pending` | 02:05 | **Consultation EHR** | Display notes-only results in Consultation Results & silent background transcript PDF |
 | `89e4454` | 01:36 | **Clinical Compliance** | Enforce non-empty clinical notes before doctor can end consultation |
 | `4480094` | 01:22 | **Telehealth / Audio** | Live voice speech-to-text recognition & real-time dialogue transcription |
 | `f48e2fb` | 00:15 | **Telehealth / EHR** | Automated live consultation transcription & dual-dashboard transcript PDF |
@@ -191,3 +206,4 @@
 - **Command**: `npx tsc --noEmit`
 - **Result**: `0` errors found (clean pass)
 - **Local Dev Server**: Running on `http://localhost:3000`
+
