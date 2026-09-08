@@ -137,11 +137,14 @@
 ---
 
 ### 9. Automated Live Consultation Transcription & Dual-Dashboard PDF Download
-* **Commit**: `f48e2fb` & `10a4ba0`
-* **Timestamp**: `2026-09-09 00:15:00 +0800`
-* **Duration**: ~40 minutes
+* **Commit**: `f48e2fb`, `10a4ba0`, & `4480094`
+* **Timestamp**: `2026-09-09 01:22:00 +0800`
+* **Duration**: ~45 minutes
 * **Updates & Changes**:
-  - Created official consultation transcript document containing doctor credentials, patient demographics, clinical assessment, and full dialogue turn logs.
+  - Integrated real-time voice speech recognition that actively listens to the microphone during video calls and transcribes spoken dialogue into timestamped turns as participants speak.
+  - Added a live speaking preview indicator that displays words in real-time as they are spoken.
+  - Added a quick-input dialogue bar for typing manual clinical notes or statements directly into the transcript log.
+  - Automatically saves the complete spoken transcript to the appointment record so both doctor and patient can review or download it at any time.
   - Added "Download Transcript PDF" button on the Doctor Dashboard in Consultation Results, placed directly beside the "Download Prescription PDF" button.
   - Added "Download Transcript PDF" button on the Patient Dashboard in Medical Access, plus a dedicated "Transcript" tab to review session dialogue anytime.
   - Added live transcription toggle and floating dialogue drawer during active video consultations, allowing instant download during or after the call.
@@ -152,6 +155,7 @@
 
 | Commit | Time (+0800) | Area | Summary of Updates |
 | :--- | :--- | :--- | :--- |
+| `4480094` | 01:22 | **Telehealth / Audio** | Live voice speech-to-text recognition & real-time dialogue transcription |
 | `f48e2fb` | 00:15 | **Telehealth / EHR** | Automated live consultation transcription & dual-dashboard transcript PDF |
 | `a2389b0` | 23:55 | **Doctor Dashboard** | Eliminate SSR hydration mismatch in DoctorResearchModule |
 | `3d0cd3f` | 23:40 | **Doctor Dashboard** | Add thumbnail cover upload and medical figures to Blogs & Research |
