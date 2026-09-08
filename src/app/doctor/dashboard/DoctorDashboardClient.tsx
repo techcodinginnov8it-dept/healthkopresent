@@ -104,7 +104,6 @@ const PATIENT_STATUS_FILTERS: { id: PatientStatusFilter; label: string }[] = [
   { id: "active", label: "Active" },
   { id: "pending", label: "Pending" },
   { id: "completed", label: "Completed" },
-  { id: "prescriptions", label: "Rx" },
 ];
 
 const PATIENT_RECORD_TABS: { id: PatientRecordsTab; label: string }[] = [
@@ -585,7 +584,7 @@ function PatientOperationsHub({
         </div>
 
         {/* Directory Stats Quick Bar */}
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className={`rounded-xl border p-3.5 transition-colors ${isDark ? "border-slate-800 bg-slate-950" : "border-slate-100 bg-slate-50/70"}`}>
             <p className={`text-[10px] font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Total Directory</p>
             <p className="mt-1 text-2xl font-black text-brand-teal">{allPatientCount}</p>
@@ -597,10 +596,6 @@ function PatientOperationsHub({
           <div className={`rounded-xl border p-3.5 transition-colors ${isDark ? "border-slate-800 bg-slate-950" : "border-slate-100 bg-slate-50/70"}`}>
             <p className={`text-[10px] font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Completed Encounters</p>
             <p className="mt-1 text-2xl font-black text-emerald-500">{patients.reduce((acc, p) => acc + p.completed.length, 0)}</p>
-          </div>
-          <div className={`rounded-xl border p-3.5 transition-colors ${isDark ? "border-slate-800 bg-slate-950" : "border-slate-100 bg-slate-50/70"}`}>
-            <p className={`text-[10px] font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Prescriptions Issued</p>
-            <p className="mt-1 text-2xl font-black text-amber-500">{patients.reduce((acc, p) => acc + p.prescriptions.length, 0)}</p>
           </div>
         </div>
 
@@ -712,13 +707,6 @@ function PatientOperationsHub({
                       }`}>
                         {patient.completed.length} records
                       </span>
-                      {patient.prescriptions.length > 0 && (
-                        <span className={`rounded-lg px-2 py-1 text-[10px] font-black ${
-                          isDark ? "bg-amber-400/15 text-amber-300" : "bg-amber-50 text-amber-700"
-                        }`}>
-                          {patient.prescriptions.length} Rx
-                        </span>
-                      )}
                     </div>
 
                     {/* 4. Next / Recent Visit */}
