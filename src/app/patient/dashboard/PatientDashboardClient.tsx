@@ -24,7 +24,7 @@ import { useDashboardModule } from "@/hooks/useDashboardModule";
 import { useDashboardNotifications } from "@/hooks/useDashboardNotifications";
 import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
 import { useWebRTC } from "@/hooks/useWebRTC";
-import { formatDateTime } from "@/lib/dashboard/format";
+import { formatDateTime, formatDate, formatTime, toLocalDateKey, toLocalTimeKey, toUtcIsoFromLocal } from "@/lib/dashboard/format";
 import { downloadPrescriptionPdf } from "@/lib/prescription-pdf";
 import { downloadConsultationTranscriptPdf, parseNotesAndTranscript } from "@/lib/consultation-transcript-pdf";
 import { createDashboardNotification } from "@/lib/dashboard/notifications";
@@ -112,22 +112,19 @@ function getAppointmentStatusStyle(status: string) {
 }
 
 function toDateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return toLocalDateKey(date);
 }
 
 function toTimeValue(date: Date) {
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  return toLocalTimeKey(date);
 }
 
 function formatAppointmentFeedDate(value: Date | string) {
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+  return formatDate(value);
 }
 
 function formatAppointmentFeedTime(value: Date | string) {
-  return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
+  return formatTime(value);
 }
 
 function formatPhilippinePeso(value?: number | null) {
@@ -990,7 +987,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     }),
     [appointmentReferenceTime, appointments, selectedDoctor]
   );
-  const requestedDateTime = appointmentDate && appointmentTime ? new Date(`${appointmentDate}T${appointmentTime}:00`) : null;
+  const requestedDateTime = appointmentDate && appointmentTime ? new Date(toUtcIsoFromLocal(appointmentDate, appointmentTime)) : null;
   const patientConflict = requestedDateTime && !Number.isNaN(requestedDateTime.getTime())
     ? hasPatientScheduleConflict(appointments, requestedDateTime)
     : false;
@@ -1065,9 +1062,11 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       ? `${reason.trim()}\n\nPatient Notes: ${patientNotes.trim()}`
       : reason.trim();
 
+    const isoScheduledAt = toUtcIsoFromLocal(appointmentDate, appointmentTime);
+
     const result = await bookAppointment({
       doctorId: selectedDoctorId,
-      scheduledAt: `${appointmentDate}T${appointmentTime}:00`,
+      scheduledAt: isoScheduledAt,
       reason: combinedReason,
     });
 
@@ -1083,7 +1082,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       appointmentId: result.consultation?.id || "pending",
       actorRole: "patient",
       targetDoctorId: result.consultation?.doctorId || selectedDoctorId,
-      scheduledAt: `${appointmentDate}T${appointmentTime}:00`,
+      scheduledAt: isoScheduledAt,
       title: "New appointment request",
       body: "A patient submitted a consultation request for review.",
     });

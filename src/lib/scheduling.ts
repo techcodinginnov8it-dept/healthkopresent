@@ -99,10 +99,44 @@ export function parseAvailability(availability?: string | null): AvailabilityWin
   };
 }
 
+function getLocalDayAndMinutes(date: Date, timeZone = "Asia/Manila") {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      weekday: "short",
+      hour: "numeric",
+      minute: "numeric",
+      hour12: false,
+    }).formatToParts(date);
+
+    let dayStr = "";
+    let hour = 0;
+    let minute = 0;
+
+    for (const p of parts) {
+      if (p.type === "weekday") dayStr = p.value.toLowerCase();
+      else if (p.type === "hour") hour = Number(p.value);
+      else if (p.type === "minute") minute = Number(p.value);
+    }
+
+    const dayIndex = DAY_INDEX[dayStr] ?? date.getDay();
+    return {
+      day: dayIndex,
+      minutes: hour * 60 + minute,
+    };
+  } catch {
+    return {
+      day: date.getDay(),
+      minutes: date.getHours() * 60 + date.getMinutes(),
+    };
+  }
+}
+
 export function isWithinDoctorAvailability(
   scheduledAt: Date,
   durationMinutes: number,
-  doctor: ScheduleDoctor
+  doctor: ScheduleDoctor,
+  timeZone = "Asia/Manila"
 ) {
   const window = parseAvailability(doctor.availability);
 
@@ -110,11 +144,11 @@ export function isWithinDoctorAvailability(
     return true;
   }
 
-  const startMinutes = scheduledAt.getHours() * 60 + scheduledAt.getMinutes();
+  const { day, minutes: startMinutes } = getLocalDayAndMinutes(scheduledAt, timeZone);
   const endMinutes = startMinutes + durationMinutes;
 
   return (
-    window.days.includes(scheduledAt.getDay()) &&
+    window.days.includes(day) &&
     startMinutes >= window.startMinutes &&
     endMinutes <= window.endMinutes
   );

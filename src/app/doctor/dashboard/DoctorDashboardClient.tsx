@@ -28,7 +28,7 @@ import { useDashboardNotifications } from "@/hooks/useDashboardNotifications";
 import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
 import { useWebRTC } from "@/hooks/useWebRTC";
 import { getTabButtonClassName } from "@/components/dashboard/tabStyles";
-import { formatDateTime } from "@/lib/dashboard/format";
+import { formatDateTime, formatDate, formatTime, toLocalDateKey, toLocalTimeKey, toUtcIsoFromLocal } from "@/lib/dashboard/format";
 import { downloadPrescriptionPdf } from "@/lib/prescription-pdf";
 import { downloadConsultationTranscriptPdf, formatNotesWithTranscript, parseNotesAndTranscript } from "@/lib/consultation-transcript-pdf";
 import { createDashboardNotification } from "@/lib/dashboard/notifications";
@@ -767,7 +767,7 @@ function PatientOperationsHub({
                       </p>
                       {patient.lastEncounter && (
                         <p className={`text-[10px] truncate ${isDark ? "text-slate-500" : "text-slate-400"}`}>
-                          Last: {new Date(patient.lastEncounter.scheduledAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          Last: {formatDate(patient.lastEncounter.scheduledAt)}
                         </p>
                       )}
                     </div>
@@ -2083,7 +2083,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     }
 
     setScheduleState({ loading: true, error: "", success: "" });
-    const scheduledAt = `${followUpDate}T${followUpTime}:00`;
+    const scheduledAt = toUtcIsoFromLocal(followUpDate, followUpTime);
     const result = await scheduleFollowUpAppointment({
       patientId: followUpPatientId,
       scheduledAt,
@@ -2120,7 +2120,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     setFollowUpReason(reason ? `Follow-up: ${reason}` : "Follow-up consultation");
     const nextDate = new Date();
     nextDate.setDate(nextDate.getDate() + 7);
-    const dateStr = nextDate.toISOString().split("T")[0];
+    const dateStr = toLocalDateKey(nextDate);
     setFollowUpDate((prev) => prev || dateStr);
     setFollowUpTime((prev) => prev || "09:00");
     setScheduleState({ loading: false, error: "", success: "" });
@@ -3255,7 +3255,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                               <span className="capitalize">{selectedLiveAppointment.patient.gender}</span>
                             )}
                             {selectedLiveAppointment.patient.dob && (
-                              <span>DOB: {new Date(selectedLiveAppointment.patient.dob).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                              <span>DOB: {formatDate(selectedLiveAppointment.patient.dob)}</span>
                             )}
                             {selectedLiveAppointment.patient.email && (
                               <span className="truncate max-w-[180px]">{selectedLiveAppointment.patient.email}</span>

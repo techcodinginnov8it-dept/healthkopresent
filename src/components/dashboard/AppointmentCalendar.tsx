@@ -89,7 +89,7 @@ function moveAppointmentToDay(appointmentDate: Date | string, day: Date) {
   const original = new Date(appointmentDate);
   const next = new Date(day);
   next.setHours(original.getHours(), original.getMinutes(), 0, 0);
-  return toLocalDateTimeValue(next);
+  return next.toISOString();
 }
 
 function formatWeekday(date: Date) {

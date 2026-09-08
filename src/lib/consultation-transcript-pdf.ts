@@ -373,11 +373,13 @@ export function generateConsultationTranscriptPdf(data: ConsultationTranscriptDa
   const diagnosis = data.reasonForVisit || "Telehealth Consultation Review";
 
   const rawDate = data.date ? new Date(data.date) : new Date();
-  const formattedDate = rawDate.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
+  const formattedDate = new Intl.DateTimeFormat("en-US", {
+    month: "short",
     day: "numeric",
-  });
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(rawDate);
 
   // Prepare turns
   let turns: TranscriptTurn[] = [];
