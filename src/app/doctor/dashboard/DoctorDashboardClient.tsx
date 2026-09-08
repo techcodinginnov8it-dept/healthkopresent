@@ -2593,6 +2593,9 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
             scheduledDurationMinutes={session.activeAppointment.duration || doctor.consultationDuration || 30}
             onExtendCall={handleExtendCall}
             externalExtendedMinutes={callExtendedMinutes}
+            appointmentId={session.activeAppointment.id}
+            doctorName={doctor.name}
+            patientName={`${session.activeAppointment.patient.firstName} ${session.activeAppointment.patient.lastName}`}
             chat={<ChatPanel role="doctor" messages={session.messages} onSend={session.sendMessage} tone={tone} />}
             documentation={
               <section className={`rounded-xl border p-4 transition-colors max-h-[calc(100vh-14rem)] overflow-y-auto ${

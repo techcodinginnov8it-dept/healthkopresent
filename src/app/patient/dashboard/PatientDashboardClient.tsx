@@ -2216,6 +2216,9 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
             scheduledDurationMinutes={session.activeAppointment.duration || 30}
             onExtendCall={handleExtendCall}
             externalExtendedMinutes={callExtendedMinutes}
+            appointmentId={session.activeAppointment.id}
+            doctorName={session.activeAppointment.doctor.name}
+            patientName={`${patient.firstName} ${patient.lastName}`}
             devices={webRTC.devices}
             cameraDeviceId={webRTC.cameraDeviceId}
             microphoneDeviceId={webRTC.microphoneDeviceId}

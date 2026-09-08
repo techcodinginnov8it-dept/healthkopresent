@@ -765,6 +765,9 @@ export function LiveConsultationPanel({
   onExtendCall,
   externalExtendedMinutes = 0,
   tone = "light",
+  appointmentId,
+  doctorName,
+  patientName,
 }: {
   role: DashboardRole;
   counterpartName: string;
@@ -800,6 +803,9 @@ export function LiveConsultationPanel({
   onExtendCall?: (additionalMinutes: number, newTotalMinutes: number) => void;
   externalExtendedMinutes?: number;
   tone?: "light" | "dark";
+  appointmentId?: string;
+  doctorName?: string;
+  patientName?: string;
 }) {
   const isDark = tone === "dark";
   const statusLabel = status === "connected" ? "Connected" : role === "doctor" ? "Waiting for Patient" : "Waiting room";
@@ -855,42 +861,203 @@ export function LiveConsultationPanel({
     onExtendCall?.(selectedExtensionMins, newTotal);
   };
 
-  // Live Audio Transcription State
+  // ── Live Audio Web Speech Recognition Engine ──────────────────────────────
   const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeechSupported, setIsSpeechSupported] = useState(true);
+  const [interimText, setInterimText] = useState("");
+  const [speechNotice, setSpeechNotice] = useState<string | null>(null);
+  const [manualInput, setManualInput] = useState("");
+  const recognitionRef = useRef<any>(null);
+  const isSpeechActiveRef = useRef(false);
+
   const [transcriptTurns, setTranscriptTurns] = useState<
     { id: string; speaker: string; role: "doctor" | "patient" | "system"; text: string; timestamp: string }[]
-  >(() => [
-    {
-      id: "t-1",
-      speaker: role === "doctor" ? "Dr. Attending Physician" : counterpartName,
-      role: "doctor",
-      timestamp: "00:05",
-      text: "Synchronous consultation channel initialized. Audiovisual encryption active.",
-    },
-    {
-      id: "t-2",
-      speaker: role === "doctor" ? counterpartName : "Patient",
-      role: "patient",
-      timestamp: "00:18",
-      text: "Hello Doctor, video and audio are clear on my end.",
-    },
-    {
-      id: "t-3",
-      speaker: role === "doctor" ? "Dr. Attending Physician" : counterpartName,
-      role: "doctor",
-      timestamp: "00:35",
-      text: "Good day. Let us review your reported symptoms and health tracker readings.",
-    },
-  ]);
+  >(() => {
+    if (typeof window !== "undefined" && appointmentId) {
+      try {
+        const saved = localStorage.getItem(`healthko:transcript:${appointmentId}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return [
+      {
+        id: "t-1",
+        speaker: role === "doctor" ? (doctorName || "Dr. Attending Physician") : counterpartName,
+        role: "doctor",
+        timestamp: "00:05",
+        text: "Synchronous consultation channel initialized. Audiovisual encryption active.",
+      },
+      {
+        id: "t-2",
+        speaker: role === "doctor" ? counterpartName : (patientName || "Patient"),
+        role: "patient",
+        timestamp: "00:18",
+        text: "Hello Doctor, video and audio are clear on my end.",
+      },
+      {
+        id: "t-3",
+        speaker: role === "doctor" ? (doctorName || "Dr. Attending Physician") : counterpartName,
+        role: "doctor",
+        timestamp: "00:35",
+        text: "Good day. Let us review your reported symptoms and health tracker readings.",
+      },
+    ];
+  });
+
+  // Persist transcript turns to localStorage whenever updated
+  useEffect(() => {
+    if (typeof window === "undefined" || !appointmentId) return;
+    try {
+      localStorage.setItem(`healthko:transcript:${appointmentId}`, JSON.stringify(transcriptTurns));
+    } catch {}
+  }, [appointmentId, transcriptTurns]);
+
+  // Web Speech Recognition Hook (Chrome, Edge, Safari Web Speech API)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRec) {
+      setIsSpeechSupported(false);
+      return;
+    }
+    setIsSpeechSupported(true);
+
+    const shouldListen = status === "connected" && isMicOn && isTranscriptOpen;
+    isSpeechActiveRef.current = shouldListen;
+
+    if (!shouldListen) {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {}
+        recognitionRef.current = null;
+      }
+      setIsListening(false);
+      setInterimText("");
+      return;
+    }
+
+    let recognition: any = null;
+    try {
+      recognition = new SpeechRec();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        setSpeechNotice(null);
+      };
+
+      recognition.onresult = (event: any) => {
+        let liveInterim = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          const result = event.results[i];
+          const text = result[0]?.transcript?.trim();
+          if (result.isFinal && text) {
+            const timestamp = callDuration || "00:00";
+            const speakerName =
+              role === "doctor"
+                ? (doctorName || "Dr. Attending Physician")
+                : (patientName || counterpartName || "Patient");
+            const turnRole: "doctor" | "patient" = role === "doctor" ? "doctor" : "patient";
+            setTranscriptTurns((prev) => [
+              ...prev,
+              {
+                id: `speech-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                speaker: speakerName,
+                role: turnRole,
+                timestamp,
+                text,
+              },
+            ]);
+            setInterimText("");
+          } else if (text) {
+            liveInterim += text + " ";
+          }
+        }
+        if (liveInterim) {
+          setInterimText(liveInterim.trim());
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        if (event.error === "no-speech") {
+          return;
+        }
+        if (event.error === "not-allowed") {
+          setSpeechNotice("Microphone permission required for speech recognition.");
+        }
+      };
+
+      recognition.onend = () => {
+        if (isSpeechActiveRef.current) {
+          try {
+            recognition.start();
+          } catch {}
+        } else {
+          setIsListening(false);
+        }
+      };
+
+      recognition.start();
+      recognitionRef.current = recognition;
+    } catch {
+      setIsListening(false);
+    }
+
+    return () => {
+      isSpeechActiveRef.current = false;
+      if (recognition) {
+        try {
+          recognition.stop();
+        } catch {}
+      }
+      recognitionRef.current = null;
+      setIsListening(false);
+    };
+  }, [status, isMicOn, isTranscriptOpen, role, counterpartName, doctorName, patientName, callDuration]);
+
+  const handleAddManualTurn = () => {
+    const text = manualInput.trim();
+    if (!text) return;
+    const timestamp = callDuration || "00:00";
+    const speakerName =
+      role === "doctor"
+        ? (doctorName || "Dr. Attending Physician")
+        : (patientName || counterpartName || "Patient");
+    const turnRole: "doctor" | "patient" = role === "doctor" ? "doctor" : "patient";
+    setTranscriptTurns((prev) => [
+      ...prev,
+      {
+        id: `manual-${Date.now()}`,
+        speaker: speakerName,
+        role: turnRole,
+        timestamp,
+        text,
+      },
+    ]);
+    setManualInput("");
+  };
+
+  const handleClearTranscript = () => {
+    setTranscriptTurns([]);
+    setInterimText("");
+  };
 
   const handleDownloadLiveTranscript = () => {
     downloadConsultationTranscriptPdf({
-      doctorName: role === "doctor" ? "Attending Physician, MD" : counterpartName,
-      patientName: role === "patient" ? "Patient" : counterpartName,
+      appointmentId,
+      doctorName: role === "doctor" ? (doctorName || "Dr. Attending Physician, MD") : counterpartName,
+      patientName: role === "patient" ? (patientName || "Patient") : counterpartName,
       date: new Date(),
       durationMinutes: Math.max(5, Math.ceil(elapsedSeconds / 60) || 20),
       reasonForVisit: "Synchronous Telehealth Consultation",
-      clinicalAssessment: "Real-time clinical teleconsultation session documentation.",
+      clinicalAssessment: "Synchronous consultation audio speech transcript recorded in real-time via Web Speech Engine.",
       transcript: transcriptTurns,
     });
   };
@@ -1161,11 +1328,33 @@ export function LiveConsultationPanel({
 
         {/* ── Live Transcript Overlay Drawer ── */}
         {isTranscriptOpen && (
-          <div className="absolute top-16 right-4 z-40 w-80 sm:w-96 max-h-[calc(100%-7rem)] flex flex-col rounded-2xl border border-white/20 bg-slate-950/90 backdrop-blur-md shadow-2xl p-4 text-white animate-fadeIn">
+          <div className="absolute top-16 right-4 z-40 w-80 sm:w-96 max-h-[calc(100%-7rem)] flex flex-col rounded-2xl border border-white/20 bg-slate-950/95 backdrop-blur-md shadow-2xl p-4 text-white animate-fadeIn">
+            {/* Header & Status */}
             <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
               <div className="flex items-center gap-2">
-                <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                <p className="text-[10px] font-black uppercase tracking-wider text-emerald-300">Live Audio Transcription</p>
+                <span
+                  className={`flex h-2.5 w-2.5 rounded-full ${
+                    isListening
+                      ? "bg-emerald-400 animate-ping"
+                      : isMicOn
+                        ? "bg-amber-400"
+                        : "bg-rose-500"
+                  }`}
+                />
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-emerald-300">
+                    Live Audio Transcription
+                  </p>
+                  <p className="text-[9px] font-semibold text-slate-400">
+                    {isListening
+                      ? "Actively listening & transcribing speech..."
+                      : !isMicOn
+                        ? "Microphone muted (unmute to transcribe)"
+                        : !isSpeechSupported
+                          ? "Web Speech API not supported in browser"
+                          : "Paused"}
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
@@ -1177,28 +1366,85 @@ export function LiveConsultationPanel({
               </button>
             </div>
 
-            <div className="mt-3 flex-1 overflow-y-auto space-y-2 pr-1 text-xs max-h-60">
-              {transcriptTurns.map((turn) => (
-                <div
-                  key={turn.id}
-                  className={`rounded-xl p-2.5 space-y-1 ${
-                    turn.role === "doctor"
-                      ? "bg-brand-teal/20 border border-brand-teal/30"
-                      : "bg-white/10 border border-white/10"
-                  }`}
-                >
-                  <div className="flex items-center justify-between text-[10px] font-black">
-                    <span className={turn.role === "doctor" ? "text-brand-teal" : "text-slate-300"}>
-                      [{turn.timestamp}] {turn.speaker}
-                    </span>
-                  </div>
-                  <p className="text-[11px] leading-relaxed text-slate-200">{turn.text}</p>
+            {/* Error or permission notice */}
+            {speechNotice && (
+              <div className="mt-2 rounded-lg bg-amber-500/15 border border-amber-500/30 px-2.5 py-1.5 text-[10px] font-semibold text-amber-200">
+                ⚠️ {speechNotice}
+              </div>
+            )}
+
+            {/* Live Interim Speech Bubble */}
+            {interimText && (
+              <div className="mt-2.5 flex items-start gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/15 p-2 text-xs text-emerald-100 animate-pulse">
+                <span className="text-emerald-300 text-xs font-black shrink-0">🎤</span>
+                <p className="text-[11px] leading-snug">
+                  <span className="font-bold text-emerald-200">Speaking:</span> {interimText}...
+                </p>
+              </div>
+            )}
+
+            {/* Scrollable Dialogue List */}
+            <div className="mt-3 flex-1 overflow-y-auto space-y-2 pr-1 text-xs max-h-56">
+              {transcriptTurns.length === 0 ? (
+                <div className="py-8 text-center text-slate-500">
+                  <p className="text-xs">No dialogue recorded yet.</p>
+                  <p className="text-[10px] mt-1">Speak into the microphone or type below.</p>
                 </div>
-              ))}
+              ) : (
+                transcriptTurns.map((turn) => (
+                  <div
+                    key={turn.id}
+                    className={`rounded-xl p-2.5 space-y-1 ${
+                      turn.role === "doctor"
+                        ? "bg-brand-teal/20 border border-brand-teal/30"
+                        : "bg-white/10 border border-white/10"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-[10px] font-black">
+                      <span className={turn.role === "doctor" ? "text-brand-teal" : "text-slate-300"}>
+                        [{turn.timestamp}] {turn.speaker}
+                      </span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-slate-200">{turn.text}</p>
+                  </div>
+                ))
+              )}
             </div>
 
-            <div className="mt-3 border-t border-white/10 pt-2.5 flex items-center justify-between">
-              <span className="text-[10px] text-slate-400">Synchronous dialogue log</span>
+            {/* Manual Dialogue Turn Quick-Entry Bar */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleAddManualTurn();
+              }}
+              className="mt-2.5 flex gap-1.5 border-t border-white/10 pt-2"
+            >
+              <input
+                type="text"
+                value={manualInput}
+                onChange={(e) => setManualInput(e.target.value)}
+                placeholder="Type note or spoken dialogue..."
+                className="flex-1 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1.5 text-xs text-white placeholder:text-slate-500 outline-none focus:border-brand-teal"
+              />
+              <button
+                type="submit"
+                disabled={!manualInput.trim()}
+                className="rounded-lg bg-white/10 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-white hover:bg-brand-teal transition disabled:opacity-40"
+              >
+                + Add
+              </button>
+            </form>
+
+            {/* Bottom Actions */}
+            <div className="mt-2.5 border-t border-white/10 pt-2 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={handleClearTranscript}
+                disabled={transcriptTurns.length === 0}
+                className="text-[10px] text-slate-400 hover:text-red-400 transition disabled:opacity-30"
+              >
+                Clear
+              </button>
               <button
                 type="button"
                 onClick={handleDownloadLiveTranscript}
