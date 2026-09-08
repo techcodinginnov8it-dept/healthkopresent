@@ -13,6 +13,7 @@ const DOCTOR_MODULES = [
   "messages",
   "notifications",
   "analytics",
+  "research",
   "settings",
 ] as const satisfies readonly DoctorModuleId[];
 

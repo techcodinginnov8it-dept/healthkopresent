@@ -10,6 +10,7 @@ import { AppointmentCalendar, type CalendarViewMode } from "@/components/dashboa
 import { DashboardShell, type DashboardNavItem } from "@/components/dashboard/DashboardShell";
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
 import { DoctorSettingsModule } from "@/components/dashboard/SettingsModule";
+import { DoctorResearchModule } from "@/components/dashboard/DoctorResearchModule";
 import {
   AppointmentCard,
   ChatPanel,
@@ -91,6 +92,7 @@ const DOCTOR_MODULES = [
   "live",
   "patients",
   "schedule",
+  "research",
   "notes",
   "prescriptions",
   "messages",
@@ -1867,6 +1869,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     { id: "schedule", label: "Appointment Calendar", badge: pendingAppointments.length || undefined },
     { id: "live", label: "Patient Consultation", badge: confirmedAppointments.length || undefined },
     { id: "patients", label: "Patient Management" },
+    { id: "research", label: "Blogs & Research" },
     { id: "settings", label: "Settings" },
   ];
 
@@ -3409,6 +3412,10 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
             ]}
           />
         </div>
+      )}
+
+      {activeModule === "research" && (
+        <DoctorResearchModule doctor={doctor} tone={tone} />
       )}
 
       {activeModule === "settings" && (

@@ -22,6 +22,7 @@ export type DoctorModuleId =
   | "messages"
   | "notifications"
   | "analytics"
+  | "research"
   | "settings";
 
 export type ModuleId = PatientModuleId | DoctorModuleId;
@@ -212,4 +213,30 @@ export type ChatAttachment = {
   size: number;
   type: string;
   dataUrl?: string;
+};
+
+export type DoctorArticleCategory = "guide" | "tip" | "research" | "update";
+
+export type DoctorArticle = {
+  id: string;
+  title: string;
+  slug: string;
+  category: DoctorArticleCategory;
+  targetAudience: "patients" | "physicians" | "general";
+  summary: string;
+  content: string;
+  keyTakeaways?: string[];
+  readTimeMinutes: number;
+  publishedAt: string;
+  authorId: string;
+  authorName: string;
+  authorSpecialty: string;
+  authorImage?: string | null;
+  authorNpi?: string | null;
+  authorLicense?: string | null;
+  coverImageUrl?: string;
+  tags: string[];
+  viewsCount: number;
+  likesCount: number;
+  isPeerArticle?: boolean;
 };
