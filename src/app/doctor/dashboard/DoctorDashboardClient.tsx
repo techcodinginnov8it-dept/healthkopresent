@@ -30,7 +30,7 @@ import { useWebRTC } from "@/hooks/useWebRTC";
 import { getTabButtonClassName } from "@/components/dashboard/tabStyles";
 import { formatDateTime } from "@/lib/dashboard/format";
 import { downloadPrescriptionPdf } from "@/lib/prescription-pdf";
-import { downloadConsultationTranscriptPdf } from "@/lib/consultation-transcript-pdf";
+import { downloadConsultationTranscriptPdf, formatNotesWithTranscript, parseNotesAndTranscript } from "@/lib/consultation-transcript-pdf";
 import { createDashboardNotification } from "@/lib/dashboard/notifications";
 import type {
   ChatAttachment,
@@ -530,8 +530,10 @@ function PatientOperationsHub({
       ? `CLINIC OF DR. ${doctor.name.toUpperCase().replace(/^DR\.?\s+/i, "")}, MD`
       : undefined;
 
-    let customTranscript: any = undefined;
-    if (typeof window !== "undefined") {
+    const { clinicalNotes: cleanNotes, transcriptTurns: parsedTurns } = parseNotesAndTranscript(appointment.notes);
+    let customTranscript: any = parsedTurns.length > 0 ? parsedTurns : undefined;
+
+    if (!customTranscript && typeof window !== "undefined") {
       try {
         const saved = localStorage.getItem(`healthko:transcript:${appointment.id}`);
         if (saved) customTranscript = JSON.parse(saved);
@@ -553,7 +555,7 @@ function PatientOperationsHub({
       date: appointment.scheduledAt,
       durationMinutes: appointment.duration || 30,
       reasonForVisit: appointment.reason || "Telehealth Consultation",
-      clinicalAssessment: appointment.notes || "Clinical consultation and assessment completed via synchronous telehealth.",
+      clinicalAssessment: cleanNotes || appointment.notes || "Clinical consultation and assessment completed via synchronous telehealth.",
       clinicalPlan: appointment.prescription
         ? `Electronic prescription issued:\n${appointment.prescription}`
         : "Follow-up consultation advised as clinically indicated.",
@@ -1258,24 +1260,36 @@ function PatientOperationsHub({
                               </div>
 
                               {/* Doctor's Consultation Notes & Clinical Observations */}
-                              <div className={`mt-3 rounded-xl border p-3 ${
-                                isDark ? "border-slate-800/90 bg-slate-950/60" : "border-slate-200/70 bg-slate-50/80"
-                              }`}>
-                                <div className="flex items-center gap-1.5 mb-1">
-                                  <svg className="h-3 w-3 text-brand-teal shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                    <polyline points="14 2 14 8 20 8" />
-                                    <line x1="16" y1="13" x2="8" y2="13" />
-                                    <line x1="16" y1="17" x2="8" y2="17" />
-                                  </svg>
-                                  <p className="text-[10px] font-black uppercase tracking-wider text-brand-teal">
-                                    Consultation Notes &amp; Clinical Observations
-                                  </p>
-                                </div>
-                                <p className={`text-xs leading-relaxed whitespace-pre-wrap ${isDark ? "text-slate-200" : "text-slate-700"}`}>
-                                  {appointment.notes?.trim() || "Consultation encounter documented. No additional clinical notes recorded."}
-                                </p>
-                              </div>
+                              {(() => {
+                                const { clinicalNotes: cleanNotes, transcriptTurns: turns } = parseNotesAndTranscript(appointment.notes);
+                                return (
+                                  <div className={`mt-3 rounded-xl border p-3 ${
+                                    isDark ? "border-slate-800/90 bg-slate-950/60" : "border-slate-200/70 bg-slate-50/80"
+                                  }`}>
+                                    <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
+                                      <div className="flex items-center gap-1.5">
+                                        <svg className="h-3 w-3 text-brand-teal shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                          <polyline points="14 2 14 8 20 8" />
+                                          <line x1="16" y1="13" x2="8" y2="13" />
+                                          <line x1="16" y1="17" x2="8" y2="17" />
+                                        </svg>
+                                        <p className="text-[10px] font-black uppercase tracking-wider text-brand-teal">
+                                          Consultation Notes &amp; Clinical Observations
+                                        </p>
+                                      </div>
+                                      {turns.length > 0 && (
+                                        <span className="rounded-full bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 text-[9px] font-black text-brand-teal">
+                                          ✓ {turns.length} Dialogue Turns Archived
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className={`text-xs leading-relaxed whitespace-pre-wrap ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+                                      {cleanNotes || appointment.notes?.trim() || "Consultation encounter documented. No additional clinical notes recorded."}
+                                    </p>
+                                  </div>
+                                );
+                              })()}
 
                               {/* Prescribed medication details if available, otherwise non-pharmacological note */}
                               {hasPrescription ? (
@@ -2308,9 +2322,19 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     }
 
     setSubmitState({ loading: true, error: "", success: "" });
+
+    let liveTurns: any[] = [];
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem(`healthko:transcript:${session.activeAppointment.id}`);
+        if (saved) liveTurns = JSON.parse(saved);
+      } catch {}
+    }
+    const combinedNotes = formatNotesWithTranscript(clinicalNotes.trim(), liveTurns);
+
     const result = await completeConsultation({
       consultationId: session.activeAppointment.id,
-      notes: clinicalNotes,
+      notes: combinedNotes,
       prescription: prescriptionText,
       reason: diagnosisText || undefined,
     });
@@ -2648,6 +2672,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
             appointmentId={session.activeAppointment.id}
             doctorName={doctor.name}
             patientName={`${session.activeAppointment.patient.firstName} ${session.activeAppointment.patient.lastName}`}
+            messages={session.messages}
             chat={<ChatPanel role="doctor" messages={session.messages} onSend={session.sendMessage} tone={tone} />}
             documentation={
               <section className={`rounded-xl border p-4 transition-colors max-h-[calc(100vh-14rem)] overflow-y-auto ${
@@ -3891,11 +3916,21 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                           return;
                         }
                         setIsEndCallLoading(true);
+                        // Retrieve live transcript turns captured during the call
+                        let liveTurns: any[] = [];
+                        if (typeof window !== "undefined") {
+                          try {
+                            const saved = localStorage.getItem(`healthko:transcript:${session.activeAppointment.id}`);
+                            if (saved) liveTurns = JSON.parse(saved);
+                          } catch {}
+                        }
+                        const combinedNotes = formatNotesWithTranscript(clinicalNotes.trim(), liveTurns);
+
                         // Mark as completed first
                         const consultationId = session.activeAppointment.id;
                         await completeConsultation({
                           consultationId,
-                          notes: clinicalNotes.trim(),
+                          notes: combinedNotes,
                           prescription: prescriptionText || session.activeAppointment.prescription || undefined,
                           reason: diagnosisText || session.activeAppointment.reason || undefined,
                         });
@@ -3928,9 +3963,18 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                         }
                         setIsEndCallLoading(true);
                         if (session.activeAppointment && clinicalNotes.trim()) {
+                          let liveTurns: any[] = [];
+                          if (typeof window !== "undefined") {
+                            try {
+                              const saved = localStorage.getItem(`healthko:transcript:${session.activeAppointment.id}`);
+                              if (saved) liveTurns = JSON.parse(saved);
+                            } catch {}
+                          }
+                          const combinedNotes = formatNotesWithTranscript(clinicalNotes.trim(), liveTurns);
+
                           await completeConsultation({
                             consultationId: session.activeAppointment.id,
-                            notes: clinicalNotes.trim(),
+                            notes: combinedNotes,
                             prescription: prescriptionText || session.activeAppointment.prescription || undefined,
                             reason: diagnosisText || session.activeAppointment.reason || undefined,
                           });

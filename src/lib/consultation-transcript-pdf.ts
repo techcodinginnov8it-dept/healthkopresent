@@ -6,6 +6,7 @@
  */
 
 export interface TranscriptTurn {
+  id?: string;
   speaker: string;
   role: "doctor" | "patient" | "system";
   text: string;
@@ -66,51 +67,52 @@ function wrapText(text: string, maxChars = 75): string[] {
   return lines;
 }
 
-function getDefaultSampleDialogue(doctorName: string, patientName: string): TranscriptTurn[] {
-  return [
-    {
-      speaker: doctorName,
+export const TRANSCRIPT_DELIMITER = "--- CONSULTATION DIALOGUE TRANSCRIPT ---";
+
+export function formatNotesWithTranscript(clinicalNotes: string, turns: TranscriptTurn[]): string {
+  const cleanNotes = (clinicalNotes || "").split(TRANSCRIPT_DELIMITER)[0].trim();
+  if (!turns || turns.length === 0) {
+    return cleanNotes;
+  }
+  const formattedTurns = turns
+    .filter((t) => t && t.text && t.text.trim())
+    .map((t) => `[${t.timestamp || "00:00"}] ${t.speaker}: ${t.text.trim()}`)
+    .join("\n");
+  return formattedTurns ? `${cleanNotes}\n\n${TRANSCRIPT_DELIMITER}\n${formattedTurns}` : cleanNotes;
+}
+
+export function parseNotesAndTranscript(rawNotes?: string | null): {
+  clinicalNotes: string;
+  transcriptTurns: TranscriptTurn[];
+} {
+  if (!rawNotes) {
+    return { clinicalNotes: "", transcriptTurns: [] };
+  }
+  const parts = rawNotes.split(TRANSCRIPT_DELIMITER);
+  const clinicalNotes = parts[0].trim();
+  if (parts.length < 2 || !parts[1].trim()) {
+    return { clinicalNotes, transcriptTurns: [] };
+  }
+  const lines = parts[1].split("\n").filter((l) => l.trim());
+  const transcriptTurns: TranscriptTurn[] = lines.map((line, idx) => {
+    const match = line.match(/^\[?(\d{1,2}:\d{2})\]?\s*(.+?):\s*(.+)$/);
+    if (match) {
+      const isDoc = match[2].toLowerCase().includes("dr") || match[2].toLowerCase().includes("doctor");
+      return {
+        timestamp: match[1],
+        speaker: match[2].trim(),
+        role: isDoc ? "doctor" : "patient",
+        text: match[3].trim(),
+      };
+    }
+    return {
+      timestamp: `00:${String(idx * 15).padStart(2, "0")}`,
+      speaker: "Participant",
       role: "doctor",
-      timestamp: "00:05",
-      text: `Good day ${patientName}, thank you for joining the HealthKo secure telehealth consultation room. How are you feeling today?`,
-    },
-    {
-      speaker: patientName,
-      role: "patient",
-      timestamp: "00:18",
-      text: "Good day Doctor. I've been monitoring my symptoms as requested, but I've experienced some recurring fatigue and occasional elevated readings in the morning.",
-    },
-    {
-      speaker: doctorName,
-      role: "doctor",
-      timestamp: "00:35",
-      text: "Thank you for noting that. Let us review your latest recorded vital signs and medication timing over the past week.",
-    },
-    {
-      speaker: patientName,
-      role: "patient",
-      timestamp: "00:52",
-      text: "My morning systolic readings have been averaging around 138 over 86. I take my prescribed dose right before breakfast as directed.",
-    },
-    {
-      speaker: doctorName,
-      role: "doctor",
-      timestamp: "01:15",
-      text: "That provides helpful clinical clarity. We will maintain your current core regimen and incorporate dietary sodium restrictions, with a scheduled digital check-in in two weeks.",
-    },
-    {
-      speaker: patientName,
-      role: "patient",
-      timestamp: "01:38",
-      text: "Understood Doctor. I will continue logging my daily numbers in the HealthKo tracker.",
-    },
-    {
-      speaker: doctorName,
-      role: "doctor",
-      timestamp: "01:55",
-      text: "Excellent. I have documented the clinical notes and your updated e-prescription is generated. Have a restful recovery.",
-    },
-  ];
+      text: line.trim(),
+    };
+  });
+  return { clinicalNotes, transcriptTurns };
 }
 
 const PAGE_W = 612;
@@ -287,30 +289,44 @@ export function generateConsultationTranscriptPdf(data: ConsultationTranscriptDa
   // Prepare turns
   let turns: TranscriptTurn[] = [];
   if (Array.isArray(data.transcript) && data.transcript.length > 0) {
-    turns = data.transcript;
+    turns = data.transcript.filter((t) => t && t.text && t.text.trim());
   } else if (typeof data.transcript === "string" && data.transcript.trim()) {
-    // Parse text lines if provided as string
-    const lines = data.transcript.split("\n").filter((l) => l.trim());
-    turns = lines.map((line, idx) => {
-      const match = line.match(/^\[?(\d{1,2}:\d{2})\]?\s*(.+?):\s*(.+)$/);
-      if (match) {
-        const isDoc = match[2].toLowerCase().includes("dr") || match[2].toLowerCase().includes("doctor");
-        return {
-          timestamp: match[1],
-          speaker: match[2].trim(),
-          role: isDoc ? "doctor" : "patient",
-          text: match[3].trim(),
-        };
-      }
-      return {
-        timestamp: `00:${String(idx * 15).padStart(2, "0")}`,
-        speaker: idx % 2 === 0 ? doctorName : patientName,
-        role: idx % 2 === 0 ? "doctor" : "patient",
-        text: line.trim(),
-      };
-    });
-  } else {
-    turns = getDefaultSampleDialogue(doctorName, patientName);
+    const parsed = parseNotesAndTranscript(data.transcript);
+    turns = parsed.transcriptTurns.length > 0
+      ? parsed.transcriptTurns
+      : data.transcript
+          .split("\n")
+          .filter((l) => l.trim())
+          .map((line, idx) => {
+            const match = line.match(/^\[?(\d{1,2}:\d{2})\]?\s*(.+?):\s*(.+)$/);
+            if (match) {
+              const isDoc = match[2].toLowerCase().includes("dr") || match[2].toLowerCase().includes("doctor");
+              return {
+                timestamp: match[1],
+                speaker: match[2].trim(),
+                role: isDoc ? "doctor" : "patient",
+                text: match[3].trim(),
+              };
+            }
+            return {
+              timestamp: `00:${String(idx * 15).padStart(2, "0")}`,
+              speaker: idx % 2 === 0 ? doctorName : patientName,
+              role: idx % 2 === 0 ? "doctor" : "patient",
+              text: line.trim(),
+            };
+          });
+  }
+
+  // If no live conversation turns were captured, present a truthful encounter record
+  if (turns.length === 0) {
+    turns = [
+      {
+        speaker: "Telehealth Encounter System",
+        role: "system",
+        timestamp: "00:00",
+        text: `Live video consultation conducted between Dr. ${doctorName} and ${patientName}. Real-time clinical observations, doctor assessment, and care directives recorded in the official medical record.`,
+      },
+    ];
   }
 
   // Build Renderable Blocks

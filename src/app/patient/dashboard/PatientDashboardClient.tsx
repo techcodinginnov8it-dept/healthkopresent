@@ -25,7 +25,7 @@ import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
 import { useWebRTC } from "@/hooks/useWebRTC";
 import { formatDateTime } from "@/lib/dashboard/format";
 import { downloadPrescriptionPdf } from "@/lib/prescription-pdf";
-import { downloadConsultationTranscriptPdf } from "@/lib/consultation-transcript-pdf";
+import { downloadConsultationTranscriptPdf, parseNotesAndTranscript } from "@/lib/consultation-transcript-pdf";
 import { createDashboardNotification } from "@/lib/dashboard/notifications";
 import { DEFAULT_DURATION_MINUTES, getScheduleConflict, parseAvailability } from "@/lib/scheduling";
 import type {
@@ -269,8 +269,10 @@ function downloadTranscriptReport(appointment: PatientAppointment, patient?: Das
     ? Math.floor((Date.now() - new Date(patient.dob).getTime()) / (365.25 * 24 * 3600 * 1000))
     : "Adult";
 
-  let customTranscript: any = undefined;
-  if (typeof window !== "undefined") {
+  const { clinicalNotes: cleanNotes, transcriptTurns: parsedTurns } = parseNotesAndTranscript(appointment.notes);
+  let customTranscript: any = parsedTurns.length > 0 ? parsedTurns : undefined;
+
+  if (!customTranscript && typeof window !== "undefined") {
     try {
       const saved = localStorage.getItem(`healthko:transcript:${appointment.id}`);
       if (saved) customTranscript = JSON.parse(saved);
@@ -291,7 +293,7 @@ function downloadTranscriptReport(appointment: PatientAppointment, patient?: Das
     date: appointment.scheduledAt,
     durationMinutes: appointment.duration || DEFAULT_DURATION_MINUTES,
     reasonForVisit: appointment.reason || "Telehealth Consultation",
-    clinicalAssessment: appointment.notes || "Clinical consultation and assessment completed via synchronous telehealth.",
+    clinicalAssessment: cleanNotes || appointment.notes || "Clinical consultation and assessment completed via synchronous telehealth.",
     clinicalPlan: appointment.prescription
       ? `Electronic prescription issued:\n${appointment.prescription}`
       : "Follow doctor advice and schedule follow-up as instructed.",
@@ -2219,6 +2221,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
             appointmentId={session.activeAppointment.id}
             doctorName={session.activeAppointment.doctor.name}
             patientName={`${patient.firstName} ${patient.lastName}`}
+            messages={session.messages}
             devices={webRTC.devices}
             cameraDeviceId={webRTC.cameraDeviceId}
             microphoneDeviceId={webRTC.microphoneDeviceId}
@@ -2892,37 +2895,68 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
                             </p>
                           </div>
 
-                          <div className="space-y-2.5 pt-2">
-                            <div className="rounded-xl border border-teal-100 bg-teal-50/40 p-3 space-y-1">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-black text-brand-teal">[00:05] Dr. {selectedMedicalAppointment.doctor.name}</span>
-                                <span className="text-[9px] font-bold text-slate-400">Attending Physician</span>
-                              </div>
-                              <p className="text-xs font-medium text-slate-800 leading-relaxed">
-                                Good day {patient?.firstName || "there"}, thank you for joining our telehealth session. Let us review your chief symptoms and the health tracker updates you logged prior to our consultation.
-                              </p>
-                            </div>
+                          {(() => {
+                            const { clinicalNotes: cleanNotes, transcriptTurns: turnsFromNotes } = parseNotesAndTranscript(selectedMedicalAppointment.notes);
+                            let turns = turnsFromNotes;
+                            if (turns.length === 0 && typeof window !== "undefined") {
+                              try {
+                                const saved = localStorage.getItem(`healthko:transcript:${selectedMedicalAppointment.id}`);
+                                if (saved) {
+                                  const parsed = JSON.parse(saved);
+                                  if (Array.isArray(parsed) && parsed.length > 0) turns = parsed;
+                                }
+                              } catch {}
+                            }
 
-                            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 space-y-1">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-black text-slate-800">[00:22] {patient?.firstName || "Patient"} {patient?.lastName || ""}</span>
-                                <span className="text-[9px] font-bold text-slate-400">Patient</span>
-                              </div>
-                              <p className="text-xs font-medium text-slate-800 leading-relaxed">
-                                Thank you Doctor. I&apos;ve been tracking my vitals daily. Overall the symptoms have moderated, but I wanted to review my morning dosage schedule and the care plan recommendations.
-                              </p>
-                            </div>
+                            if (turns.length === 0) {
+                              return (
+                                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-5 text-center space-y-2">
+                                  <p className="text-xs font-bold text-slate-700">
+                                    No live spoken conversation dialogue was captured for this encounter.
+                                  </p>
+                                  <p className="text-[11px] text-slate-500 max-w-md mx-auto leading-relaxed">
+                                    Official clinical observations, assessment directives, and care directives recorded by your physician are detailed below.
+                                  </p>
+                                  {cleanNotes && (
+                                    <div className="mt-3 text-left rounded-lg bg-white border border-slate-200 p-3">
+                                      <p className="text-[10px] font-black uppercase tracking-wider text-brand-teal mb-1">Doctor&apos;s Medical Note</p>
+                                      <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">{cleanNotes}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
 
-                            <div className="rounded-xl border border-teal-100 bg-teal-50/40 p-3 space-y-1">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-black text-brand-teal">[00:48] Dr. {selectedMedicalAppointment.doctor.name}</span>
-                                <span className="text-[9px] font-bold text-slate-400">Attending Physician</span>
+                            return (
+                              <div className="space-y-2.5 pt-2">
+                                {turns.map((turn, idx) => {
+                                  const isDoctor = turn.role === "doctor" || turn.speaker.toLowerCase().includes("dr");
+                                  return (
+                                    <div
+                                      key={turn.id || idx}
+                                      className={`rounded-xl border p-3 space-y-1 ${
+                                        isDoctor
+                                          ? "border-teal-100 bg-teal-50/40"
+                                          : "border-slate-200 bg-slate-50/60"
+                                      }`}
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <span className={`text-xs font-black ${isDoctor ? "text-brand-teal" : "text-slate-800"}`}>
+                                          [{turn.timestamp || "00:00"}] {turn.speaker}
+                                        </span>
+                                        <span className="text-[9px] font-bold text-slate-400">
+                                          {isDoctor ? "Attending Physician" : "Patient"}
+                                        </span>
+                                      </div>
+                                      <p className="text-xs font-medium text-slate-800 leading-relaxed">
+                                        {turn.text}
+                                      </p>
+                                    </div>
+                                  );
+                                })}
                               </div>
-                              <p className="text-xs font-medium text-slate-800 leading-relaxed">
-                                {selectedMedicalAppointment.notes ? selectedMedicalAppointment.notes : "Based on our examination and review today, we have updated your clinical assessment and issued an electronic prescription. Please continue monitoring and reach out if any concerns arise."}
-                              </p>
-                            </div>
-                          </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     </section>

@@ -768,6 +768,7 @@ export function LiveConsultationPanel({
   appointmentId,
   doctorName,
   patientName,
+  messages,
   canEndCall = true,
 }: {
   role: DashboardRole;
@@ -807,6 +808,7 @@ export function LiveConsultationPanel({
   appointmentId?: string;
   doctorName?: string;
   patientName?: string;
+  messages?: ChatMessage[];
   canEndCall?: boolean;
 }) {
   const isDark = tone === "dark";
@@ -876,29 +878,7 @@ export function LiveConsultationPanel({
         }
       } catch {}
     }
-    return [
-      {
-        id: "t-1",
-        speaker: role === "doctor" ? (doctorName || "Dr. Attending Physician") : counterpartName,
-        role: "doctor",
-        timestamp: "00:05",
-        text: "Synchronous consultation channel initialized. Audiovisual encryption active.",
-      },
-      {
-        id: "t-2",
-        speaker: role === "doctor" ? counterpartName : (patientName || "Patient"),
-        role: "patient",
-        timestamp: "00:18",
-        text: "Hello Doctor, video and audio are clear on my end.",
-      },
-      {
-        id: "t-3",
-        speaker: role === "doctor" ? (doctorName || "Dr. Attending Physician") : counterpartName,
-        role: "doctor",
-        timestamp: "00:35",
-        text: "Good day. Let us review your reported symptoms and health tracker readings.",
-      },
-    ];
+    return [];
   });
 
   // Automatically sync transcript turns to localStorage for this appointment
@@ -908,6 +888,32 @@ export function LiveConsultationPanel({
       localStorage.setItem(`healthko:transcript:${appointmentId}`, JSON.stringify(transcriptTurns));
     } catch {}
   }, [appointmentId, transcriptTurns]);
+
+  // Merge in-call chat messages into the consultation conversation transcript
+  useEffect(() => {
+    if (!messages || messages.length === 0) return;
+    setTranscriptTurns((prev) => {
+      const existingIds = new Set(prev.map((t) => t.id));
+      const newTurns = messages
+        .filter((m) => m.kind === "user" && m.text?.trim() && !existingIds.has(m.id))
+        .map((m) => {
+          const isMe = m.sender === role;
+          const speakerName = isMe
+            ? (role === "doctor" ? (doctorName || "Dr. Attending Physician") : (patientName || "Patient"))
+            : counterpartName;
+          const turnRole = (m.sender === "doctor" ? "doctor" : "patient") as "doctor" | "patient";
+          return {
+            id: m.id,
+            speaker: speakerName,
+            role: turnRole,
+            timestamp: m.time || callDuration || "00:00",
+            text: m.text.trim(),
+          };
+        });
+      if (newTurns.length === 0) return prev;
+      return [...prev, ...newTurns];
+    });
+  }, [messages, role, counterpartName, doctorName, patientName, callDuration]);
 
   const recognitionRef = useRef<any>(null);
   const isSpeechActiveRef = useRef(false);

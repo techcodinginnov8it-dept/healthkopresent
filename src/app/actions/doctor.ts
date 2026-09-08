@@ -8,6 +8,7 @@ import {
   getFullyBookedMessage,
   getScheduleConflict,
 } from "@/lib/scheduling";
+import { formatNotesWithTranscript, parseNotesAndTranscript } from "@/lib/consultation-transcript-pdf";
 
 async function validatePrismaDoctorSchedule({
   doctorId,
@@ -155,6 +156,38 @@ export async function completeConsultation(data: CompleteConsultationPayload) {
   } catch (error: unknown) {
     console.error("completeConsultation failed:", error);
     return { success: false, error: "Failed to complete consultation in database." };
+  }
+}
+
+export async function saveConsultationTranscript(data: {
+  consultationId: string;
+  turns: Array<{ speaker: string; role: "doctor" | "patient" | "system"; text: string; timestamp?: string }>;
+}) {
+  try {
+    const consultation = await prisma.consultation.findUnique({
+      where: { id: data.consultationId },
+    });
+
+    if (!consultation) {
+      return { success: false, error: "Consultation not found." };
+    }
+
+    const { clinicalNotes } = parseNotesAndTranscript(consultation.notes);
+    const updatedNotes = formatNotesWithTranscript(clinicalNotes, data.turns);
+
+    const updated = await prisma.consultation.update({
+      where: { id: data.consultationId },
+      data: {
+        notes: updatedNotes,
+      },
+    });
+
+    revalidatePath("/doctor/dashboard");
+    revalidatePath("/patient/dashboard");
+    return { success: true, consultation: updated };
+  } catch (error: unknown) {
+    console.error("saveConsultationTranscript failed:", error);
+    return { success: false, error: "Failed to save transcript." };
   }
 }
 

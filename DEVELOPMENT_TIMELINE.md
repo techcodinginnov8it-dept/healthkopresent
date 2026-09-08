@@ -181,10 +181,24 @@
 
 ---
 
+### 12. Real Live Call Conversation Capture & Past Video Consultation Archives
+* **Commit**: `Pending`
+* **Timestamp**: `2026-09-09 02:35:00 +0800`
+* **Duration**: ~20 minutes
+* **Updates & Changes**:
+  - Removed all hardcoded static sample dialogue from the transcript PDF generator and the patient encounter view.
+  - Combined live voice speech recognition with in-call chat messages so all spoken statements and typed communications during active consultations are captured into real dialogue turns.
+  - Automatically saves the full conversation dialogue to the consultation database record upon call completion, preserving the encounter history permanently.
+  - Replaced the static dialogue stream on the Patient Dashboard with a dynamic conversation timeline showing the exact spoken turns, speaker roles, and timestamps from that past call.
+  - Provided direct PDF download of the authentic conversation transcript for both doctors and patients.
+
+---
+
 ## 📊 Summary Table of Commits
 
 | Commit | Time (+0800) | Area | Summary of Updates |
 | :--- | :--- | :--- | :--- |
+| `Pending` | 02:35 | **Live Telehealth** | Dynamic live conversation capture & database archives for doctor and patient |
 | `545e649` | 02:05 | **Consultation EHR** | Display notes-only results in Consultation Results & silent background transcript PDF |
 | `89e4454` | 01:36 | **Clinical Compliance** | Enforce non-empty clinical notes before doctor can end consultation |
 | `4480094` | 01:22 | **Telehealth / Audio** | Live voice speech-to-text recognition & real-time dialogue transcription |
