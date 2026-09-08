@@ -168,7 +168,7 @@
 ---
 
 ### 11. Consultation Results Display Without Prescription & Background Call Transcription PDF
-* **Commit**: `Pending`
+* **Commit**: `545e649`
 * **Timestamp**: `2026-09-09 02:05:00 +0800`
 * **Duration**: ~25 minutes
 * **Updates & Changes**:
@@ -185,7 +185,7 @@
 
 | Commit | Time (+0800) | Area | Summary of Updates |
 | :--- | :--- | :--- | :--- |
-| `Pending` | 02:05 | **Consultation EHR** | Display notes-only results in Consultation Results & silent background transcript PDF |
+| `545e649` | 02:05 | **Consultation EHR** | Display notes-only results in Consultation Results & silent background transcript PDF |
 | `89e4454` | 01:36 | **Clinical Compliance** | Enforce non-empty clinical notes before doctor can end consultation |
 | `4480094` | 01:22 | **Telehealth / Audio** | Live voice speech-to-text recognition & real-time dialogue transcription |
 | `f48e2fb` | 00:15 | **Telehealth / EHR** | Automated live consultation transcription & dual-dashboard transcript PDF |
