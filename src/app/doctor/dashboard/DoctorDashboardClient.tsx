@@ -607,7 +607,7 @@ function PatientOperationsHub({
         {/* Directory List View (CRM List/Table Layout) */}
         <div className="mt-6 overflow-hidden rounded-2xl border transition-colors" style={{ borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)" }}>
           {/* Table Header (hidden on small screens) */}
-          <div className={`hidden md:grid md:grid-cols-[minmax(240px,260px)_130px_160px_1fr_auto] items-center gap-4 px-6 py-3.5 border-b text-[10px] font-black uppercase tracking-wider ${
+          <div className={`hidden md:grid md:grid-cols-[1.3fr_1fr_1.1fr_1.2fr_1fr] items-center gap-4 px-6 py-3.5 border-b text-[10px] font-black uppercase tracking-wider ${
             isDark ? "border-slate-800 bg-slate-950/80 text-slate-400" : "border-slate-100 bg-slate-50/80 text-slate-500"
           }`}>
             <span>Patient Information</span>
@@ -627,7 +627,7 @@ function PatientOperationsHub({
                 return (
                   <div
                     key={patient.id}
-                    className={`flex flex-col md:grid md:grid-cols-[minmax(240px,260px)_130px_160px_1fr_auto] items-start md:items-center gap-4 px-6 py-4 transition-all duration-150 ${
+                    className={`flex flex-col md:grid md:grid-cols-[1.3fr_1fr_1.1fr_1.2fr_1fr] items-start md:items-center gap-4 px-6 py-4 transition-all duration-150 ${
                       isSelected && isDetailOpen
                         ? "bg-brand-teal/5 ring-1 ring-inset ring-brand-teal/30"
                         : isDark
