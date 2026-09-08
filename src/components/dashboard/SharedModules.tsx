@@ -768,6 +768,7 @@ export function LiveConsultationPanel({
   appointmentId,
   doctorName,
   patientName,
+  canEndCall = true,
 }: {
   role: DashboardRole;
   counterpartName: string;
@@ -806,6 +807,7 @@ export function LiveConsultationPanel({
   appointmentId?: string;
   doctorName?: string;
   patientName?: string;
+  canEndCall?: boolean;
 }) {
   const isDark = tone === "dark";
   const statusLabel = status === "connected" ? "Connected" : role === "doctor" ? "Waiting for Patient" : "Waiting room";
@@ -1315,15 +1317,33 @@ export function LiveConsultationPanel({
               <span className="text-[11px] font-black tracking-wider">CC</span>
             </button>
           </div>
-          <button
-            type="button"
-            onClick={onEnd}
-            aria-label="End consultation"
-            title="End consultation"
-            className="grid h-14 w-14 place-items-center rounded-full bg-brand-red text-white shadow-lg shadow-red-950/40 transition hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-300"
-          >
-            <PhoneDownIcon />
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={onEnd}
+              aria-label="End consultation"
+              title={
+                !canEndCall && role === "doctor"
+                  ? "Consultation notes / clinical observations required before ending call"
+                  : "End consultation"
+              }
+              className={`grid h-14 w-14 place-items-center rounded-full transition focus:outline-none focus:ring-4 ${
+                !canEndCall && role === "doctor"
+                  ? "bg-amber-600 hover:bg-amber-700 text-white shadow-lg shadow-amber-950/40 ring-2 ring-amber-400/50 focus:ring-amber-300"
+                  : "bg-brand-red text-white shadow-lg shadow-red-950/40 hover:bg-red-700 focus:ring-red-300"
+              }`}
+            >
+              <PhoneDownIcon />
+            </button>
+            {!canEndCall && role === "doctor" && (
+              <span
+                className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 text-slate-950 font-black text-[10px] shadow border border-amber-300 animate-pulse"
+                title="Clinical notes required before call can be ended"
+              >
+                !
+              </span>
+            )}
+          </div>
         </footer>
 
         {/* ── Live Transcript Overlay Drawer ── */}

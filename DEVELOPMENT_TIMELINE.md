@@ -2,7 +2,7 @@
 
 **Date**: September 8–9, 2026  
 **Active Branch**: `HealthKoUpdated`  
-**Development Runtime**: ~3 hours 45 minutes  
+**Development Runtime**: ~4 hours 20 minutes  
 
 ---
 
@@ -10,10 +10,10 @@
 
 | Metric | Details |
 | :--- | :--- |
-| **Total Session Duration** | 3 hours 45 minutes (21:15 – 01:00 +0800) |
-| **Current Task Duration** | **~40 minutes** (23:35 – 00:15 +0800) |
-| **Focus of Current Task** | Automated Live Consultation Transcription & Dual-Dashboard Transcript PDF |
-| **Total Production Commits** | 10 commits |
+| **Total Session Duration** | 4 hours 20 minutes (21:15 – 01:35 +0800) |
+| **Current Task Duration** | **~15 minutes** (01:23 – 01:36 +0800) |
+| **Focus of Current Task** | Mandatory Consultation Notes Enforcement Before Ending Call |
+| **Total Production Commits** | 12 commits |
 | **TypeScript / Build Status** | Passing (0 errors) |
 
 ---
@@ -21,7 +21,7 @@
 ## 📅 Visual Development Timeline
 
 ```text
-21:15 ───────────────────────────────────────────────────────────────────────────── 01:00
+21:15 ───────────────────────────────────────────────────────────────────────────── 01:35
   │
   ├─ 21:35 [35m] Multi-page PDF Pagination & Overflow Protection (744e7b5)
   │
@@ -41,7 +41,11 @@
   │
   ├─ 23:55 [15m] SSR Hydration Mismatch Fix in DoctorResearchModule (a2389b0)
   │
-  └─ 00:15 [40m] [COMPLETED] Automated Consultation Transcription & Dual PDF (f48e2fb, 10a4ba0)
+  ├─ 00:15 [40m] Automated Consultation Transcription & Dual PDF (f48e2fb, 10a4ba0)
+  │
+  ├─ 01:22 [15m] Real-Time Voice Speech-to-Text Recognition (4480094)
+  │
+  └─ 01:36 [15m] [COMPLETED] Mandatory Consultation Notes Before Ending Call
 ```
 
 ---
@@ -151,10 +155,23 @@
 
 ---
 
+### 10. Mandatory Consultation Notes Before Ending Call
+* **Commit**: `[PENDING]`
+* **Timestamp**: `2026-09-09 01:36:00 +0800`
+* **Duration**: ~15 minutes
+* **Updates & Changes**:
+  - Enforced clinical documentation compliance by preventing doctors from ending a live connected consultation call until consultation notes and clinical observations are filled out.
+  - Added a visual warning badge on the call toolbar's end button alerting doctors when clinical notes are still missing.
+  - Added a dedicated clinical observation section and textarea inside the End Call confirmation dialog, allowing doctors to conveniently write notes directly without losing their place.
+  - Locked and disabled the call termination buttons while notes are empty, preventing accidental closure of undocumented medical encounters.
+
+---
+
 ## 📊 Summary Table of Commits
 
 | Commit | Time (+0800) | Area | Summary of Updates |
 | :--- | :--- | :--- | :--- |
+| `[PENDING]` | 01:36 | **Clinical Compliance** | Enforce non-empty clinical notes before doctor can end consultation |
 | `4480094` | 01:22 | **Telehealth / Audio** | Live voice speech-to-text recognition & real-time dialogue transcription |
 | `f48e2fb` | 00:15 | **Telehealth / EHR** | Automated live consultation transcription & dual-dashboard transcript PDF |
 | `a2389b0` | 23:55 | **Doctor Dashboard** | Eliminate SSR hydration mismatch in DoctorResearchModule |

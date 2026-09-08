@@ -2583,7 +2583,13 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
             onToggleCamera={session.toggleCamera}
             onToggleMic={session.toggleMic}
             onToggleScreenShare={handleToggleScreenShare}
-            onEnd={() => setShowEndCallConfirm(true)}
+            canEndCall={Boolean(clinicalNotes.trim())}
+            onEnd={() => {
+              if (session.status === "connected" && !clinicalNotes.trim()) {
+                showToast("error", "Clinical observations required: You must document consultation notes before ending the call.");
+              }
+              setShowEndCallConfirm(true);
+            }}
             localStream={webRTC.localStream}
             screenShareStream={webRTC.screenShareStream}
             remoteStream={webRTC.remoteStream}
@@ -3766,58 +3772,138 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
               </strong>.
             </p>
 
+            {/* Clinical Observations / Consultation Notes Section */}
+            {session.status === "connected" && (() => {
+              const isNotesMissing = !clinicalNotes.trim();
+              return (
+                <div className={`mt-4 rounded-xl border p-3.5 text-left transition-all ${
+                  isNotesMissing
+                    ? "border-amber-500/50 bg-amber-500/10 text-amber-200"
+                    : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                }`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                      {isNotesMissing ? (
+                        <>
+                          <span className="text-amber-400">⚠️</span>
+                          <span className="text-amber-300">Consultation Notes Required</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-emerald-400">✓</span>
+                          <span className="text-emerald-300">Consultation Notes Documented</span>
+                        </>
+                      )}
+                    </span>
+                    {isNotesMissing && (
+                      <span className="rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[9px] font-black px-1.5 py-0.5 uppercase tracking-wider">
+                        Mandatory
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="mt-1 text-[11px] font-medium text-slate-300 leading-snug">
+                    {isNotesMissing
+                      ? "Clinical observations and consultation notes cannot be empty before concluding the call."
+                      : "Your clinical observations will be saved to the permanent encounter record."}
+                  </p>
+
+                  <textarea
+                    value={clinicalNotes}
+                    onChange={(e) => setClinicalNotes(e.target.value)}
+                    placeholder="Enter clinical assessment, diagnosis, or patient findings..."
+                    rows={3}
+                    className={`mt-2.5 w-full rounded-lg border p-2.5 text-xs outline-none transition focus:border-brand-teal ${
+                      isDark
+                        ? "border-slate-700 bg-slate-950 text-white placeholder:text-slate-500"
+                        : "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400"
+                    }`}
+                  />
+
+                  {isNotesMissing && (
+                    <p className="mt-1.5 text-[10px] text-amber-400 font-bold flex items-center gap-1">
+                      <span>* Fill out the notes above to enable ending the call.</span>
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+
             <div className="mt-6 flex flex-col gap-2.5">
               {/* End & Complete */}
-              <button
-                type="button"
-                disabled={isEndCallLoading}
-                onClick={async () => {
-                  if (!session.activeAppointment) return;
-                  setIsEndCallLoading(true);
-                  // Mark as completed first
-                  const consultationId = session.activeAppointment.id;
-                  await completeConsultation({
-                    consultationId,
-                    notes: clinicalNotes || session.activeAppointment.notes || undefined,
-                    prescription: prescriptionText || session.activeAppointment.prescription || undefined,
-                    reason: diagnosisText || session.activeAppointment.reason || undefined,
-                  });
-                  realtime.publish({
-                    type: "appointment:updated",
-                    appointmentId: consultationId,
-                    actorRole: "doctor",
-                    title: "Consultation completed",
-                    body: `Your consultation with Dr. ${doctor.name} has been completed.`,
-                  });
-                  // Then end the call
-                  await handleEndSession();
-                  setShowEndCallConfirm(false);
-                  setIsEndCallLoading(false);
-                  showToast("success", "Call ended. Consultation marked as completed.");
-                }}
-                className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 px-5 py-3 text-xs font-black text-white shadow-md transition disabled:opacity-60"
-              >
-                {isEndCallLoading ? "Ending..." : "✓ End Call & Mark as Completed"}
-              </button>
+              {(() => {
+                const isNotesMissing = session.status === "connected" && !clinicalNotes.trim();
+                return (
+                  <>
+                    <button
+                      type="button"
+                      disabled={isEndCallLoading || isNotesMissing}
+                      onClick={async () => {
+                        if (!session.activeAppointment) return;
+                        if (isNotesMissing) {
+                          showToast("error", "Consultation notes / clinical observations cannot be empty.");
+                          return;
+                        }
+                        setIsEndCallLoading(true);
+                        // Mark as completed first
+                        const consultationId = session.activeAppointment.id;
+                        await completeConsultation({
+                          consultationId,
+                          notes: clinicalNotes.trim(),
+                          prescription: prescriptionText || session.activeAppointment.prescription || undefined,
+                          reason: diagnosisText || session.activeAppointment.reason || undefined,
+                        });
+                        realtime.publish({
+                          type: "appointment:updated",
+                          appointmentId: consultationId,
+                          actorRole: "doctor",
+                          title: "Consultation completed",
+                          body: `Your consultation with Dr. ${doctor.name} has been completed.`,
+                        });
+                        // Then end the call
+                        await handleEndSession();
+                        setShowEndCallConfirm(false);
+                        setIsEndCallLoading(false);
+                        showToast("success", "Call ended. Consultation marked as completed.");
+                      }}
+                      className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 px-5 py-3 text-xs font-black text-white shadow-md transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {isEndCallLoading ? "Ending..." : "✓ End Call & Mark as Completed"}
+                    </button>
 
-              {/* End call only */}
-              <button
-                type="button"
-                disabled={isEndCallLoading}
-                onClick={async () => {
-                  setIsEndCallLoading(true);
-                  await handleEndSession();
-                  setShowEndCallConfirm(false);
-                  setIsEndCallLoading(false);
-                }}
-                className={`w-full rounded-xl border px-5 py-2.5 text-xs font-black transition disabled:opacity-60 ${
-                  isDark
-                    ? "border-slate-700 bg-slate-800 text-rose-300 hover:bg-slate-700"
-                    : "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
-                }`}
-              >
-                End Call Only (keep status)
-              </button>
+                    {/* End call only */}
+                    <button
+                      type="button"
+                      disabled={isEndCallLoading || isNotesMissing}
+                      onClick={async () => {
+                        if (isNotesMissing) {
+                          showToast("error", "Consultation notes / clinical observations cannot be empty.");
+                          return;
+                        }
+                        setIsEndCallLoading(true);
+                        if (session.activeAppointment && clinicalNotes.trim()) {
+                          await completeConsultation({
+                            consultationId: session.activeAppointment.id,
+                            notes: clinicalNotes.trim(),
+                            prescription: prescriptionText || session.activeAppointment.prescription || undefined,
+                            reason: diagnosisText || session.activeAppointment.reason || undefined,
+                          });
+                        }
+                        await handleEndSession();
+                        setShowEndCallConfirm(false);
+                        setIsEndCallLoading(false);
+                      }}
+                      className={`w-full rounded-xl border px-5 py-2.5 text-xs font-black transition disabled:opacity-40 disabled:cursor-not-allowed ${
+                        isDark
+                          ? "border-slate-700 bg-slate-800 text-rose-300 hover:bg-slate-700"
+                          : "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+                      }`}
+                    >
+                      End Call Only (keep status)
+                    </button>
+                  </>
+                );
+              })()}
 
               {/* Cancel */}
               <button
