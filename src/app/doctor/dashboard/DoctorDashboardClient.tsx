@@ -30,6 +30,7 @@ import { useWebRTC } from "@/hooks/useWebRTC";
 import { getTabButtonClassName } from "@/components/dashboard/tabStyles";
 import { formatDateTime } from "@/lib/dashboard/format";
 import { downloadPrescriptionPdf } from "@/lib/prescription-pdf";
+import { downloadConsultationTranscriptPdf } from "@/lib/consultation-transcript-pdf";
 import { createDashboardNotification } from "@/lib/dashboard/notifications";
 import type {
   ChatAttachment,
@@ -511,6 +512,52 @@ function PatientOperationsHub({
       date: appointment.scheduledAt,
       diagnosis: appointment.reason || appointment.notes || "Clinical Telehealth Encounter",
       prescription: appointment.prescription || "No prescription recorded.",
+    });
+  };
+
+  const handleDownloadTranscript = (appointment: DoctorAppointment) => {
+    const pat = selectedPatient || appointment.patient;
+    const patientName = getPatientDisplayName(pat);
+    const patientAge = pat.dob
+      ? Math.floor((Date.now() - new Date(pat.dob).getTime()) / (365.25 * 24 * 3600 * 1000))
+      : "Adult";
+
+    const docName = doctor?.name || "Dr. Medical Doctor";
+    const docSpecialty = doctor?.specialty || "General & Telemedicine Practice";
+    const docLicense = doctor?.licenseNumber;
+    const docNpi = doctor?.npi;
+    const clinicName = doctor?.name
+      ? `CLINIC OF DR. ${doctor.name.toUpperCase().replace(/^DR\.?\s+/i, "")}, MD`
+      : undefined;
+
+    let customTranscript: any = undefined;
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem(`healthko:transcript:${appointment.id}`);
+        if (saved) customTranscript = JSON.parse(saved);
+      } catch {
+        // Fallback
+      }
+    }
+
+    downloadConsultationTranscriptPdf({
+      appointmentId: appointment.id,
+      doctorName: docName,
+      doctorSpecialty: docSpecialty,
+      doctorLicense: docLicense,
+      doctorNpi: docNpi,
+      clinicName,
+      patientName,
+      patientAge,
+      patientGender: pat.gender,
+      date: appointment.scheduledAt,
+      durationMinutes: appointment.duration || 30,
+      reasonForVisit: appointment.reason || "Telehealth Consultation",
+      clinicalAssessment: appointment.notes || "Clinical consultation and assessment completed via synchronous telehealth.",
+      clinicalPlan: appointment.prescription
+        ? `Electronic prescription issued:\n${appointment.prescription}`
+        : "Follow-up consultation advised as clinically indicated.",
+      transcript: customTranscript,
     });
   };
 
@@ -1220,30 +1267,51 @@ function PatientOperationsHub({
                                 </p>
                               </div>
 
-                              {/* Prescription PDF Download Button */}
-                              {appointment.prescription && (
-                                <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pt-1">
-                                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                                    <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                                      <polyline points="22 4 12 14.01 9 11.01" />
-                                    </svg>
-                                    <span>E-Prescription Generated</span>
-                                  </div>
+                              {/* Consultation Documents & Actions (Transcript + Prescription) */}
+                              <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pt-1">
+                                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                  <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                                    <polyline points="22 4 12 14.01 9 11.01" />
+                                  </svg>
+                                  <span>{appointment.prescription ? "Clinical Documentation & Rx" : "Consultation Documented"}</span>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {/* Download Consultation Transcript PDF Button */}
                                   <button
                                     type="button"
-                                    onClick={() => handleDownloadRx(appointment)}
-                                    className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-brand-teal px-3.5 py-2 text-xs font-black text-white shadow-xs transition hover:bg-teal-600 active:scale-[0.98] shrink-0"
+                                    onClick={() => handleDownloadTranscript(appointment)}
+                                    className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-brand-teal/40 bg-teal-50 dark:bg-brand-teal/15 px-3 py-2 text-xs font-black text-brand-teal shadow-xs transition hover:bg-teal-100 dark:hover:bg-brand-teal/25 active:scale-[0.98] shrink-0"
+                                    title="Download complete dialogue transcript and clinical summary as PDF"
                                   >
-                                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                      <polyline points="7 10 12 15 17 10" />
-                                      <line x1="12" y1="15" x2="12" y2="3" />
+                                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                      <polyline points="14 2 14 8 20 8" />
+                                      <line x1="16" y1="13" x2="8" y2="13" />
+                                      <line x1="16" y1="17" x2="8" y2="17" />
+                                      <polyline points="10 9 9 9 8 9" />
                                     </svg>
-                                    Download Prescription PDF
+                                    Download Transcript PDF
                                   </button>
+
+                                  {/* Download Prescription PDF Button */}
+                                  {appointment.prescription && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDownloadRx(appointment)}
+                                      className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-brand-teal px-3.5 py-2 text-xs font-black text-white shadow-xs transition hover:bg-teal-600 active:scale-[0.98] shrink-0"
+                                    >
+                                      <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                        <polyline points="7 10 12 15 17 10" />
+                                        <line x1="12" y1="15" x2="12" y2="3" />
+                                      </svg>
+                                      Download Prescription PDF
+                                    </button>
+                                  )}
                                 </div>
-                              )}
+                              </div>
                             </article>
                           );
                         })

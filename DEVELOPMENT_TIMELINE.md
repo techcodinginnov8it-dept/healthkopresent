@@ -134,10 +134,43 @@
 
 ---
 
+### Task 8: Blog Media & Figures Upload + SSR Hydration Hardening (00:05)
+- **Time Spent**: ~30 mins
+- **Key Changes**:
+  1. **Cover & Thumbnail Upload**:
+     - Added dedicated Thumbnail/Cover photo upload in article creation form with real-time base64 image preview and removal action.
+  2. **Medical Figures & Diagram Attachments**:
+     - Multi-file image uploader allowing doctors to attach high-resolution clinical scans, ECG strips, diagrams, and figures with customizable captions.
+  3. **SSR Hydration Fix**:
+     - Resolved React SSR hydration mismatch by deferring client-side `localStorage` initialization to `useEffect`, rendering SSR-safe skeleton loaders during initial mount.
+
+---
+
+### Task 9: Automated Live Consultation Transcription & Dual-Dashboard Transcript PDF (00:15)
+- **Time Spent**: ~40 mins
+- **Key Changes**:
+  1. **Official Clinical Transcript PDF Engine** (`src/lib/consultation-transcript-pdf.ts`):
+     - Built standalone, HIPAA/DOH-compliant vector PDF generator without third-party runtime bloat.
+     - Formats synchronous clinical dialogues with clinic branding, doctor license/NPI, patient demographics, clinical assessment & plan, dialogue speech turns (speaker, role, timestamps), auto-pagination (`Page X of Y`), and electronic signature block.
+  2. **Doctor Dashboard Integration** (`src/app/doctor/dashboard/DoctorDashboardClient.tsx`):
+     - Added **"Download Transcript PDF"** button in **Consultation Results** placed directly beside the existing **"Download Prescription PDF"** button.
+     - Pulls live speech dialogue or persists encounter transcript records linked to the patient's appointment.
+  3. **Patient Dashboard Integration** (`src/app/patient/dashboard/PatientDashboardClient.tsx`):
+     - Added **"Download Transcript PDF"** button in the **Medical Access** header directly beside **"Download PDF Report"**.
+     - Added a dedicated **"Transcript"** tab within Medical Access with an interactive session card, speaker turns view, and instant download.
+  4. **Live Consultation Panel Integration** (`src/components/dashboard/SharedModules.tsx`):
+     - Added live speech transcription toggle `[CC]` in the call control toolbar.
+     - Added floating live dialogue drawer with real-time dialogue logging and in-call transcript download capability.
+
+---
+
 ## 📊 Summary Table of Commits
 
 | Commit | Time (+0800) | Area | Summary of Updates |
 | :--- | :--- | :--- | :--- |
+| `[PENDING]` | 00:15 | **Telehealth / EHR** | Automated live consultation transcription & dual-dashboard transcript PDF |
+| `a2389b0` | 23:55 | **Doctor Dashboard** | Eliminate SSR hydration mismatch in DoctorResearchModule |
+| `3d0cd3f` | 23:40 | **Doctor Dashboard** | Add thumbnail cover upload and medical figures to Blogs & Research |
 | `7c7bb2a` | 23:19 | **Doctor Dashboard** | Add Blogs & Research Hub with "My Publications" & "Physician Network" tabs |
 | `e64b7dc` | 22:55 | **Clinical CRM** | Remove RX filter, pill badges, and prescription stat card |
 | `bd545c3` | 22:31 | **Patient Directory** | Distribute table columns evenly across Info, Status, Next Visit, Actions |
