@@ -206,10 +206,25 @@
 
 ---
 
+### 14. Real-Time Conversation Sync, Live Speech Audio Bar & Database Transcript Persistence
+* **Commit**: `f37f448`
+* **Timestamp**: `2026-09-09 03:32:00 +0800`
+* **Duration**: ~20 minutes
+* **Updates & Changes**:
+  - Implemented real-time bidirectional synchronization of conversation dialogue between doctor and patient so spoken turns from either participant immediately appear on both screens.
+  - Added a live speech transcription status bar displaying real-time audio detection, active speaking text preview, and recorded turns count.
+  - Added an in-call dialogue stream card allowing participants to see the conversation history updating live as they speak and chat.
+  - Added interim speech recognition handling with automatic silence commit, guaranteeing spoken words are never lost on short pauses or quick endings.
+  - Integrated in-call chat messages directly into the consultation dialogue timeline with timestamps and speaker tags.
+  - Ensured all dialogue turns are saved to the encounter database record when either doctor or patient ends or completes the consultation.
+
+---
+
 ## 📊 Summary Table of Commits
 
 | Commit | Time (+0800) | Area | Summary of Updates |
 | :--- | :--- | :--- | :--- |
+| `f37f448` | 03:32 | **Telehealth / Audio** | Real-time dialogue synchronization, live speech bar & database transcript archives |
 | `d5fa35f` | 02:50 | **Patient Dashboard** | Disconnect warning modal & leave confirmation for active consultations |
 | `f3102f0` | 02:35 | **Live Telehealth** | Dynamic live conversation capture & database archives for doctor and patient |
 | `545e649` | 02:05 | **Consultation EHR** | Display notes-only results in Consultation Results & silent background transcript PDF |
