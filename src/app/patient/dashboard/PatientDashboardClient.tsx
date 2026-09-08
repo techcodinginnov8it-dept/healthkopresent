@@ -7,6 +7,7 @@ import QRCode from "qrcode";
 import { logoutPatient } from "@/app/actions/auth";
 import { bookAppointment, confirmFollowUpAppointment, requestFollowUpReschedule } from "@/app/actions/patient";
 import { authorizePatientVideoSession, endVideoSession } from "@/app/actions/video-session";
+import { saveConsultationTranscript } from "@/app/actions/doctor";
 import { DashboardShell, type DashboardNavItem } from "@/components/dashboard/DashboardShell";
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
 import { PatientSettingsModule } from "@/components/dashboard/SettingsModule";
@@ -1239,6 +1240,15 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
   const handleEndSession = async () => {
     const roomId = session.roomId;
     if (session.activeAppointment) {
+      const turnsToSave = session.transcriptTurns && session.transcriptTurns.length > 0 ? session.transcriptTurns : [];
+      if (turnsToSave.length > 0) {
+        try {
+          await saveConsultationTranscript({
+            consultationId: session.activeAppointment.id,
+            turns: turnsToSave,
+          });
+        } catch {}
+      }
       await endVideoSession(session.activeAppointment.id);
     }
     if (roomId) {
@@ -2317,6 +2327,8 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
             doctorName={session.activeAppointment.doctor.name}
             patientName={`${patient.firstName} ${patient.lastName}`}
             messages={session.messages}
+            sessionTranscriptTurns={session.transcriptTurns}
+            onNewTranscriptTurn={(turn) => session.addTranscriptTurn(turn)}
             devices={webRTC.devices}
             cameraDeviceId={webRTC.cameraDeviceId}
             microphoneDeviceId={webRTC.microphoneDeviceId}

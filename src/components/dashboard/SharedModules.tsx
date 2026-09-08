@@ -770,6 +770,8 @@ export function LiveConsultationPanel({
   patientName,
   messages,
   canEndCall = true,
+  sessionTranscriptTurns,
+  onNewTranscriptTurn,
 }: {
   role: DashboardRole;
   counterpartName: string;
@@ -810,6 +812,8 @@ export function LiveConsultationPanel({
   patientName?: string;
   messages?: ChatMessage[];
   canEndCall?: boolean;
+  sessionTranscriptTurns?: Array<{ id: string; speaker: string; role: "doctor" | "patient" | "system"; text: string; timestamp: string }>;
+  onNewTranscriptTurn?: (turn: { id: string; speaker: string; role: "doctor" | "patient" | "system"; text: string; timestamp: string }) => void;
 }) {
   const isDark = tone === "dark";
   const statusLabel = status === "connected" ? "Connected" : role === "doctor" ? "Waiting for Patient" : "Waiting room";
@@ -869,6 +873,9 @@ export function LiveConsultationPanel({
   const [transcriptTurns, setTranscriptTurns] = useState<
     { id: string; speaker: string; role: "doctor" | "patient" | "system"; text: string; timestamp: string }[]
   >(() => {
+    if (sessionTranscriptTurns && sessionTranscriptTurns.length > 0) {
+      return sessionTranscriptTurns;
+    }
     if (typeof window !== "undefined" && appointmentId) {
       try {
         const saved = localStorage.getItem(`healthko:transcript:${appointmentId}`);
@@ -880,6 +887,17 @@ export function LiveConsultationPanel({
     }
     return [];
   });
+
+  // Sync external session transcript turns if they arrive over realtime
+  useEffect(() => {
+    if (!sessionTranscriptTurns || sessionTranscriptTurns.length === 0) return;
+    setTranscriptTurns((prev) => {
+      const existing = new Set(prev.map((t) => t.id));
+      const newItems = sessionTranscriptTurns.filter((t) => !existing.has(t.id));
+      if (newItems.length === 0) return prev;
+      return [...prev, ...newItems];
+    });
+  }, [sessionTranscriptTurns]);
 
   // Automatically sync transcript turns to localStorage for this appointment
   useEffect(() => {
@@ -915,19 +933,59 @@ export function LiveConsultationPanel({
     });
   }, [messages, role, counterpartName, doctorName, patientName, callDuration]);
 
+  const [interimText, setInterimText] = useState("");
+  const [speechStatus, setSpeechStatus] = useState<"idle" | "listening" | "hearing" | "unsupported" | "error">("idle");
+  const pendingInterimRef = useRef("");
+  const silenceTimerRef = useRef<any>(null);
   const recognitionRef = useRef<any>(null);
   const isSpeechActiveRef = useRef(false);
+
+  const commitTurn = useCallback(
+    (textToCommit: string) => {
+      const trimmed = textToCommit.trim();
+      if (!trimmed) return;
+      const timestamp = callDuration || "00:00";
+      const speakerName =
+        role === "doctor"
+          ? (doctorName || "Dr. Attending Physician")
+          : (patientName || counterpartName || "Patient");
+      const turnRole: "doctor" | "patient" = role === "doctor" ? "doctor" : "patient";
+      const newTurn = {
+        id: `speech-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        speaker: speakerName,
+        role: turnRole,
+        timestamp,
+        text: trimmed,
+      };
+      setTranscriptTurns((prev) => {
+        if (prev.some((t) => t.text === newTurn.text && t.speaker === newTurn.speaker)) return prev;
+        return [...prev, newTurn];
+      });
+      onNewTranscriptTurn?.(newTurn);
+    },
+    [callDuration, role, doctorName, patientName, counterpartName, onNewTranscriptTurn]
+  );
 
   // Background Web Speech Recognition (listens automatically while connected & unmuted)
   useEffect(() => {
     if (typeof window === "undefined") return;
     const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRec) return;
+    if (!SpeechRec) {
+      setSpeechStatus("unsupported");
+      return;
+    }
 
     const shouldListen = status === "connected" && isMicOn;
     isSpeechActiveRef.current = shouldListen;
 
     if (!shouldListen) {
+      setSpeechStatus("idle");
+      setInterimText("");
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      if (pendingInterimRef.current?.trim()) {
+        commitTurn(pendingInterimRef.current.trim());
+        pendingInterimRef.current = "";
+      }
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
@@ -941,55 +999,84 @@ export function LiveConsultationPanel({
     try {
       recognition = new SpeechRec();
       recognition.continuous = true;
-      recognition.interimResults = false;
-      recognition.lang = "en-US";
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+      recognition.lang = (typeof navigator !== "undefined" && navigator.language) || "en-US";
+
+      recognition.onstart = () => {
+        setSpeechStatus("listening");
+      };
 
       recognition.onresult = (event: any) => {
+        let interim = "";
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           const result = event.results[i];
           const text = result[0]?.transcript?.trim();
           if (result.isFinal && text) {
-            const timestamp = callDuration || "00:00";
-            const speakerName =
-              role === "doctor"
-                ? (doctorName || "Dr. Attending Physician")
-                : (patientName || counterpartName || "Patient");
-            const turnRole: "doctor" | "patient" = role === "doctor" ? "doctor" : "patient";
-            setTranscriptTurns((prev) => [
-              ...prev,
-              {
-                id: `speech-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-                speaker: speakerName,
-                role: turnRole,
-                timestamp,
-                text,
-              },
-            ]);
+            pendingInterimRef.current = "";
+            setInterimText("");
+            setSpeechStatus("listening");
+            if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+            commitTurn(text);
+          } else if (text) {
+            interim += " " + text;
           }
+        }
+        if (interim.trim()) {
+          const cleanInterim = interim.trim();
+          pendingInterimRef.current = cleanInterim;
+          setInterimText(cleanInterim);
+          setSpeechStatus("hearing");
+          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = setTimeout(() => {
+            if (pendingInterimRef.current?.trim()) {
+              commitTurn(pendingInterimRef.current.trim());
+              pendingInterimRef.current = "";
+              setInterimText("");
+              setSpeechStatus("listening");
+            }
+          }, 1800);
         }
       };
 
       recognition.onerror = (event: any) => {
-        // Ignore temporary pauses or silence
         if (event.error === "no-speech") return;
+        if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+          setSpeechStatus("error");
+        }
       };
 
       recognition.onend = () => {
+        if (pendingInterimRef.current?.trim()) {
+          commitTurn(pendingInterimRef.current.trim());
+          pendingInterimRef.current = "";
+          setInterimText("");
+        }
         if (isSpeechActiveRef.current) {
-          try {
-            recognition.start();
-          } catch {}
+          setTimeout(() => {
+            try {
+              if (isSpeechActiveRef.current && recognitionRef.current) {
+                recognitionRef.current.start();
+              }
+            } catch {}
+          }, 300);
         }
       };
 
       recognition.start();
       recognitionRef.current = recognition;
+      setSpeechStatus("listening");
     } catch {
-      // Graceful fallback if unsupported
+      setSpeechStatus("unsupported");
     }
 
     return () => {
       isSpeechActiveRef.current = false;
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      if (pendingInterimRef.current?.trim()) {
+        commitTurn(pendingInterimRef.current.trim());
+        pendingInterimRef.current = "";
+      }
       if (recognition) {
         try {
           recognition.stop();
@@ -997,7 +1084,7 @@ export function LiveConsultationPanel({
       }
       recognitionRef.current = null;
     };
-  }, [status, isMicOn, role, counterpartName, doctorName, patientName, callDuration]);
+  }, [status, isMicOn, commitTurn]);
 
   return (
     <div className="grid gap-4 xl:grid-cols-12">
@@ -1098,6 +1185,44 @@ export function LiveConsultationPanel({
             onRefreshDevices={onRefreshDevices}
           />
         </div>
+
+        {/* Live Audio Speech Recognition & Transcript Bar */}
+        <div className={`border-b px-4 py-2.5 text-xs flex items-center justify-between gap-3 ${
+          isDark ? "bg-slate-900/90 border-slate-800 text-slate-300" : "bg-teal-50/80 border-teal-100 text-slate-700"
+        }`}>
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              {isMicOn && speechStatus !== "error" && speechStatus !== "unsupported" ? (
+                <>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                </>
+              ) : (
+                <span className="inline-flex rounded-full h-2.5 w-2.5 bg-slate-400" />
+              )}
+            </span>
+            <span className="font-black shrink-0 text-[11px] uppercase tracking-wider text-brand-teal">
+              Live Transcript:
+            </span>
+            <span className="truncate italic text-[11px] text-slate-600 dark:text-slate-300">
+              {!isMicOn
+                ? "Microphone is muted — speech capture paused"
+                : interimText
+                  ? `Hearing: "${interimText}..."`
+                  : transcriptTurns.length > 0
+                    ? `Last turn: "${transcriptTurns[transcriptTurns.length - 1].speaker}: ${transcriptTurns[transcriptTurns.length - 1].text.slice(0, 45)}..."`
+                    : speechStatus === "unsupported"
+                      ? "Browser speech recognition offline. In-call chat messages are automatically archived to the transcript."
+                      : "Listening for live consultation speech..."}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="rounded-full bg-brand-teal/15 text-brand-teal px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider">
+              {transcriptTurns.length} turns recorded
+            </span>
+          </div>
+        </div>
+
         {isScreenSharing && screenShareStream ? (
           <div className="flex flex-col gap-4 p-4 pb-28 min-h-[480px]">
             {/* Minimized Camera Previews */}
@@ -1271,6 +1396,40 @@ export function LiveConsultationPanel({
       <div className="space-y-4 xl:col-span-5">
         {documentation}
         {chat}
+
+        {/* Live Synchronous Dialogue Stream */}
+        <section className={`rounded-xl border p-4 shadow-xs max-h-64 overflow-y-auto ${
+          isDark ? "border-slate-800 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-900"
+        }`}>
+          <div className="flex items-center justify-between border-b pb-2 mb-2.5 border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-brand-teal animate-pulse" />
+              <h4 className="text-xs font-black uppercase tracking-wider text-brand-teal">
+                Live Dialogue Transcript ({transcriptTurns.length})
+              </h4>
+            </div>
+            <span className="text-[10px] text-slate-400">Archived to PDF report</span>
+          </div>
+          {transcriptTurns.length === 0 ? (
+            <p className="text-xs italic text-slate-400 py-4 text-center">
+              Spoken conversation turns and in-call messages will appear here in real time.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {transcriptTurns.map((turn) => (
+                <div key={turn.id} className="text-xs rounded-lg p-2.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/50">
+                  <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 mb-0.5">
+                    <span className={turn.role === "doctor" ? "text-brand-teal font-black" : "text-emerald-600 dark:text-emerald-400 font-black"}>
+                      {turn.speaker} ({turn.role})
+                    </span>
+                    <span>{turn.timestamp}</span>
+                  </div>
+                  <p className="text-slate-800 dark:text-slate-200 leading-relaxed">{turn.text}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
 
       {/* ── Call Duration Warning & Extension Popup ── */}

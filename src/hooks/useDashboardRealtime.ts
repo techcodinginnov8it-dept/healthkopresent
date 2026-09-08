@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -42,6 +42,9 @@ export function useDashboardRealtime(onEvent?: (event: RealtimeEvent) => void) {
   const getEventKey = useCallback((event: RealtimeEvent) => {
     if (event.type === "message:new") {
       return `message:new:${event.messageId}`;
+    }
+    if (event.type === "transcript:turn") {
+      return `transcript:turn:${event.turn.id}`;
     }
 
     return null;

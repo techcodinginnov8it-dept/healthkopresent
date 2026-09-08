@@ -97,11 +97,18 @@ export function parseNotesAndTranscript(rawNotes?: string | null): {
   const transcriptTurns: TranscriptTurn[] = lines.map((line, idx) => {
     const match = line.match(/^\[?(\d{1,2}:\d{2})\]?\s*(.+?):\s*(.+)$/);
     if (match) {
-      const isDoc = match[2].toLowerCase().includes("dr") || match[2].toLowerCase().includes("doctor");
+      const rawSpeaker = match[2].trim();
+      const roleMatch = rawSpeaker.match(/^(.+?)\s*\((doctor|patient|system)\)$/i);
+      const speaker = roleMatch ? roleMatch[1].trim() : rawSpeaker;
+      const role = roleMatch
+        ? (roleMatch[2].toLowerCase() as "doctor" | "patient" | "system")
+        : (rawSpeaker.toLowerCase().includes("dr") || rawSpeaker.toLowerCase().includes("doctor")
+            ? "doctor"
+            : "patient");
       return {
         timestamp: match[1],
-        speaker: match[2].trim(),
-        role: isDoc ? "doctor" : "patient",
+        speaker,
+        role,
         text: match[3].trim(),
       };
     }

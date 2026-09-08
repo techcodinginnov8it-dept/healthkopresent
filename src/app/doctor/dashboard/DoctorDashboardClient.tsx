@@ -2323,8 +2323,8 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
 
     setSubmitState({ loading: true, error: "", success: "" });
 
-    let liveTurns: any[] = [];
-    if (typeof window !== "undefined") {
+    let liveTurns: any[] = session.transcriptTurns || [];
+    if (liveTurns.length === 0 && typeof window !== "undefined") {
       try {
         const saved = localStorage.getItem(`healthko:transcript:${session.activeAppointment.id}`);
         if (saved) liveTurns = JSON.parse(saved);
@@ -2673,6 +2673,8 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
             doctorName={doctor.name}
             patientName={`${session.activeAppointment.patient.firstName} ${session.activeAppointment.patient.lastName}`}
             messages={session.messages}
+            sessionTranscriptTurns={session.transcriptTurns}
+            onNewTranscriptTurn={(turn) => session.addTranscriptTurn(turn)}
             chat={<ChatPanel role="doctor" messages={session.messages} onSend={session.sendMessage} tone={tone} />}
             documentation={
               <section className={`rounded-xl border p-4 transition-colors max-h-[calc(100vh-14rem)] overflow-y-auto ${
@@ -3917,8 +3919,8 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                         }
                         setIsEndCallLoading(true);
                         // Retrieve live transcript turns captured during the call
-                        let liveTurns: any[] = [];
-                        if (typeof window !== "undefined") {
+                        let liveTurns: any[] = session.transcriptTurns || [];
+                        if (liveTurns.length === 0 && typeof window !== "undefined") {
                           try {
                             const saved = localStorage.getItem(`healthko:transcript:${session.activeAppointment.id}`);
                             if (saved) liveTurns = JSON.parse(saved);
@@ -3963,8 +3965,8 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
                         }
                         setIsEndCallLoading(true);
                         if (session.activeAppointment && clinicalNotes.trim()) {
-                          let liveTurns: any[] = [];
-                          if (typeof window !== "undefined") {
+                          let liveTurns: any[] = session.transcriptTurns || [];
+                          if (liveTurns.length === 0 && typeof window !== "undefined") {
                             try {
                               const saved = localStorage.getItem(`healthko:transcript:${session.activeAppointment.id}`);
                               if (saved) liveTurns = JSON.parse(saved);

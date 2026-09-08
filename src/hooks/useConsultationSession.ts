@@ -18,6 +18,13 @@ type SessionState<TAppointment> = {
   roomId: string;
   accessToken: string;
   messages: ChatMessage[];
+  transcriptTurns: Array<{
+    id: string;
+    speaker: string;
+    role: "doctor" | "patient" | "system";
+    text: string;
+    timestamp: string;
+  }>;
 };
 
 const idleState = {
@@ -34,6 +41,7 @@ const idleState = {
   roomId: "",
   accessToken: "",
   messages: [],
+  transcriptTurns: [],
 } satisfies SessionState<{ id: string; notes?: string | null; prescription?: string | null }>;
 
 function getInitialState<TAppointment>(persistKey?: string): SessionState<TAppointment> {
@@ -271,6 +279,14 @@ export function useConsultationSession<TAppointment extends { id: string; notes?
         attachment,
       };
 
+      const chatTurn = {
+        id: `chat-${message.id}`,
+        speaker: role === "doctor" ? "Doctor" : "Patient",
+        role: role as "doctor" | "patient",
+        text: message.text,
+        timestamp: message.time,
+      };
+
       publish({
         type: "message:new",
         appointmentId: appointment.id,
@@ -286,13 +302,53 @@ export function useConsultationSession<TAppointment extends { id: string; notes?
           return current;
         }
 
+        const updatedTurns = current.transcriptTurns.some((t) => t.id === chatTurn.id)
+          ? current.transcriptTurns
+          : [...current.transcriptTurns, chatTurn];
+
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem(`healthko:transcript:${appointment.id}`, JSON.stringify(updatedTurns));
+          } catch {}
+        }
+
         return {
           ...current,
           messages: [...current.messages, message],
+          transcriptTurns: updatedTurns,
         };
       });
     },
     [publish, role, state.activeAppointment]
+  );
+
+  const addTranscriptTurn = useCallback(
+    (turn: { id: string; speaker: string; role: "doctor" | "patient" | "system"; text: string; timestamp: string }) => {
+      const apptId = state.activeAppointment?.id;
+      if (!turn || !turn.text?.trim() || !apptId) return;
+
+      publish({
+        type: "transcript:turn",
+        appointmentId: apptId,
+        actorRole: role,
+        turn,
+      });
+
+      setState((current) => {
+        if (current.transcriptTurns.some((t) => t.id === turn.id)) return current;
+        const updated = [...current.transcriptTurns, turn];
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem(`healthko:transcript:${apptId}`, JSON.stringify(updated));
+          } catch {}
+        }
+        return {
+          ...current,
+          transcriptTurns: updated,
+        };
+      });
+    },
+    [publish, role, state.activeAppointment?.id]
   );
 
   const receiveRealtimeEvent = useCallback((event: RealtimeEvent | null) => {
@@ -373,12 +429,44 @@ export function useConsultationSession<TAppointment extends { id: string; notes?
         };
       }
 
+      if (event.type === "transcript:turn") {
+        if (!event.turn || !event.turn.text?.trim()) return current;
+        if (current.transcriptTurns.some((t) => t.id === event.turn.id)) return current;
+        const updated = [...current.transcriptTurns, event.turn];
+        if (typeof window !== "undefined" && event.appointmentId) {
+          try {
+            localStorage.setItem(`healthko:transcript:${event.appointmentId}`, JSON.stringify(updated));
+          } catch {}
+        }
+        return {
+          ...current,
+          transcriptTurns: updated,
+        };
+      }
+
       if (event.type !== "message:new") {
         return current;
       }
 
       if (current.messages.some((message) => message.id === event.messageId)) {
         return current;
+      }
+
+      const chatTurn = {
+        id: `chat-${event.messageId}`,
+        speaker: event.actorRole === "doctor" ? "Doctor" : "Patient",
+        role: event.actorRole as "doctor" | "patient",
+        text: event.text,
+        timestamp: event.time,
+      };
+      const updatedTurns = current.transcriptTurns.some((t) => t.id === chatTurn.id)
+        ? current.transcriptTurns
+        : [...current.transcriptTurns, chatTurn];
+
+      if (typeof window !== "undefined" && event.appointmentId) {
+        try {
+          localStorage.setItem(`healthko:transcript:${event.appointmentId}`, JSON.stringify(updatedTurns));
+        } catch {}
       }
 
       return {
@@ -394,6 +482,7 @@ export function useConsultationSession<TAppointment extends { id: string; notes?
             attachment: event.attachment,
           },
         ],
+        transcriptTurns: updatedTurns,
       };
     });
   }, [role]);
@@ -409,6 +498,7 @@ export function useConsultationSession<TAppointment extends { id: string; notes?
     toggleSpeaker,
     setScreenSharing,
     sendMessage,
+    addTranscriptTurn,
     receiveMessage: receiveRealtimeEvent,
     receiveRealtimeEvent,
   };

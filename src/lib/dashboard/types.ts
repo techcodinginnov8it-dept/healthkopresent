@@ -176,6 +176,18 @@ export type RealtimeEvent =
       screenSharing: boolean;
     }
   | {
+      type: "transcript:turn";
+      appointmentId: string;
+      actorRole: DashboardRole;
+      turn: {
+        id: string;
+        speaker: string;
+        role: "doctor" | "patient" | "system";
+        text: string;
+        timestamp: string;
+      };
+    }
+  | {
       type: "notification:new";
       actorRole: DashboardRole;
       title: string;
