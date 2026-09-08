@@ -110,7 +110,7 @@ const PATIENT_STATUS_FILTERS: { id: PatientStatusFilter; label: string }[] = [
 const PATIENT_RECORD_TABS: { id: PatientRecordsTab; label: string }[] = [
   { id: "records", label: "Records" },
   { id: "history", label: "History" },
-  { id: "prescriptions", label: "Rx" },
+  { id: "prescriptions", label: "Consultation Results" },
   { id: "session", label: "Live" },
 ];
 
@@ -419,6 +419,7 @@ function PatientOperationsHub({
   actionLoadingId,
   messages,
   tone = "light",
+  doctor,
   onSearchChange,
   onStatusFilterChange,
   onRecordsTabChange,
@@ -445,6 +446,7 @@ function PatientOperationsHub({
   actionLoadingId: string | null;
   messages: ChatMessage[];
   tone?: "light" | "dark";
+  doctor?: DashboardDoctor;
   availableDoctors?: DashboardDoctor[];
   onRefer?: (patient: PatientProfile, targetDoctorId: string, note?: string) => Promise<void> | void;
   onSearchChange: (value: string) => void;
@@ -478,6 +480,38 @@ function PatientOperationsHub({
   const [referTargetDoctorId, setReferTargetDoctorId] = useState("");
   const [referNote, setReferNote] = useState("");
   const [isReferring, setIsReferring] = useState(false);
+
+  const handleDownloadRx = (appointment: DoctorAppointment) => {
+    const pat = selectedPatient || appointment.patient;
+    const patientName = getPatientDisplayName(pat);
+    const patientAge = pat.dob
+      ? Math.floor((Date.now() - new Date(pat.dob).getTime()) / (365.25 * 24 * 3600 * 1000))
+      : "Adult";
+
+    const docName = doctor?.name || "Dr. Medical Doctor";
+    const docSpecialty = doctor?.specialty || "General & Telemedicine Practice";
+    const docLicense = doctor?.licenseNumber;
+    const docNpi = doctor?.npi;
+    const clinicName = doctor?.name
+      ? `CLINIC OF DR. ${doctor.name.toUpperCase().replace(/^DR\.?\s+/i, "")}, MD`
+      : undefined;
+
+    downloadPrescriptionPdf({
+      appointmentId: appointment.id,
+      doctorName: docName,
+      doctorSpecialty: docSpecialty,
+      doctorLicense: docLicense,
+      doctorNpi: docNpi,
+      clinicName,
+      patientName,
+      patientAge,
+      patientGender: pat.gender,
+      patientAddress: pat.address ? `${pat.address}, ${pat.city || ""}` : undefined,
+      date: appointment.scheduledAt,
+      diagnosis: appointment.reason || appointment.notes || "Clinical Telehealth Encounter",
+      prescription: appointment.prescription || "No prescription recorded.",
+    });
+  };
 
   // When doctor clicks a patient card, select them and open the popover
   const handleSelectAndOpen = (patientId: string, initialTab: "data" | "records" = "data") => {
@@ -1133,19 +1167,97 @@ function PatientOperationsHub({
                   {recordsTab === "prescriptions" && (
                     <div className="space-y-3">
                       {selectedPatient.prescriptions.length ? (
-                        selectedPatient.prescriptions.map((appointment) => (
-                          <AppointmentCard
-                            key={appointment.id}
-                            tone={tone}
-                            title={appointment.prescription || "Prescription"}
-                            subtitle={getPatientDisplayName(selectedPatient)}
-                            scheduledAt={appointment.scheduledAt}
-                            status={appointment.status}
-                            reason={appointment.reason}
-                          />
-                        ))
+                        selectedPatient.prescriptions.map((appointment) => {
+                          const rxFirstLine = appointment.prescription
+                            ? appointment.prescription.startsWith("---")
+                              ? appointment.prescription.split("\n").find((l) => l.startsWith("Medicine:"))?.replace(/^Medicine:\s*/i, "") || "Prescription Order"
+                              : appointment.prescription.split("\n")[0]
+                            : "Prescription";
+
+                          return (
+                            <article
+                              key={appointment.id}
+                              className={`group rounded-2xl border p-4 transition-all duration-200 hover:shadow-md ${
+                                isDark
+                                  ? "border-slate-800 bg-slate-900/80 text-white hover:border-slate-700"
+                                  : "border-slate-200/80 bg-white text-slate-950 hover:border-slate-300 shadow-2xs"
+                              }`}
+                            >
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <h3 className="text-sm font-black truncate max-w-md">
+                                      {rxFirstLine}
+                                    </h3>
+                                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${getStatusClasses(appointment.status)}`}>
+                                      {appointment.status}
+                                    </span>
+                                  </div>
+                                  <p className="mt-0.5 text-xs font-bold tracking-wide text-brand-teal">
+                                    {getPatientDisplayName(selectedPatient)}
+                                  </p>
+                                  {appointment.reason && (
+                                    <p className={`mt-1 text-xs font-medium ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                                      Encounter Reason: {appointment.reason}
+                                    </p>
+                                  )}
+                                </div>
+                                <div className={`shrink-0 rounded-xl border px-3 py-1.5 text-center text-xs sm:text-right ${isDark ? "border-slate-800 bg-slate-800/60" : "border-slate-100 bg-slate-50"}`}>
+                                  <p className={`font-black text-[11px] leading-tight ${isDark ? "text-slate-200" : "text-slate-800"}`}>
+                                    {formatDateTime(appointment.scheduledAt)}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Doctor's Medical Note on that session */}
+                              <div className={`mt-3 rounded-xl border p-3 ${
+                                isDark ? "border-slate-800/90 bg-slate-950/60" : "border-slate-200/70 bg-slate-50/80"
+                              }`}>
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  <svg className="h-3 w-3 text-brand-teal shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                    <polyline points="14 2 14 8 20 8" />
+                                    <line x1="16" y1="13" x2="8" y2="13" />
+                                    <line x1="16" y1="17" x2="8" y2="17" />
+                                  </svg>
+                                  <p className="text-[10px] font-black uppercase tracking-wider text-brand-teal">
+                                    Doctor&apos;s Medical Note
+                                  </p>
+                                </div>
+                                <p className={`text-xs leading-relaxed whitespace-pre-wrap ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+                                  {appointment.notes?.trim() || "No additional doctor notes recorded for this session."}
+                                </p>
+                              </div>
+
+                              {/* Prescription PDF Download Button */}
+                              {appointment.prescription && (
+                                <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pt-1">
+                                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                    <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                                      <polyline points="22 4 12 14.01 9 11.01" />
+                                    </svg>
+                                    <span>E-Prescription Generated</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadRx(appointment)}
+                                    className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-brand-teal px-3.5 py-2 text-xs font-black text-white shadow-xs transition hover:bg-teal-600 active:scale-[0.98] shrink-0"
+                                  >
+                                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                      <polyline points="7 10 12 15 17 10" />
+                                      <line x1="12" y1="15" x2="12" y2="3" />
+                                    </svg>
+                                    Download Prescription PDF
+                                  </button>
+                                </div>
+                              )}
+                            </article>
+                          );
+                        })
                       ) : (
-                        <EmptyState tone={tone} title="No prescriptions" body="Medication plans issued during consultations appear here." />
+                        <EmptyState tone={tone} title="No consultation results" body="Consultations with clinical documentation and prescriptions appear here." />
                       )}
                     </div>
                   )}
@@ -3145,6 +3257,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
 
       {activeModule === "patients" && (
         <PatientOperationsHub
+          doctor={doctor}
           tone={tone}
           patients={filteredPatientProfiles}
           allPatientCount={patientProfiles.length}
