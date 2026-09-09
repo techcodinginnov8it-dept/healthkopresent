@@ -260,13 +260,30 @@
 
 ---
 
+### 17. Google Calendar-Style Appointment Stacking & Availability Visualization
+* **Commit**: *(pending)*
+* **Timestamp**: `2026-09-09 23:35:00 +0800`
+* **Duration**: ~30 minutes
+* **Updates & Changes**:
+  - Redesigned the appointment calendar so that multiple appointments in the same hour slot stack vertically in a clean, readable column instead of squishing horizontally into unreadable slivers.
+  - Implemented a Google Calendar-style overflow system in Day and Week views: when more than 3 appointments share an hour, the first 3 are shown and a prominent "+N more" button reveals the remaining appointments inline with a "Show less" collapse control.
+  - Applied the same stacking and overflow pattern to the Month view, showing up to 3 appointment chips per day cell with a "+N more" button for excess appointments.
+  - Added clear visual distinction between Available and Unavailable time slots using a subtle diagonal hatch pattern on unavailable slots so doctors and patients can immediately see which hours are open for scheduling.
+  - Available slots show a clean background with a soft teal hover glow on mouse-over, reinforcing which slots can accept drag-and-drop reschedules or new bookings.
+  - Unavailable slots display an "Off" micro-label in empty off-hours cells and a "Unavailable" sub-label in the month view header so the state is never ambiguous.
+  - Added two new legend pills to the calendar header: a teal dot "Available" badge and a hatched square "Unavailable" badge, making the calendar legend self-explanatory at a glance.
+  - Prevented drag-over events from firing on unavailable slots, ensuring appointments cannot be accidentally rescheduled into off-hours via drag-and-drop.
+  - Truncated appointment title and subtitle text in all views so cards never overflow their slot width regardless of how long the patient name or reason text is.
+
+---
+
 ## 📊 Summary Table of Commits
 
 | Commit | Time (+0800) | Area | Summary of Updates |
 | :--- | :--- | :--- | :--- |
+| *(pending)* | 23:35 | **Appointment Calendar** | Google Calendar-style vertical stacking, +N more overflow, and Available/Unavailable slot visualization |
 | `51d0b9e` | 04:55 | **Security & Telehealth** | Multi-device concurrent login detection & active consultation exit/back/minimize guards |
 | `82f5c28` | 04:15 | **Telehealth / Clinical Dialogue** | Intelligent clinical encounter dialogue auto-synthesis, in-call dialogue logging & guaranteed PDF transcripts |
-
 | `f37f448` | 03:32 | **Telehealth / Audio** | Real-time dialogue synchronization, live speech bar & database transcript archives |
 | `d5fa35f` | 02:50 | **Patient Dashboard** | Disconnect warning modal & leave confirmation for active consultations |
 | `f3102f0` | 02:35 | **Live Telehealth** | Dynamic live conversation capture & database archives for doctor and patient |
@@ -291,4 +308,3 @@
 - **Command**: `npx tsc --noEmit`
 - **Result**: `0` errors found (clean pass)
 - **Local Dev Server**: Running on `http://localhost:3000`
-

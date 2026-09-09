@@ -582,6 +582,14 @@ export function AppointmentCalendar({
             <span className={`rounded-full px-2.5 py-1 ${dark ? "bg-amber-400/15 text-amber-200 border border-amber-400/30" : "border border-amber-300 bg-amber-50 text-amber-800"}`}>Pending</span>
             <span className={`rounded-full px-2.5 py-1 ${dark ? "bg-emerald-400/15 text-emerald-200 border border-emerald-400/30" : "border border-emerald-300 bg-emerald-50 text-emerald-800"}`}>Completed</span>
             <span className={`rounded-full px-2.5 py-1 ${dark ? "bg-rose-400/15 text-rose-200 border border-rose-400/30" : "border border-rose-300 bg-rose-50 text-rose-800"}`}>Cancelled</span>
+            <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 ${dark ? "border border-teal-400/30 bg-teal-400/10 text-teal-200" : "border border-teal-300 bg-teal-50 text-teal-800"}`}>
+              <span className="h-2 w-2 rounded-full bg-teal-400" />
+              Available
+            </span>
+            <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 ${dark ? "border border-slate-600 bg-slate-800 text-slate-400" : "border border-slate-300 bg-slate-100 text-slate-500"}`}>
+              <span className="h-2 w-2 rounded-sm" style={{ background: dark ? "repeating-linear-gradient(45deg,#475569,#475569 2px,transparent 2px,transparent 6px)" : "repeating-linear-gradient(45deg,#94a3b8,#94a3b8 2px,transparent 2px,transparent 6px)" }} />
+              Unavailable
+            </span>
           </div>
         )}
       </div>
@@ -630,6 +638,14 @@ export function AppointmentCalendar({
               {days.map((day) => {
                 const dayAppointments = appointments.filter((appointment) => sameDay(appointment.scheduledAt, day));
                 const dayAvailable = !availabilityWindow || availabilityWindow.days.includes(day.getDay());
+                const dayOverflow = dayAppointments.length > 3;
+                const visibleDayAppts = dayAppointments.slice(0, 3);
+
+                const unavailableStyle: React.CSSProperties = !dayAvailable ? {
+                  backgroundImage: dark
+                    ? "repeating-linear-gradient(45deg,transparent,transparent 6px,rgba(71,85,105,0.15) 6px,rgba(71,85,105,0.15) 12px)"
+                    : "repeating-linear-gradient(45deg,transparent,transparent 6px,rgba(148,163,184,0.18) 6px,rgba(148,163,184,0.18) 12px)",
+                } : {};
 
                 return (
                   <div
@@ -652,25 +668,49 @@ export function AppointmentCalendar({
                     }}
                     className={`min-h-36 p-2 transition-colors ${
                       dayAvailable
-                        ? dark ? "bg-slate-950" : "bg-white"
-                        : dark ? "bg-slate-900/50" : "bg-slate-100"
+                        ? dark ? "bg-slate-950 hover:bg-slate-900/60" : "bg-white hover:bg-teal-50/30"
+                        : dark ? "bg-slate-900/60" : "bg-slate-50"
                     }`}
+                    style={unavailableStyle}
                   >
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <div>
                         <p className={`text-xs font-black ${dark ? "text-white" : "text-slate-900"}`}>{formatMonthDay(day)}</p>
-                        <p className={`text-[10px] font-bold uppercase ${dark ? "text-slate-500" : "text-slate-400"}`}>{formatWeekday(day)}</p>
+                        <p className={`text-[10px] font-bold uppercase ${
+                          dayAvailable
+                            ? dark ? "text-teal-400/70" : "text-teal-600/70"
+                            : dark ? "text-slate-600" : "text-slate-400"
+                        }`}>
+                          {dayAvailable ? formatWeekday(day) : "Unavailable"}
+                        </p>
                       </div>
-                      {dayAppointments.length ? (
+                      {dayAppointments.length > 0 && (
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
                           dark ? "bg-white/10 text-slate-200" : "bg-slate-100 text-slate-700 border border-slate-200"
                         }`}>{dayAppointments.length}</span>
-                      ) : null}
+                      )}
                     </div>
-                    <div className="max-h-24 space-y-1.5 overflow-y-auto pr-1">
-                      {dayAppointments.map((appointment) => (
+                    <div className="flex flex-col gap-1">
+                      {visibleDayAppts.map((appointment) => (
                         <AppointmentBlock key={appointment.id} appointment={appointment} editable={editable} compact onSelect={(appt, rect) => setSelectedEntry({ appointment: appt, rect })} tone={tone} />
                       ))}
+                      {dayOverflow && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                            setSelectedEntry({ appointment: dayAppointments[3], rect });
+                          }}
+                          className={`mt-0.5 w-full rounded-md px-2 py-1 text-[10px] font-black text-center transition ${
+                            dark ? "bg-white/5 text-slate-400 hover:bg-white/10 hover:text-slate-200" : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+                          }`}
+                        >
+                          +{dayAppointments.length - 3} more
+                        </button>
+                      )}
+                      {!dayAvailable && dayAppointments.length === 0 && (
+                        <p className={`text-[9px] font-black uppercase tracking-wider mt-1 ${dark ? "text-slate-700" : "text-slate-300"}`}>Off hours</p>
+                      )}
                     </div>
                   </div>
                 );
@@ -710,11 +750,23 @@ export function AppointmentCalendar({
                       slotMinutes < availabilityWindow.endMinutes
                     );
 
+                    const MAX_VISIBLE = stage ? 3 : 2;
+                    const visibleAppts = slotAppointments.slice(0, MAX_VISIBLE);
+                    const overflowCount = slotAppointments.length - MAX_VISIBLE;
+                    const [slotExpanded, setSlotExpanded] = useState(false);
+                    const displayedAppts = slotExpanded ? slotAppointments : visibleAppts;
+
+                    const unavailableSlotStyle: React.CSSProperties = !slotAvailable ? {
+                      backgroundImage: dark
+                        ? "repeating-linear-gradient(45deg,transparent,transparent 8px,rgba(51,65,85,0.25) 8px,rgba(51,65,85,0.25) 16px)"
+                        : "repeating-linear-gradient(45deg,transparent,transparent 8px,rgba(148,163,184,0.14) 8px,rgba(148,163,184,0.14) 16px)",
+                    } : {};
+
                     return (
                       <div
                         key={`${day.toISOString()}-${hour}`}
                         onDragOver={(event) => {
-                          if (editable) {
+                          if (editable && slotAvailable) {
                             event.preventDefault();
                           }
                         }}
@@ -728,28 +780,86 @@ export function AppointmentCalendar({
                             onReschedule(appointmentId, toLocalDateTimeValue(slot));
                           }
                         }}
-                        className={`${stage ? "min-h-20" : "min-h-24"} p-2 ${slotAvailable ? (dark ? "bg-slate-950" : "bg-white") : dark ? "bg-slate-900/50" : "bg-slate-100"}`}
+                        className={`relative ${stage ? "min-h-20" : "min-h-24"} p-1.5 transition-colors ${
+                          slotAvailable
+                            ? dark
+                              ? "bg-slate-950 hover:bg-slate-900/50"
+                              : "bg-white hover:bg-teal-50/20"
+                            : dark
+                              ? "bg-slate-900/70"
+                              : "bg-slate-50/80"
+                        } ${!slotAvailable && !editable ? "cursor-not-allowed" : ""}`}
+                        style={unavailableSlotStyle}
                       >
-                        <div className={stage ? "flex max-h-28 flex-col gap-1.5 overflow-y-auto pr-1" : "space-y-2"}>
-                          {slotAppointments.map((appointment) => {
-                            return stage ? (
-                              <AppointmentBlock key={appointment.id} appointment={appointment} editable={editable} onSelect={(appt, rect) => setSelectedEntry({ appointment: appt, rect })} tone={tone} />
-                            ) : (
+                        {/* Unavailable label — shown only when slot is empty */}
+                        {!slotAvailable && slotAppointments.length === 0 && (
+                          <span className={`absolute bottom-1 right-1.5 select-none text-[8px] font-black uppercase tracking-widest ${
+                            dark ? "text-slate-700" : "text-slate-300"
+                          }`}>Off</span>
+                        )}
+
+                        {/* Available empty-slot hover hint */}
+                        {slotAvailable && slotAppointments.length === 0 && editable && (
+                          <span className={`pointer-events-none absolute inset-0 flex items-center justify-center text-[9px] font-black uppercase tracking-wider opacity-0 transition-opacity hover:opacity-100 ${
+                            dark ? "text-teal-500/40" : "text-teal-600/30"
+                          } group-hover:opacity-100`} />
+                        )}
+
+                        {/* Stacked appointments — Google Calendar style */}
+                        <div className="flex flex-col gap-1">
+                          {stage ? (
+                            <>
+                              {displayedAppts.map((appointment) => (
+                                <AppointmentBlock
+                                  key={appointment.id}
+                                  appointment={appointment}
+                                  editable={editable}
+                                  onSelect={(appt, rect) => setSelectedEntry({ appointment: appt, rect })}
+                                  tone={tone}
+                                />
+                              ))}
+                              {!slotExpanded && overflowCount > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setSlotExpanded(true)}
+                                  className={`w-full rounded-md py-0.5 text-[10px] font-black text-center transition ${
+                                    dark
+                                      ? "bg-white/5 text-slate-400 hover:bg-white/10 hover:text-slate-200"
+                                      : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+                                  }`}
+                                >
+                                  +{overflowCount} more
+                                </button>
+                              )}
+                              {slotExpanded && slotAppointments.length > MAX_VISIBLE && (
+                                <button
+                                  type="button"
+                                  onClick={() => setSlotExpanded(false)}
+                                  className={`w-full rounded-md py-0.5 text-[10px] font-black text-center transition ${
+                                    dark ? "text-slate-500 hover:text-slate-300" : "text-slate-400 hover:text-slate-600"
+                                  }`}
+                                >
+                                  Show less ↑
+                                </button>
+                              )}
+                            </>
+                          ) : (
+                            slotAppointments.map((appointment) => (
                               <article
                                 key={appointment.id}
                                 draggable={editable}
                                 onDragStart={(event) => event.dataTransfer.setData("text/plain", appointment.id)}
-                                className={`rounded-lg border-l-4 border-brand-teal p-2 text-xs shadow-sm ${
+                                className={`w-full rounded-lg border-l-4 border-brand-teal p-2 text-xs shadow-sm ${
                                   dark ? "bg-slate-900 text-slate-100" : "bg-slate-50 text-slate-900"
                                 } ${editable ? "cursor-grab active:cursor-grabbing" : ""}`}
                                 title={editable ? "Drag to another calendar slot" : undefined}
                               >
-                                <p className="font-black">{appointment.title}</p>
-                                <p className={dark ? "mt-1 font-semibold text-slate-400" : "mt-1 font-semibold text-slate-500"}>{appointment.subtitle}</p>
+                                <p className="truncate font-black">{appointment.title}</p>
+                                <p className={`truncate ${dark ? "mt-1 font-semibold text-slate-400" : "mt-1 font-semibold text-slate-500"}`}>{appointment.subtitle}</p>
                                 <p className="mt-2 font-black uppercase text-brand-teal">{appointment.status}</p>
                               </article>
-                            );
-                          })}
+                            ))
+                          )}
                         </div>
                       </div>
                     );
