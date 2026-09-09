@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { logoutDoctor } from "@/app/actions/auth";
+import { logoutDoctor, checkSessionStatus } from "@/app/actions/auth";
 import { acceptAppointment, cancelAppointment, completeConsultation, referAppointment, rescheduleAppointment, scheduleFollowUpAppointment, updateConsultationVitals } from "@/app/actions/doctor";
 import { updateDoctorStatus } from "@/app/actions/settings";
 import { endVideoSession, startVideoSession } from "@/app/actions/video-session";
@@ -11,6 +11,9 @@ import { DashboardShell, type DashboardNavItem } from "@/components/dashboard/Da
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
 import { DoctorSettingsModule } from "@/components/dashboard/SettingsModule";
 import { DoctorResearchModule } from "@/components/dashboard/DoctorResearchModule";
+import { ConcurrentLoginModal } from "@/components/dashboard/ConcurrentLoginModal";
+import { ActiveCallWarningModal } from "@/components/dashboard/ActiveCallWarningModal";
+import { useActiveCallGuard } from "@/hooks/useActiveCallGuard";
 import {
   AppointmentCard,
   ChatPanel,
@@ -71,6 +74,7 @@ type DoctorDashboardClientProps = {
   doctor: Doctor;
   doctors: DashboardDoctor[];
   initialModule?: DoctorModuleId;
+  currentSessionId?: string;
 };
 
 type PatientStatusFilter = "all" | "active" | "pending" | "completed" | "prescriptions";
@@ -1469,7 +1473,12 @@ function RecordTimeline({
   );
 }
 
-export default function DoctorDashboardClient({ doctor, doctors, initialModule = "overview" }: DoctorDashboardClientProps) {
+export default function DoctorDashboardClient({
+  doctor,
+  doctors,
+  initialModule = "overview",
+  currentSessionId,
+}: DoctorDashboardClientProps) {
   const router = useRouter();
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
@@ -1576,8 +1585,57 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
   }, []);
 
   const [callExtendedMinutes, setCallExtendedMinutes] = useState(0);
+  const [concurrentSession, setConcurrentSession] = useState<{
+    isOpen: boolean;
+    newDevice?: string;
+    loginTime?: string;
+  }>({ isOpen: false });
+
+  useEffect(() => {
+    if (!currentSessionId) return;
+
+    const verifySession = async () => {
+      try {
+        const res = await checkSessionStatus("doctor", currentSessionId);
+        if (!res.valid) {
+          setConcurrentSession({
+            isOpen: true,
+            newDevice: res.currentDevice || "Another Device",
+            loginTime: res.lastLoginAt || new Date().toISOString(),
+          });
+        }
+      } catch {}
+    };
+
+    const handleFocus = () => {
+      void verifySession();
+    };
+
+    window.addEventListener("focus", handleFocus);
+    const interval = window.setInterval(verifySession, 20000);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.clearInterval(interval);
+    };
+  }, [currentSessionId]);
 
   const onRealtimeEvent = useCallback((event: RealtimeEvent) => {
+    if (
+      event.type === "auth:concurrent-login" &&
+      event.targetRole === "doctor" &&
+      event.targetUserId === doctor.id &&
+      currentSessionId &&
+      event.newSessionId !== currentSessionId
+    ) {
+      setConcurrentSession({
+        isOpen: true,
+        newDevice: event.device,
+        loginTime: event.timestamp,
+      });
+      return;
+    }
+
     const targetsAnotherDoctor = "targetDoctorId" in event && event.targetDoctorId && event.targetDoctorId !== doctor.id;
     if (targetsAnotherDoctor) {
       return;
@@ -1612,7 +1670,7 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
       setDoctorStatus(normalizeDoctorStatus(event.status));
       router.refresh();
     }
-  }, [doctor.id, router, showToast]);
+  }, [currentSessionId, doctor.id, router, showToast]);
 
   const realtime = useDashboardRealtime(onRealtimeEvent);
   const doctorScopedRealtimeEvent = useMemo(() => {
@@ -1653,6 +1711,13 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
     persistKey: `healthko:doctor:${doctor.id}:active-consultation`,
   });
   const isLiveConsultationActive = Boolean(session.roomId && (session.status === "waiting" || session.status === "connected"));
+  const { showWarningModal, closeWarningModal } = useActiveCallGuard({
+    isCallActive: isLiveConsultationActive,
+    onEndCall: () => {
+      session.endSession(true);
+      setActiveModule("overview");
+    },
+  });
   const webRTC = useWebRTC({
     roomId: session.roomId,
     role: "doctor",
@@ -4396,6 +4461,22 @@ export default function DoctorDashboardClient({ doctor, doctors, initialModule =
           </div>
         </div>
       )}
+      <ConcurrentLoginModal
+        isOpen={concurrentSession.isOpen}
+        role="doctor"
+        newDevice={concurrentSession.newDevice}
+        loginTime={concurrentSession.loginTime}
+        onLogout={() => void logoutDoctor()}
+      />
+
+      <ActiveCallWarningModal
+        isOpen={showWarningModal}
+        onClose={closeWarningModal}
+        onEndCall={() => {
+          session.endSession(true);
+          setActiveModule("overview");
+        }}
+      />
     </DashboardShell>
   );
 }

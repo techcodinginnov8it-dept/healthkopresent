@@ -44,4 +44,5 @@ next-env.d.ts
 # logs
 devserver.log
 scratch-*
+scratch/
 

@@ -76,6 +76,9 @@ model Patient {
   weight                   String?
   createdById              String?        @map("created_by_id")
   userId                   String         @unique @map("user_id")
+  currentSessionId         String?        @map("current_session_id")
+  lastLoginDevice          String?        @map("last_login_device")
+  lastLoginAt              DateTime?      @map("last_login_at")
   bookings                 Consultation[]
   createdBy                Admin?         @relation("AdminPatients", fields: [createdById], references: [id])
   user                     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -118,6 +121,9 @@ model Doctor {
   createdById              String?        @map("created_by_id")
   userId                   String         @unique @map("user_id")
   username                 String?        @unique
+  currentSessionId         String?        @map("current_session_id")
+  lastLoginDevice          String?        @map("last_login_device")
+  lastLoginAt              DateTime?      @map("last_login_at")
   bookings                 Consultation[]
   audits                   DoctorAudit[]
   createdBy                Admin?         @relation("AdminDoctors", fields: [createdById], references: [id])

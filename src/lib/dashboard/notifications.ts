@@ -22,7 +22,7 @@ export function createDashboardNotification({
 }
 
 export function notificationFromRealtimeEvent(event: RealtimeEvent, recipientRole: DashboardRole): DashboardNotification | null {
-  if (event.actorRole === recipientRole) {
+  if ("actorRole" in event && event.actorRole === recipientRole) {
     return null;
   }
 

@@ -30,7 +30,7 @@ export default async function PatientDashboardPage({
 }: {
   searchParams?: Promise<{ module?: string | string[] }>;
 }) {
-  const { patient } = await getPatientDashboardData();
+  const { session, patient } = await getPatientDashboardData();
   const doctorsRes = await getDoctorsList();
   const params = await searchParams;
   const initialModule = getInitialModule(params?.module);
@@ -85,6 +85,7 @@ export default async function PatientDashboardPage({
       doctors={serializedDoctors}
       initialModule={initialModule}
       medicalIdUrl={medicalIdUrl}
+      currentSessionId={session.sessionId}
     />
   );
 }

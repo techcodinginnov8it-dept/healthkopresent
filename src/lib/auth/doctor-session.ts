@@ -11,6 +11,7 @@ export type DoctorSession = {
   userId: string;
   email: string;
   role: "doctor";
+  sessionId?: string;
   exp: number;
 };
 
@@ -91,14 +92,17 @@ function decodeSession(token: string): DoctorSession | null {
 export async function createDoctorSession({
   userId,
   email,
+  sessionId,
 }: {
   userId: string;
   email: string;
+  sessionId?: string;
 }) {
   const session: DoctorSession = {
     userId,
     email,
     role: "doctor",
+    sessionId,
     exp: Date.now() + SESSION_TTL_SECONDS * 1000,
   };
 

@@ -4,13 +4,16 @@ import React, { useCallback, useEffect, useMemo, useState, type ReactNode } from
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
-import { logoutPatient } from "@/app/actions/auth";
+import { logoutPatient, checkSessionStatus } from "@/app/actions/auth";
 import { bookAppointment, confirmFollowUpAppointment, requestFollowUpReschedule } from "@/app/actions/patient";
 import { authorizePatientVideoSession, endVideoSession } from "@/app/actions/video-session";
 import { saveConsultationTranscript } from "@/app/actions/doctor";
 import { DashboardShell, type DashboardNavItem } from "@/components/dashboard/DashboardShell";
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
 import { PatientSettingsModule } from "@/components/dashboard/SettingsModule";
+import { ConcurrentLoginModal } from "@/components/dashboard/ConcurrentLoginModal";
+import { ActiveCallWarningModal } from "@/components/dashboard/ActiveCallWarningModal";
+import { useActiveCallGuard } from "@/hooks/useActiveCallGuard";
 import {
   ChatPanel,
   EmptyState,
@@ -48,6 +51,7 @@ type PatientDashboardClientProps = {
   doctors: DashboardDoctor[];
   initialModule?: PatientModuleId;
   medicalIdUrl: string;
+  currentSessionId?: string;
 };
 
 type AppointmentFeedFilter = "all" | "pending" | "confirmed" | "completed" | "cancelled";
@@ -569,8 +573,49 @@ function DoctorProfileModal({
   );
 }
 
-export default function PatientDashboardClient({ patient, doctors, initialModule = "overview", medicalIdUrl }: PatientDashboardClientProps) {
+export default function PatientDashboardClient({
+  patient,
+  doctors,
+  initialModule = "overview",
+  medicalIdUrl,
+  currentSessionId,
+}: PatientDashboardClientProps) {
   const router = useRouter();
+  const [concurrentSession, setConcurrentSession] = useState<{
+    isOpen: boolean;
+    newDevice?: string;
+    loginTime?: string;
+  }>({ isOpen: false });
+
+  useEffect(() => {
+    if (!currentSessionId) return;
+
+    const verifySession = async () => {
+      try {
+        const res = await checkSessionStatus("patient", currentSessionId);
+        if (!res.valid) {
+          setConcurrentSession({
+            isOpen: true,
+            newDevice: res.currentDevice || "Another Device",
+            loginTime: res.lastLoginAt || new Date().toISOString(),
+          });
+        }
+      } catch {}
+    };
+
+    const handleFocus = () => {
+      void verifySession();
+    };
+
+    window.addEventListener("focus", handleFocus);
+    const interval = window.setInterval(verifySession, 20000);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.clearInterval(interval);
+    };
+  }, [currentSessionId]);
+
   const [activeModule, setActiveModule] = useDashboardModule<PatientModuleId>(initialModule, PATIENT_MODULES);
   const [collapsed, setCollapsed] = useState(false);
   const [selectedDoctorId, setSelectedDoctorId] = useState((doctors.find((d) => d.isVerified) ?? doctors[0])?.id || "");
@@ -657,6 +702,21 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
   patientBookingsRef.current = patient.bookings;
 
   const onRealtimeEvent = useCallback((event: RealtimeEvent) => {
+    if (
+      event.type === "auth:concurrent-login" &&
+      event.targetRole === "patient" &&
+      event.targetUserId === patient.id &&
+      currentSessionId &&
+      event.newSessionId !== currentSessionId
+    ) {
+      setConcurrentSession({
+        isOpen: true,
+        newDevice: event.device,
+        loginTime: event.timestamp,
+      });
+      return;
+    }
+
     if (
       event.actorRole === "doctor" &&
       (
@@ -750,7 +810,7 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       }
       router.refresh();
     }
-  }, [dismissedStartedId, router, showToast]);
+  }, [currentSessionId, dismissedStartedId, patient.id, router, showToast]);
 
   const realtime = useDashboardRealtime(onRealtimeEvent);
   const session = useConsultationSession<PatientAppointment>({
@@ -759,6 +819,13 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
     persistKey: `healthko:patient:${patient.id}:active-consultation`,
   });
   const isLiveConsultationActive = Boolean(session.roomId && (session.status === "waiting" || session.status === "connected"));
+  const { showWarningModal, closeWarningModal } = useActiveCallGuard({
+    isCallActive: isLiveConsultationActive,
+    onEndCall: () => {
+      session.endSession(true);
+      setActiveModule("overview");
+    },
+  });
 
   // Keep the appointment-ID ref in sync so the socket callback can filter
   // without needing the full appointments array as a dependency.
@@ -3158,6 +3225,23 @@ export default function PatientDashboardClient({ patient, doctors, initialModule
       {activeModule === "settings" && (
         <PatientSettingsModule tone={tone} patient={patient} onToast={showToast} />
       )}
+
+      <ConcurrentLoginModal
+        isOpen={concurrentSession.isOpen}
+        role="patient"
+        newDevice={concurrentSession.newDevice}
+        loginTime={concurrentSession.loginTime}
+        onLogout={() => void logoutPatient()}
+      />
+
+      <ActiveCallWarningModal
+        isOpen={showWarningModal}
+        onClose={closeWarningModal}
+        onEndCall={() => {
+          session.endSession(true);
+          setActiveModule("overview");
+        }}
+      />
     </DashboardShell>
   );
 }

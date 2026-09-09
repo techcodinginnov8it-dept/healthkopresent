@@ -29,7 +29,7 @@ export default async function DoctorDashboardPage({
 }: {
   searchParams?: Promise<{ module?: string | string[] }>;
 }) {
-  const { doctor } = await getDoctorDashboardData();
+  const { session, doctor } = await getDoctorDashboardData();
   const doctorsRes = await getDoctorsList();
   const params = await searchParams;
   const initialModule = getInitialModule(params?.module);
@@ -108,5 +108,5 @@ export default async function DoctorDashboardPage({
       yearsExp: candidate.yearsExp,
     }));
 
-  return <DoctorDashboardClient doctor={serializedDoctor as any} doctors={doctors} initialModule={initialModule} />;
+  return <DoctorDashboardClient doctor={serializedDoctor as any} doctors={doctors} initialModule={initialModule} currentSessionId={session.sessionId} />;
 }

@@ -82,7 +82,7 @@ export function useDashboardRealtime(onEvent?: (event: RealtimeEvent) => void) {
     channelRef.current = channel;
 
     const handleMessage = ({ payload }: { payload: RealtimeEvent }) => {
-      console.log("[Realtime] Received dashboard:event", payload.type, "actorRole:", payload.actorRole);
+      console.log("[Realtime] Received dashboard:event", payload.type, "actorRole:", "actorRole" in payload ? payload.actorRole : undefined);
       commitEvent(payload);
     };
 
@@ -109,7 +109,7 @@ export function useDashboardRealtime(onEvent?: (event: RealtimeEvent) => void) {
 
   const publish = useCallback(
     (event: RealtimeEvent) => {
-      console.log("[Realtime] Publishing dashboard:event", event.type, "actorRole:", event.actorRole);
+      console.log("[Realtime] Publishing dashboard:event", event.type, "actorRole:", "actorRole" in event ? event.actorRole : undefined);
       commitEvent(event);
       void channelRef.current?.send({
         type: "broadcast",

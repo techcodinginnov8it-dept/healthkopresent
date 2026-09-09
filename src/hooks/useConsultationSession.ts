@@ -356,7 +356,12 @@ export function useConsultationSession<TAppointment extends { id: string; notes?
       return;
     }
 
-    if (event.type === "notification:new" || event.type === "doctor:availability-updated" || event.type === "doctor:status-updated") {
+    if (
+      event.type === "notification:new" ||
+      event.type === "doctor:availability-updated" ||
+      event.type === "doctor:status-updated" ||
+      event.type === "auth:concurrent-login"
+    ) {
       return;
     }
 

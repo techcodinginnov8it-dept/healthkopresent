@@ -209,6 +209,15 @@ export type RealtimeEvent =
       status: string;
       title?: string;
       body?: string;
+    }
+  | {
+      type: "auth:concurrent-login";
+      actorRole?: DashboardRole;
+      targetUserId: string;
+      targetRole: "doctor" | "patient";
+      newSessionId: string;
+      device: string;
+      timestamp: string;
     };
 
 export type ChatMessage = {

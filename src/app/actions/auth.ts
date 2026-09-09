@@ -2,13 +2,15 @@
 
 import { createClient as createSupabaseServerClient } from "@/utils/supabase/server";
 import { prisma } from "@/lib/prisma";
-import { clearPatientSession, createPatientSession } from "@/lib/auth/patient-session";
-import { clearDoctorSession, createDoctorSession } from "@/lib/auth/doctor-session";
+import { clearPatientSession, createPatientSession, getPatientSession } from "@/lib/auth/patient-session";
+import { clearDoctorSession, createDoctorSession, getDoctorSession } from "@/lib/auth/doctor-session";
 import { clearAdminSession, createAdminSession } from "@/lib/auth/admin-session";
+import { parseUserAgent } from "@/lib/auth/device";
+import { broadcastDashboardEvent } from "@/lib/dashboard/broadcast";
 import bcrypt from "bcryptjs";
-import { randomInt } from "crypto";
+import { randomInt, randomUUID } from "crypto";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 
 type PatientSignupPayload = {
   firstName: string;
@@ -204,12 +206,22 @@ export async function requestPatientSignupOtp(data: PatientSignupPayload): Promi
   });
 
   if (!isOtpWorkflowEnabled()) {
+    const sessionId = randomUUID();
+    const reqHeaders = await headers();
+    const device = parseUserAgent(reqHeaders.get("user-agent"));
+    const now = new Date();
+
     await prisma.patient.update({
       where: { email },
-      data: { emailVerified: true },
+      data: {
+        emailVerified: true,
+        currentSessionId: sessionId,
+        lastLoginDevice: device,
+        lastLoginAt: now,
+      },
     });
 
-    await createPatientSession({ userId: patient.id, email: patient.email });
+    await createPatientSession({ userId: patient.id, email: patient.email, sessionId });
 
     return {
       success: true,
@@ -272,8 +284,31 @@ export async function verifyPatientSignupOtp(data: {
     return { success: false, error: "We could not verify your email." };
   }
 
-  await prisma.patient.update({ where: { email }, data: { emailVerified: true } });
-  await createPatientSession({ userId: patient.id, email: patient.email });
+  const sessionId = randomUUID();
+  const reqHeaders = await headers();
+  const device = parseUserAgent(reqHeaders.get("user-agent"));
+  const now = new Date();
+
+  await prisma.patient.update({
+    where: { email },
+    data: {
+      emailVerified: true,
+      currentSessionId: sessionId,
+      lastLoginDevice: device,
+      lastLoginAt: now,
+    },
+  });
+
+  await broadcastDashboardEvent({
+    type: "auth:concurrent-login",
+    targetUserId: patient.id,
+    targetRole: "patient",
+    newSessionId: sessionId,
+    device,
+    timestamp: now.toISOString(),
+  });
+
+  await createPatientSession({ userId: patient.id, email: patient.email, sessionId });
 
   return {
     success: true,
@@ -358,11 +393,31 @@ export async function verifyPatientLoginOtp(data: {
     return { success: false, error: "Authentication failed" };
   }
 
-  if (purpose === "signup_verify" && !patient.emailVerified) {
-    await prisma.patient.update({ where: { email }, data: { emailVerified: true } });
-  }
+  const sessionId = randomUUID();
+  const reqHeaders = await headers();
+  const device = parseUserAgent(reqHeaders.get("user-agent"));
+  const now = new Date();
 
-  await createPatientSession({ userId: patient.id, email: patient.email });
+  await prisma.patient.update({
+    where: { email },
+    data: {
+      ...(purpose === "signup_verify" && !patient.emailVerified ? { emailVerified: true } : {}),
+      currentSessionId: sessionId,
+      lastLoginDevice: device,
+      lastLoginAt: now,
+    },
+  });
+
+  await broadcastDashboardEvent({
+    type: "auth:concurrent-login",
+    targetUserId: patient.id,
+    targetRole: "patient",
+    newSessionId: sessionId,
+    device,
+    timestamp: now.toISOString(),
+  });
+
+  await createPatientSession({ userId: patient.id, email: patient.email, sessionId });
 
   return {
     success: true,
@@ -405,7 +460,30 @@ export async function loginPatient(data: PatientLoginPayload) {
     return { success: false, error: "Invalid email or password" };
   }
 
-  await createPatientSession({ userId: patient.id, email: patient.email });
+  const sessionId = randomUUID();
+  const reqHeaders = await headers();
+  const device = parseUserAgent(reqHeaders.get("user-agent"));
+  const now = new Date();
+
+  await prisma.patient.update({
+    where: { email },
+    data: {
+      currentSessionId: sessionId,
+      lastLoginDevice: device,
+      lastLoginAt: now,
+    },
+  });
+
+  await broadcastDashboardEvent({
+    type: "auth:concurrent-login",
+    targetUserId: patient.id,
+    targetRole: "patient",
+    newSessionId: sessionId,
+    device,
+    timestamp: now.toISOString(),
+  });
+
+  await createPatientSession({ userId: patient.id, email: patient.email, sessionId });
 
   return {
     success: true,
@@ -475,7 +553,30 @@ export async function loginDoctor(data: DoctorLoginPayload) {
       return { success: false, error: "Security key must be a 6-digit verification code" };
     }
 
-    await createDoctorSession({ userId: doctor.id, email: doctor.email });
+    const sessionId = randomUUID();
+    const reqHeaders = await headers();
+    const device = parseUserAgent(reqHeaders.get("user-agent"));
+    const now = new Date();
+
+    await prisma.doctor.update({
+      where: { id: doctor.id },
+      data: {
+        currentSessionId: sessionId,
+        lastLoginDevice: device,
+        lastLoginAt: now,
+      },
+    });
+
+    await broadcastDashboardEvent({
+      type: "auth:concurrent-login",
+      targetUserId: doctor.id,
+      targetRole: "doctor",
+      newSessionId: sessionId,
+      device,
+      timestamp: now.toISOString(),
+    });
+
+    await createDoctorSession({ userId: doctor.id, email: doctor.email, sessionId });
 
     return {
       success: true,
@@ -551,3 +652,58 @@ export async function logoutAdmin() {
   await clearAdminSession();
   redirect("/admin/signin");
 }
+
+export async function checkSessionStatus(
+  role: "doctor" | "patient",
+  sessionId?: string
+): Promise<{
+  valid: boolean;
+  currentDevice?: string | null;
+  lastLoginAt?: string | null;
+}> {
+  try {
+    if (!sessionId) {
+      return { valid: true };
+    }
+
+    if (role === "doctor") {
+      const session = await getDoctorSession();
+      if (!session) {
+        return { valid: false };
+      }
+      const doctor = await prisma.doctor.findUnique({
+        where: { id: session.userId },
+        select: { currentSessionId: true, lastLoginDevice: true, lastLoginAt: true },
+      });
+      if (doctor?.currentSessionId && doctor.currentSessionId !== sessionId) {
+        return {
+          valid: false,
+          currentDevice: doctor.lastLoginDevice || "Another Device",
+          lastLoginAt: doctor.lastLoginAt ? doctor.lastLoginAt.toISOString() : null,
+        };
+      }
+      return { valid: true };
+    } else {
+      const session = await getPatientSession();
+      if (!session) {
+        return { valid: false };
+      }
+      const patient = await prisma.patient.findUnique({
+        where: { id: session.userId },
+        select: { currentSessionId: true, lastLoginDevice: true, lastLoginAt: true },
+      });
+      if (patient?.currentSessionId && patient.currentSessionId !== sessionId) {
+        return {
+          valid: false,
+          currentDevice: patient.lastLoginDevice || "Another Device",
+          lastLoginAt: patient.lastLoginAt ? patient.lastLoginAt.toISOString() : null,
+        };
+      }
+      return { valid: true };
+    }
+  } catch (err) {
+    console.error("[checkSessionStatus] Error checking session:", err);
+    return { valid: true };
+  }
+}
+
