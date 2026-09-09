@@ -261,7 +261,7 @@
 ---
 
 ### 17. Google Calendar-Style Appointment Stacking & Availability Visualization
-* **Commit**: *(pending)*
+* **Commit**: `5114379`
 * **Timestamp**: `2026-09-09 23:35:00 +0800`
 * **Duration**: ~30 minutes
 * **Updates & Changes**:
@@ -281,7 +281,7 @@
 
 | Commit | Time (+0800) | Area | Summary of Updates |
 | :--- | :--- | :--- | :--- |
-| *(pending)* | 23:35 | **Appointment Calendar** | Google Calendar-style vertical stacking, +N more overflow, and Available/Unavailable slot visualization |
+| `5114379` | 23:35 | **Appointment Calendar** | Google Calendar-style vertical stacking, +N more overflow, and Available/Unavailable slot visualization |
 | `51d0b9e` | 04:55 | **Security & Telehealth** | Multi-device concurrent login detection & active consultation exit/back/minimize guards |
 | `82f5c28` | 04:15 | **Telehealth / Clinical Dialogue** | Intelligent clinical encounter dialogue auto-synthesis, in-call dialogue logging & guaranteed PDF transcripts |
 | `f37f448` | 03:32 | **Telehealth / Audio** | Real-time dialogue synchronization, live speech bar & database transcript archives |
