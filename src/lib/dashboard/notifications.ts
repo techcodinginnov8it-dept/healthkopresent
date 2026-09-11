@@ -7,6 +7,7 @@ export function createDashboardNotification({
   kind = "system",
   createdAt = new Date(),
   readAt = null,
+  appointmentId = null,
 }: Omit<DashboardNotification, "id" | "createdAt"> & {
   id: string;
   createdAt?: Date | string;
@@ -18,6 +19,7 @@ export function createDashboardNotification({
     kind,
     createdAt,
     readAt,
+    appointmentId,
   };
 }
 
@@ -63,6 +65,7 @@ export function notificationFromRealtimeEvent(event: RealtimeEvent, recipientRol
       title: event.title || "Appointment update",
       body: event.body || "Your appointment workflow was updated.",
       kind: "appointment",
+      appointmentId: event.appointmentId,
     });
   }
 

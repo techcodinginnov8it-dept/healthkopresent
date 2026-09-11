@@ -2,18 +2,58 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import { formatDateTime } from "@/lib/dashboard/format";
-import { parseAvailability } from "@/lib/scheduling";
+import { parseAvailability, getEffectiveAvailabilityWindow } from "@/lib/scheduling";
 
 export type CalendarViewMode = "day" | "week" | "month";
 
-type CalendarAppointment = {
+export type CalendarAppointment = {
   id: string;
   title: string;
   subtitle: string;
   scheduledAt: Date | string;
   status: string;
   reason?: string | null;
+  duration?: number | null;
+  notes?: string | null;
+  patient?: {
+    id?: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    image?: string | null;
+    phone?: string | null;
+    dob?: string | null;
+    gender?: string | null;
+    height?: string | null;
+    weight?: string | null;
+    bloodType?: string | null;
+    allergies?: string | null;
+    existingConditions?: string | null;
+    currentMedications?: string | null;
+    emergencyContactName?: string | null;
+    emergencyContactPhone?: string | null;
+    emergencyContactRelation?: string | null;
+  } | null;
 };
+
+function getPatientAge(dob?: string | null): string {
+  if (!dob) return "";
+  const birth = new Date(dob);
+  if (isNaN(birth.getTime())) return "";
+  const diff = Date.now() - birth.getTime();
+  const age = Math.floor(diff / (365.25 * 24 * 3600 * 1000));
+  return age > 0 ? `${age} yrs` : "< 1 yr";
+}
+
+function getPatientInitials(name: string): string {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
 
 function startOfDay(date: Date) {
   const next = new Date(date);
@@ -147,23 +187,23 @@ function AppointmentBlock({
 
   const statusColor = confirmed
     ? dark
-      ? "border-sky-400/30 bg-sky-500/15 text-sky-100 hover:border-sky-400/60 hover:bg-sky-500/25"
-      : "border-sky-300 bg-sky-50/90 text-sky-950 shadow-2xs hover:border-sky-400 hover:bg-sky-100"
+      ? "border-sky-400/30 border-l-sky-400 bg-sky-500/15 text-sky-100 hover:border-sky-400/60 hover:bg-sky-500/25"
+      : "border-sky-200 border-l-sky-500 bg-sky-50/90 text-sky-950 shadow-2xs hover:border-sky-300 hover:bg-sky-100"
     : pending
       ? dark
-        ? "border-amber-400/30 bg-amber-500/15 text-amber-100 hover:border-amber-400/60 hover:bg-amber-500/25"
-        : "border-amber-300 bg-amber-50/90 text-amber-950 shadow-2xs hover:border-amber-400 hover:bg-amber-100"
+        ? "border-amber-400/30 border-l-amber-400 bg-amber-500/15 text-amber-100 hover:border-amber-400/60 hover:bg-amber-500/25"
+        : "border-amber-200 border-l-amber-500 bg-amber-50/90 text-amber-950 shadow-2xs hover:border-amber-300 hover:bg-amber-100"
       : completed
         ? dark
-          ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100 hover:border-emerald-400/60 hover:bg-emerald-500/25"
-          : "border-emerald-300 bg-emerald-50/90 text-emerald-950 shadow-2xs hover:border-emerald-400 hover:bg-emerald-100"
+          ? "border-emerald-400/30 border-l-emerald-400 bg-emerald-500/15 text-emerald-100 hover:border-emerald-400/60 hover:bg-emerald-500/25"
+          : "border-emerald-200 border-l-emerald-500 bg-emerald-50/90 text-emerald-950 shadow-2xs hover:border-emerald-300 hover:bg-emerald-100"
         : cancelled
           ? dark
-            ? "border-rose-400/30 bg-rose-500/15 text-rose-100 hover:border-rose-400/60 hover:bg-rose-500/25"
-            : "border-rose-300 bg-rose-50/90 text-rose-950 shadow-2xs hover:border-rose-400 hover:bg-rose-100"
+            ? "border-rose-400/30 border-l-rose-400 bg-rose-500/15 text-rose-100 hover:border-rose-400/60 hover:bg-rose-500/25"
+            : "border-rose-200 border-l-rose-500 bg-rose-50/90 text-rose-950 shadow-2xs hover:border-rose-300 hover:bg-rose-100"
           : dark
-            ? "border-slate-700 bg-slate-800 text-slate-100 hover:bg-slate-750"
-            : "border-slate-200 bg-slate-100 text-slate-800 hover:bg-slate-200/70";
+            ? "border-slate-700 border-l-slate-400 bg-slate-800 text-slate-100 hover:bg-slate-750"
+            : "border-slate-200 border-l-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200/70";
 
   const badgeColor = confirmed
     ? dark
@@ -196,6 +236,7 @@ function AppointmentBlock({
           : dark ? "text-slate-400" : "text-slate-600";
 
   const badgeLabel = confirmed ? "CNF" : pending ? "REQ" : completed ? "CMP" : cancelled ? "CAN" : appointment.status.slice(0, 3);
+  const timeFormatted = formatDateTime(appointment.scheduledAt);
 
   return (
     <article
@@ -206,19 +247,22 @@ function AppointmentBlock({
         const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
         onSelect(appointment, rect);
       }}
-      className={`rounded-md border shadow-sm transition select-none ${
-        compact ? "px-2 py-1.5 text-[10px]" : "px-2.5 py-2 text-xs"
-      } ${statusColor} cursor-pointer active:scale-[0.98]`}
-      title="Click to see actions"
+      className={`h-full min-h-[58px] flex flex-col justify-between rounded-md border border-l-[3.5px] shadow-xs transition select-none ${
+        compact ? "p-1.5 text-[10px]" : "p-2 text-xs"
+      } ${statusColor} cursor-pointer active:scale-[0.98] hover:z-20 hover:shadow-md`}
+      title={`${appointment.title} - ${appointment.subtitle} (${appointment.status}) at ${timeFormatted} — Click to manage`}
     >
-      <div className="flex items-center justify-between gap-1.5">
-        <span className="truncate font-black">{appointment.title}</span>
-        <span className={`shrink-0 rounded px-1.5 py-0.2 text-[9px] font-black uppercase border ${badgeColor}`}>
+      <div className="flex items-center justify-between gap-1 overflow-hidden">
+        <span className="truncate font-black leading-tight">{appointment.title}</span>
+        <span className={`shrink-0 rounded px-1 py-0.2 text-[8px] font-black uppercase border ${badgeColor}`}>
           {badgeLabel}
         </span>
       </div>
-      {!compact && <p className={`mt-1 truncate font-semibold ${subtitleColor}`}>{appointment.subtitle}</p>}
-      {compact && <p className={`mt-1 font-semibold ${subtitleColor}`}>{formatDateTime(appointment.scheduledAt)}</p>}
+      <div className="mt-1 flex items-center justify-between gap-1 overflow-hidden">
+        <p className={`truncate text-[9px] font-bold ${subtitleColor}`}>
+          {compact ? timeFormatted.split(",")[1]?.trim() || timeFormatted : appointment.subtitle}
+        </p>
+      </div>
     </article>
   );
 }
@@ -227,7 +271,9 @@ function AppointmentActionPopup({
   appointment,
   anchorRect,
   onClose,
+  onViewPatient,
   onConfirmAppointment,
+  onCancelAppointment,
   onCompleteConsultation,
   onStartConsultation,
   onFollowUpConsultation,
@@ -236,7 +282,9 @@ function AppointmentActionPopup({
   appointment: CalendarAppointment;
   anchorRect: DOMRect;
   onClose: () => void;
+  onViewPatient?: (appointment: CalendarAppointment) => void;
   onConfirmAppointment?: (appointment: CalendarAppointment) => void;
+  onCancelAppointment?: (appointment: CalendarAppointment) => void;
   onCompleteConsultation?: (appointment: CalendarAppointment) => void;
   onStartConsultation?: (appointment: CalendarAppointment) => void;
   onFollowUpConsultation?: (appointment: CalendarAppointment) => void;
@@ -251,7 +299,7 @@ function AppointmentActionPopup({
   const popupRef = useRef<HTMLDivElement>(null);
 
   // Compute popover position anchored to the clicked element rect
-  const POPOVER_WIDTH = 232;
+  const POPOVER_WIDTH = 296;
   const GAP = 8;
 
   const spaceRight = window.innerWidth - anchorRect.right;
@@ -269,7 +317,7 @@ function AppointmentActionPopup({
   }
 
   // Vertical: align top of popover with top of anchor, clamp to viewport
-  const top = Math.max(8, Math.min(anchorRect.top, window.innerHeight - 280));
+  const top = Math.max(8, Math.min(anchorRect.top, window.innerHeight - 440));
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -291,6 +339,14 @@ function AppointmentActionPopup({
   const statusLabel = confirmed ? "Confirmed" : pending ? "Pending Request" : completed ? "Completed" : cancelled ? "Cancelled" : appointment.status;
   const statusColor = confirmed ? "text-sky-400" : pending ? "text-amber-400" : completed ? "text-emerald-400" : cancelled ? "text-rose-400" : "text-slate-400";
   const statusDot = confirmed ? "bg-sky-400" : pending ? "bg-amber-400" : completed ? "bg-emerald-400" : cancelled ? "bg-rose-400" : "bg-slate-500";
+
+  // Patient metadata
+  const patient = appointment.patient;
+  const patientName = patient?.firstName
+    ? `${patient.firstName} ${patient.lastName || ""}`.trim()
+    : appointment.title;
+  const patientInitials = getPatientInitials(patientName);
+  const patientAge = getPatientAge(patient?.dob);
 
   // Arrow pointing from popover toward the anchor element
   const arrowTop = Math.max(12, Math.min(anchorRect.top + anchorRect.height / 2 - top - 6, 200));
@@ -320,9 +376,9 @@ function AppointmentActionPopup({
           width: POPOVER_WIDTH,
           pointerEvents: "auto",
         }}
-        className={`overflow-hidden rounded-xl border shadow-2xl transition-all ${
+        className={`overflow-hidden rounded-2xl border shadow-2xl transition-all ${
           dark
-            ? "border-slate-700/80 bg-slate-900 text-white ring-1 ring-white/5"
+            ? "border-slate-700/80 bg-slate-900 text-white ring-1 ring-white/10"
             : "border-slate-200 bg-white text-slate-900 shadow-xl ring-1 ring-slate-900/5"
         }`}
         onClick={(event) => event.stopPropagation()}
@@ -350,42 +406,194 @@ function AppointmentActionPopup({
           }}
         />
 
-        {/* Header */}
-        <div className={`border-b px-4 pb-3 pt-4 ${dark ? "border-slate-700/60" : "border-slate-100"}`}>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Appointment</p>
-          <p className={`mt-1 text-sm font-black leading-snug ${dark ? "text-white" : "text-slate-900"}`}>{appointment.title}</p>
-          <div className="mt-1 flex items-center gap-1.5">
-            <span className={`inline-block h-1.5 w-1.5 rounded-full ${statusDot}`} />
-            <span className={`text-[10px] font-semibold ${statusColor}`}>{statusLabel}</span>
+        {/* Header & Patient Data Section (Same with view patient data on notification) */}
+        <div className={`border-b px-4 pb-3.5 pt-3.5 ${dark ? "border-slate-800 bg-slate-900/90" : "border-slate-100 bg-slate-50/60"}`}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-brand-teal">
+              Patient Encounter
+            </span>
+            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${
+              pending
+                ? dark ? "bg-amber-400/20 text-amber-300 border border-amber-400/30" : "bg-amber-50 text-amber-800 border border-amber-300"
+                : confirmed
+                  ? dark ? "bg-sky-400/20 text-sky-300 border border-sky-400/30" : "bg-sky-50 text-sky-800 border border-sky-300"
+                  : completed
+                    ? dark ? "bg-emerald-400/20 text-emerald-300 border border-emerald-400/30" : "bg-emerald-50 text-emerald-800 border border-emerald-300"
+                    : dark ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-600"
+            }`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${statusDot}`} />
+              {statusLabel}
+            </span>
           </div>
-          <p className={`mt-1 text-[10px] font-semibold ${dark ? "text-slate-500" : "text-slate-400"}`}>{formatDateTime(appointment.scheduledAt)}</p>
+
+          {/* Patient Card Preview */}
+          <div className="mt-3 flex items-start gap-3">
+            {patient?.image ? (
+              <img
+                src={patient.image}
+                alt={patientName}
+                className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-brand-teal/40"
+              />
+            ) : (
+              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-black ring-2 ${
+                dark
+                  ? "bg-brand-teal/20 text-brand-teal ring-brand-teal/30"
+                  : "bg-teal-50 text-teal-700 ring-teal-200"
+              }`}>
+                {patientInitials}
+              </div>
+            )}
+
+            <div className="min-w-0 flex-1">
+              <p className={`truncate text-sm font-black leading-tight ${dark ? "text-white" : "text-slate-900"}`}>
+                {patientName}
+              </p>
+
+              {/* Demographics: Age, Gender, Blood type */}
+              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold">
+                {patientAge && (
+                  <span className={dark ? "text-slate-300" : "text-slate-600"}>
+                    {patientAge}
+                  </span>
+                )}
+                {patientAge && patient?.gender && (
+                  <span className={dark ? "text-slate-600" : "text-slate-300"}>•</span>
+                )}
+                {patient?.gender && (
+                  <span className={dark ? "text-slate-300" : "text-slate-600"}>
+                    {patient.gender}
+                  </span>
+                )}
+                {patient?.bloodType && (
+                  <span className={`rounded px-1.5 py-0.2 text-[9px] font-black uppercase ${
+                    dark ? "bg-rose-950/60 text-rose-300 border border-rose-900/50" : "bg-rose-50 text-rose-700 border border-rose-200"
+                  }`}>
+                    {patient.bloodType}
+                  </span>
+                )}
+              </div>
+
+              {/* Email / Contact */}
+              {patient?.email && (
+                <p className={`mt-0.5 truncate text-[10px] font-medium ${dark ? "text-slate-400" : "text-slate-500"}`}>
+                  {patient.email}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Schedule Time & Reason Box */}
+          <div className={`mt-3 rounded-xl border p-2.5 ${dark ? "border-slate-800 bg-slate-950/60" : "border-slate-200 bg-white"}`}>
+            <div className="flex items-center justify-between text-[10px] font-semibold">
+              <span className={`flex items-center gap-1.5 ${dark ? "text-slate-300" : "text-slate-700"}`}>
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3 text-brand-teal">
+                  <path fillRule="evenodd" d="M5.75 2a.75.75 0 01.75.75V4h7V2.75a.75.75 0 011.5 0V4h.25A2.75 2.75 0 0118 6.75v8.5A2.75 2.75 0 0115.25 18H4.75A2.75 2.75 0 012 15.25v-8.5A2.75 2.75 0 014.75 4H5V2.75A.75.75 0 015.75 2zm-1 5.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25v-6.5c0-.69-.56-1.25-1.25-1.25H4.75z" clipRule="evenodd" />
+                </svg>
+                {formatDateTime(appointment.scheduledAt)}
+              </span>
+              {appointment.duration ? (
+                <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${dark ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-700"}`}>
+                  {appointment.duration} min
+                </span>
+              ) : null}
+            </div>
+
+            {/* Chief Complaint / Reason */}
+            <div className="mt-1.5 border-t pt-1.5" style={{ borderColor: dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }}>
+              <p className={`text-[9px] font-black uppercase tracking-wider ${dark ? "text-slate-500" : "text-slate-400"}`}>
+                Reason for Visit
+              </p>
+              <p className={`mt-0.5 text-xs font-semibold leading-snug line-clamp-2 ${dark ? "text-slate-200" : "text-slate-800"}`}>
+                {appointment.reason || appointment.subtitle || "General Telehealth Consultation"}
+              </p>
+            </div>
+
+            {/* Quick Allergy Tag if available */}
+            {patient?.allergies && patient.allergies.toLowerCase() !== "none" && (
+              <div className={`mt-1.5 flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold ${
+                dark ? "bg-amber-950/40 text-amber-300 border border-amber-900/40" : "bg-amber-50 text-amber-800 border border-amber-200"
+              }`}>
+                <span>⚠️ Allergy:</span>
+                <span className="truncate">{patient.allergies}</span>
+              </div>
+            )}
+          </div>
+
+          {/* View Patient & Confirm / Reject Button (Same with notification) */}
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onViewPatient?.(appointment);
+            }}
+            className={`mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border py-2 px-3 text-xs font-black uppercase tracking-wider transition shadow-2xs active:scale-[0.98] ${
+              dark
+                ? "border-brand-teal/40 bg-brand-teal/15 text-brand-teal hover:bg-brand-teal/25"
+                : "border-teal-300 bg-teal-50 text-teal-800 hover:bg-teal-100"
+            }`}
+          >
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            View Patient Data
+          </button>
         </div>
+
 
         {/* Actions */}
         <div className="p-2 space-y-0.5">
           {pending && (
-            <button
-              type="button"
-              className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-semibold transition ${
-                dark
-                  ? "text-emerald-200 hover:bg-emerald-500/20 hover:text-white"
-                  : "text-emerald-800 hover:bg-emerald-50 hover:text-emerald-950"
-              }`}
-              onClick={() => {
-                onClose();
-                onConfirmAppointment?.(appointment);
-              }}
-            >
-              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-500/20 text-emerald-400">
-                <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              </span>
-              <span>
-                <span className="block font-black">Confirm Appointment</span>
-                <span className={`block text-[10px] font-medium ${dark ? "text-slate-400" : "text-slate-500"}`}>Accept and confirm booking</span>
-              </span>
-            </button>
+            <>
+              <button
+                type="button"
+                className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-semibold transition ${
+                  dark
+                    ? "text-emerald-200 hover:bg-emerald-500/20 hover:text-white"
+                    : "text-emerald-800 hover:bg-emerald-50 hover:text-emerald-950"
+                }`}
+                onClick={() => {
+                  onClose();
+                  onConfirmAppointment?.(appointment);
+                }}
+              >
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-500/20 text-emerald-400">
+                  <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </span>
+                <span>
+                  <span className="block font-black">Confirm Appointment</span>
+                  <span className={`block text-[10px] font-medium ${dark ? "text-slate-400" : "text-slate-500"}`}>Accept and confirm booking</span>
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs font-semibold transition ${
+                  dark
+                    ? "text-rose-300 hover:bg-rose-500/20 hover:text-rose-100"
+                    : "text-rose-700 hover:bg-rose-50 hover:text-rose-900"
+                }`}
+                onClick={() => {
+                  onClose();
+                  onCancelAppointment?.(appointment);
+                }}
+              >
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-rose-500/20 text-rose-400">
+                  <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                  </svg>
+                </span>
+                <span>
+                  <span className="block font-black">Reject Request</span>
+                  <span className={`block text-[10px] font-medium ${dark ? "text-slate-400" : "text-slate-500"}`}>Decline this booking</span>
+                </span>
+              </button>
+            </>
           )}
 
           {confirmed && (
@@ -464,6 +672,7 @@ function AppointmentActionPopup({
             </button>
           )}
         </div>
+
       </div>
     </div>
   );
@@ -474,7 +683,9 @@ export function AppointmentCalendar({
   tone = "light",
   editable = false,
   onReschedule,
+  onViewPatient,
   onConfirmAppointment,
+  onCancelAppointment,
   onCompleteConsultation,
   onStartConsultation,
   onFollowUpConsultation,
@@ -489,7 +700,9 @@ export function AppointmentCalendar({
   tone?: "light" | "dark";
   editable?: boolean;
   onReschedule?: (appointmentId: string, scheduledAt: string) => void;
+  onViewPatient?: (appointment: CalendarAppointment) => void;
   onConfirmAppointment?: (appointment: CalendarAppointment) => void;
+  onCancelAppointment?: (appointment: CalendarAppointment) => void;
   onCompleteConsultation?: (appointment: CalendarAppointment) => void;
   onStartConsultation?: (appointment: CalendarAppointment) => void;
   onFollowUpConsultation?: (appointment: CalendarAppointment) => void;
@@ -503,7 +716,7 @@ export function AppointmentCalendar({
   const resolvedAnchorDate = startOfDay(anchorDate || new Date());
   const [selectedEntry, setSelectedEntry] = useState<{ appointment: CalendarAppointment; rect: DOMRect } | null>(null);
   const days = getCalendarDays(viewMode, resolvedAnchorDate);
-  const availabilityWindow = parseAvailability(availability);
+  const availabilityWindow = getEffectiveAvailabilityWindow(availability);
   const hours = Array.from({ length: 24 }, (_, index) => index);
   const dark = tone === "dark";
   const stage = variant === "stage";
@@ -588,7 +801,7 @@ export function AppointmentCalendar({
             </span>
             <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 ${dark ? "border border-slate-600 bg-slate-800 text-slate-400" : "border border-slate-300 bg-slate-100 text-slate-500"}`}>
               <span className="h-2 w-2 rounded-sm" style={{ background: dark ? "repeating-linear-gradient(45deg,#475569,#475569 2px,transparent 2px,transparent 6px)" : "repeating-linear-gradient(45deg,#94a3b8,#94a3b8 2px,transparent 2px,transparent 6px)" }} />
-              Unavailable
+              Not Available
             </span>
           </div>
         )}
@@ -596,15 +809,15 @@ export function AppointmentCalendar({
       <div className="space-y-3 md:hidden">
         {days.map((day) => {
           const dayAppointments = appointments.filter((appointment) => sameDay(appointment.scheduledAt, day));
-          const dayAvailable = !availabilityWindow || availabilityWindow.days.includes(day.getDay());
+          const dayAvailable = availabilityWindow.days.includes(day.getDay());
 
           return (
             <section key={day.toISOString()} className={`rounded-xl border p-3 ${dark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-slate-50"}`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-black">{formatWeekday(day)} · {formatMonthDay(day)}</p>
-                  <p className={`text-[10px] font-bold uppercase ${dayAvailable ? "text-emerald-400" : "text-slate-400"}`}>
-                    {dayAvailable ? "Available" : "Outside availability"}
+                  <p className={`text-[10px] font-bold uppercase ${dayAvailable ? "text-emerald-400" : "text-rose-400"}`}>
+                    {dayAvailable ? "Available" : "Not Available"}
                   </p>
                 </div>
                 {dayAppointments.length ? (
@@ -620,7 +833,7 @@ export function AppointmentCalendar({
                   ))
                 ) : (
                   <p className={`rounded-lg border border-dashed p-3 text-xs font-semibold ${dark ? "border-slate-800 text-slate-500" : "border-slate-300 text-slate-500"}`}>
-                    No appointments scheduled.
+                    {dayAvailable ? "No appointments scheduled." : "Doctor not available on this day."}
                   </p>
                 )}
               </div>
@@ -637,7 +850,7 @@ export function AppointmentCalendar({
             <div className="grid min-w-[920px] grid-cols-7 gap-px">
               {days.map((day) => {
                 const dayAppointments = appointments.filter((appointment) => sameDay(appointment.scheduledAt, day));
-                const dayAvailable = !availabilityWindow || availabilityWindow.days.includes(day.getDay());
+                const dayAvailable = availabilityWindow.days.includes(day.getDay());
                 const dayOverflow = dayAppointments.length > 3;
                 const visibleDayAppts = dayAppointments.slice(0, 3);
 
@@ -679,9 +892,9 @@ export function AppointmentCalendar({
                         <p className={`text-[10px] font-bold uppercase ${
                           dayAvailable
                             ? dark ? "text-teal-400/70" : "text-teal-600/70"
-                            : dark ? "text-slate-600" : "text-slate-400"
+                            : dark ? "text-rose-400/80" : "text-rose-600/80"
                         }`}>
-                          {dayAvailable ? formatWeekday(day) : "Unavailable"}
+                          {dayAvailable ? formatWeekday(day) : "Not Available"}
                         </p>
                       </div>
                       {dayAppointments.length > 0 && (
@@ -709,7 +922,7 @@ export function AppointmentCalendar({
                         </button>
                       )}
                       {!dayAvailable && dayAppointments.length === 0 && (
-                        <p className={`text-[9px] font-black uppercase tracking-wider mt-1 ${dark ? "text-slate-700" : "text-slate-300"}`}>Off hours</p>
+                        <p className={`text-[9px] font-black uppercase tracking-wider mt-1 ${dark ? "text-slate-600" : "text-slate-400"}`}>Not Available</p>
                       )}
                     </div>
                   </div>
@@ -718,154 +931,161 @@ export function AppointmentCalendar({
             </div>
           </div>
         ) : (
-          <div className="max-h-[620px] overflow-x-auto overflow-y-auto rounded-lg transition-all duration-300">
-            <div
-              className={`grid gap-px overflow-hidden rounded-lg border ${dark ? "border-slate-800 bg-slate-800" : "border-slate-200 bg-slate-200"}`}
-              style={{
-                gridTemplateColumns: `72px repeat(${days.length}, ${columnMinWidth})`,
-                minWidth: `${gridMinWidth}px`,
-              }}
-            >
-              <div className={dark ? "bg-slate-950 p-3" : "bg-slate-50 p-3"} />
-              {days.map((day) => (
-                <div key={day.toISOString()} className={dark ? "bg-slate-950 p-3" : "bg-slate-50 p-3"}>
-                  <p className="text-xs font-black">{formatWeekday(day)}</p>
-                  <p className={dark ? "text-xs font-semibold text-slate-400" : "text-xs font-semibold text-slate-500"}>
-                    {formatMonthDay(day)}
-                  </p>
-                </div>
-              ))}
-              {hours.map((hour) => (
-                <Fragment key={hour}>
-                  <div key={`time-${hour}`} className={dark ? "bg-slate-950 p-3 text-xs font-black text-slate-400" : "bg-slate-50 p-3 text-xs font-black text-slate-500"}>
-                    {`${hour.toString().padStart(2, "0")}:00`}
+          <div className={`overflow-x-auto rounded-lg border transition-all duration-300 ${dark ? "border-slate-800" : "border-slate-200"}`}>
+            <div style={{ minWidth: `${gridMinWidth}px` }}>
+
+              {/* ── Sticky day-header row (does NOT scroll vertically) ── */}
+              <div
+                className={`sticky top-0 z-20 grid gap-px ${dark ? "bg-slate-800" : "bg-slate-200"}`}
+                style={{ gridTemplateColumns: `72px repeat(${days.length}, ${columnMinWidth})` }}
+              >
+                {/* Corner cell */}
+                <div className={`p-3 ${dark ? "bg-slate-950" : "bg-slate-50"}`} />
+                {days.map((day) => (
+                  <div key={day.toISOString()} className={`p-3 ${dark ? "bg-slate-950" : "bg-slate-50"}`}>
+                    <p className="text-xs font-black">{formatWeekday(day)}</p>
+                    <p className={`text-xs font-semibold ${dark ? "text-slate-400" : "text-slate-500"}`}>
+                      {formatMonthDay(day)}
+                    </p>
                   </div>
-                  {days.map((day) => {
-                    const slot = setTime(day, hour);
-                    const slotAppointments = appointments.filter((appointment) => sameSlot(appointment.scheduledAt, slot));
-                    const slotMinutes = hour * 60;
-                    const slotAvailable = !availabilityWindow || (
-                      availabilityWindow.days.includes(slot.getDay()) &&
-                      slotMinutes >= availabilityWindow.startMinutes &&
-                      slotMinutes < availabilityWindow.endMinutes
-                    );
+                ))}
+              </div>
 
-                    const MAX_VISIBLE = stage ? 3 : 2;
-                    const visibleAppts = slotAppointments.slice(0, MAX_VISIBLE);
-                    const overflowCount = slotAppointments.length - MAX_VISIBLE;
-                    const [slotExpanded, setSlotExpanded] = useState(false);
-                    const displayedAppts = slotExpanded ? slotAppointments : visibleAppts;
+              {/* ── Scrollable time-body (vertical scroll only) ── */}
+              <div
+                className={`max-h-[556px] overflow-y-auto grid gap-px ${dark ? "bg-slate-800" : "bg-slate-200"}`}
+                style={{ gridTemplateColumns: `72px repeat(${days.length}, ${columnMinWidth})` }}
+              >
+                {hours.map((hour) => (
+                  <Fragment key={hour}>
+                    <div
+                      key={`time-${hour}`}
+                      className={`p-3 text-xs font-black ${dark ? "bg-slate-950 text-slate-400" : "bg-slate-50 text-slate-500"}`}
+                    >
+                      {`${hour.toString().padStart(2, "0")}:00`}
+                    </div>
+                    {days.map((day) => {
+                      const slot = setTime(day, hour);
+                      const slotAppointments = appointments.filter((appointment) => sameSlot(appointment.scheduledAt, slot));
+                      const slotMinutes = hour * 60;
+                      const slotAvailable = (
+                        availabilityWindow.days.includes(slot.getDay()) &&
+                        slotMinutes >= availabilityWindow.startMinutes &&
+                        slotMinutes < availabilityWindow.endMinutes
+                      );
 
-                    const unavailableSlotStyle: React.CSSProperties = !slotAvailable ? {
-                      backgroundImage: dark
-                        ? "repeating-linear-gradient(45deg,transparent,transparent 8px,rgba(51,65,85,0.25) 8px,rgba(51,65,85,0.25) 16px)"
-                        : "repeating-linear-gradient(45deg,transparent,transparent 8px,rgba(148,163,184,0.14) 8px,rgba(148,163,184,0.14) 16px)",
-                    } : {};
+                      const MAX_VISIBLE = viewMode === "day" ? 4 : 3;
+                      const visibleAppts = slotAppointments.slice(0, MAX_VISIBLE);
+                      const overflowCount = slotAppointments.length - MAX_VISIBLE;
 
-                    return (
-                      <div
-                        key={`${day.toISOString()}-${hour}`}
-                        onDragOver={(event) => {
-                          if (editable && slotAvailable) {
-                            event.preventDefault();
-                          }
-                        }}
-                        onDrop={(event) => {
-                          if (!editable || !onReschedule || !slotAvailable) {
-                            return;
-                          }
+                      const unavailableSlotStyle: React.CSSProperties = !slotAvailable ? {
+                        backgroundImage: dark
+                          ? "repeating-linear-gradient(45deg,transparent,transparent 8px,rgba(51,65,85,0.25) 8px,rgba(51,65,85,0.25) 16px)"
+                          : "repeating-linear-gradient(45deg,transparent,transparent 8px,rgba(148,163,184,0.14) 8px,rgba(148,163,184,0.14) 16px)",
+                      } : {};
 
-                          const appointmentId = event.dataTransfer.getData("text/plain");
-                          if (appointmentId) {
-                            onReschedule(appointmentId, toLocalDateTimeValue(slot));
-                          }
-                        }}
-                        className={`relative ${stage ? "min-h-20" : "min-h-24"} p-1.5 transition-colors ${
-                          slotAvailable
-                            ? dark
-                              ? "bg-slate-950 hover:bg-slate-900/50"
-                              : "bg-white hover:bg-teal-50/20"
-                            : dark
-                              ? "bg-slate-900/70"
-                              : "bg-slate-50/80"
-                        } ${!slotAvailable && !editable ? "cursor-not-allowed" : ""}`}
-                        style={unavailableSlotStyle}
-                      >
-                        {/* Unavailable label — shown only when slot is empty */}
-                        {!slotAvailable && slotAppointments.length === 0 && (
-                          <span className={`absolute bottom-1 right-1.5 select-none text-[8px] font-black uppercase tracking-widest ${
-                            dark ? "text-slate-700" : "text-slate-300"
-                          }`}>Off</span>
-                        )}
+                      return (
+                        <div
+                          key={`${day.toISOString()}-${hour}`}
+                          onDragOver={(event) => {
+                            if (editable && slotAvailable) {
+                              event.preventDefault();
+                            }
+                          }}
+                          onDrop={(event) => {
+                            if (!editable || !onReschedule || !slotAvailable) {
+                              return;
+                            }
 
-                        {/* Available empty-slot hover hint */}
-                        {slotAvailable && slotAppointments.length === 0 && editable && (
-                          <span className={`pointer-events-none absolute inset-0 flex items-center justify-center text-[9px] font-black uppercase tracking-wider opacity-0 transition-opacity hover:opacity-100 ${
-                            dark ? "text-teal-500/40" : "text-teal-600/30"
-                          } group-hover:opacity-100`} />
-                        )}
+                            const appointmentId = event.dataTransfer.getData("text/plain");
+                            if (appointmentId) {
+                              onReschedule(appointmentId, toLocalDateTimeValue(slot));
+                            }
+                          }}
+                          className={`relative min-h-[70px] p-1 transition-colors ${
+                            slotAvailable
+                              ? dark
+                                ? "bg-slate-950 hover:bg-slate-900/50"
+                                : "bg-white hover:bg-teal-50/20"
+                              : dark
+                                ? "bg-slate-900/70"
+                                : "bg-slate-50/80"
+                          } ${!slotAvailable && !editable ? "cursor-not-allowed" : ""}`}
+                          style={unavailableSlotStyle}
+                        >
+                          {/* Prominent Not Available label when doctor is off-duty and slot is empty */}
+                          {!slotAvailable && slotAppointments.length === 0 && (
+                            <div className="flex h-full min-h-[58px] w-full items-center justify-center p-1 select-none pointer-events-none">
+                              <div className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[9px] font-black uppercase tracking-wider border shadow-2xs ${
+                                dark
+                                  ? "bg-slate-800/90 text-slate-400 border-slate-700/70"
+                                  : "bg-slate-100/95 text-slate-500 border-slate-200"
+                              }`}>
+                                <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3 w-3 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <circle cx="12" cy="12" r="10" />
+                                  <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                                </svg>
+                                <span>Not Available</span>
+                              </div>
+                            </div>
+                          )}
 
-                        {/* Stacked appointments — Google Calendar style */}
-                        <div className="flex flex-col gap-1">
-                          {stage ? (
-                            <>
-                              {displayedAppts.map((appointment) => (
-                                <AppointmentBlock
-                                  key={appointment.id}
-                                  appointment={appointment}
-                                  editable={editable}
-                                  onSelect={(appt, rect) => setSelectedEntry({ appointment: appt, rect })}
-                                  tone={tone}
-                                />
+                          {/* Available empty-slot hover hint */}
+                          {slotAvailable && slotAppointments.length === 0 && editable && (
+                            <span className={`pointer-events-none absolute inset-0 flex items-center justify-center text-[9px] font-black uppercase tracking-wider opacity-0 transition-opacity hover:opacity-100 ${
+                              dark ? "text-teal-500/40" : "text-teal-600/30"
+                            } group-hover:opacity-100`} />
+                          )}
+
+                          {/* Appointments: Stacked horizontally side-by-side with partial preview (Google Calendar style) */}
+                          {slotAppointments.length > 0 && (
+                            <div className="flex flex-row items-stretch gap-1.5 h-full min-h-[58px] w-full overflow-hidden">
+                              {visibleAppts.map((appointment) => (
+                                <div key={appointment.id} className="flex-1 min-w-0 h-full">
+                                  <AppointmentBlock
+                                    appointment={appointment}
+                                    editable={editable}
+                                    compact={slotAppointments.length > 1}
+                                    onSelect={(appt, rect) => setSelectedEntry({ appointment: appt, rect })}
+                                    tone={tone}
+                                  />
+                                </div>
                               ))}
-                              {!slotExpanded && overflowCount > 0 && (
+                              {overflowCount > 0 && (
                                 <button
                                   type="button"
-                                  onClick={() => setSlotExpanded(true)}
-                                  className={`w-full rounded-md py-0.5 text-[10px] font-black text-center transition ${
+                                  onClick={(e) => {
+                                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                    setSelectedEntry({ appointment: slotAppointments[MAX_VISIBLE], rect });
+                                  }}
+                                  className={`shrink-0 w-8 flex flex-col items-center justify-center rounded-md border text-[10px] font-black transition ${
                                     dark
-                                      ? "bg-white/5 text-slate-400 hover:bg-white/10 hover:text-slate-200"
-                                      : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+                                      ? "border-slate-700 bg-slate-800/90 text-slate-200 hover:bg-slate-700"
+                                      : "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200"
                                   }`}
+                                  title={`${overflowCount} more appointment(s). Click to view.`}
                                 >
-                                  +{overflowCount} more
+                                  +{overflowCount}
                                 </button>
                               )}
-                              {slotExpanded && slotAppointments.length > MAX_VISIBLE && (
-                                <button
-                                  type="button"
-                                  onClick={() => setSlotExpanded(false)}
-                                  className={`w-full rounded-md py-0.5 text-[10px] font-black text-center transition ${
-                                    dark ? "text-slate-500 hover:text-slate-300" : "text-slate-400 hover:text-slate-600"
-                                  }`}
-                                >
-                                  Show less ↑
-                                </button>
-                              )}
-                            </>
-                          ) : (
-                            slotAppointments.map((appointment) => (
-                              <article
-                                key={appointment.id}
-                                draggable={editable}
-                                onDragStart={(event) => event.dataTransfer.setData("text/plain", appointment.id)}
-                                className={`w-full rounded-lg border-l-4 border-brand-teal p-2 text-xs shadow-sm ${
-                                  dark ? "bg-slate-900 text-slate-100" : "bg-slate-50 text-slate-900"
-                                } ${editable ? "cursor-grab active:cursor-grabbing" : ""}`}
-                                title={editable ? "Drag to another calendar slot" : undefined}
-                              >
-                                <p className="truncate font-black">{appointment.title}</p>
-                                <p className={`truncate ${dark ? "mt-1 font-semibold text-slate-400" : "mt-1 font-semibold text-slate-500"}`}>{appointment.subtitle}</p>
-                                <p className="mt-2 font-black uppercase text-brand-teal">{appointment.status}</p>
-                              </article>
-                            ))
+                            </div>
+                          )}
+
+                          {/* If an appointment is scheduled outside doctor availability, display an indicator */}
+                          {!slotAvailable && slotAppointments.length > 0 && (
+                            <span className={`absolute -top-1 right-1 z-10 rounded px-1.5 py-0.2 text-[8px] font-black uppercase tracking-wider ${
+                              dark ? "bg-rose-500/30 text-rose-200 border border-rose-500/40" : "bg-rose-100 text-rose-800 border border-rose-300"
+                            }`}>
+                              Off Hours
+                            </span>
                           )}
                         </div>
-                      </div>
-                    );
-                  })}
-                </Fragment>
-              ))}
+                      );
+                    })}
+                  </Fragment>
+                ))}
+              </div>
+
             </div>
           </div>
         )}
@@ -886,7 +1106,9 @@ export function AppointmentCalendar({
           appointment={selectedEntry.appointment}
           anchorRect={selectedEntry.rect}
           onClose={() => setSelectedEntry(null)}
+          onViewPatient={onViewPatient}
           onConfirmAppointment={onConfirmAppointment}
+          onCancelAppointment={onCancelAppointment}
           onCompleteConsultation={onCompleteConsultation}
           onStartConsultation={onStartConsultation}
           onFollowUpConsultation={onFollowUpConsultation}

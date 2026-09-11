@@ -11,7 +11,11 @@ import { DashboardShell, type DashboardNavItem } from "@/components/dashboard/Da
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
 import { DoctorSettingsModule } from "@/components/dashboard/SettingsModule";
 import { DoctorResearchModule } from "@/components/dashboard/DoctorResearchModule";
+import { DoctorNotesHub } from "@/components/dashboard/DoctorNotesHub";
+import { DoctorAnalyticsHub } from "@/components/dashboard/DoctorAnalyticsHub";
 import { ConcurrentLoginModal } from "@/components/dashboard/ConcurrentLoginModal";
+import { BookingRequestModal } from "@/components/dashboard/BookingRequestModal";
+import { PatientDataModal } from "@/components/dashboard/PatientDataModal";
 import { ActiveCallWarningModal } from "@/components/dashboard/ActiveCallWarningModal";
 import { useActiveCallGuard } from "@/hooks/useActiveCallGuard";
 import {
@@ -2011,14 +2015,15 @@ export default function DoctorDashboardClient({
 
   const notificationSeed = useMemo<DashboardNotification[]>(
     () => [
-      ...pendingAppointments.slice(0, 4).map((booking) =>
+      ...pendingAppointments.slice(0, 8).map((booking) =>
         createDashboardNotification({
           id: `doctor-request-${booking.id}`,
-          title: "New appointment request",
-          body: `${booking.patient.firstName} ${booking.patient.lastName} / ${formatDateTime(booking.scheduledAt)}`,
+          title: "New Booking Request",
+          body: `${booking.patient.firstName} ${booking.patient.lastName} · ${formatDateTime(booking.scheduledAt)}${booking.reason ? ` · ${booking.reason}` : ""}`,
           kind: "appointment",
           createdAt: booking.createdAt,
           readAt: null,
+          appointmentId: booking.id,
         })
       ),
       ...confirmedAppointments.slice(0, 2).map((booking) =>
@@ -2029,6 +2034,7 @@ export default function DoctorDashboardClient({
           kind: "consultation",
           createdAt: booking.createdAt,
           readAt: booking.createdAt,
+          appointmentId: booking.id,
         })
       ),
       ...prescriptions.slice(0, 2).map((booking) =>
@@ -2039,11 +2045,24 @@ export default function DoctorDashboardClient({
           kind: "prescription",
           createdAt: booking.createdAt,
           readAt: booking.createdAt,
+          appointmentId: booking.id,
         })
       ),
     ],
     [confirmedAppointments, pendingAppointments, prescriptions]
   );
+
+  // ── Booking-request notification modal state ──
+  const [notifAppointment, setNotifAppointment] = useState<DoctorAppointment | null>(null);
+  const [calendarViewPatient, setCalendarViewPatient] = useState<DoctorAppointment | null>(null);
+
+  const handleNotificationClick = useCallback((notification: DashboardNotification) => {
+    if (!notification.appointmentId) return;
+    const found = pendingAppointments.find((a) => a.id === notification.appointmentId);
+    if (found) {
+      setNotifAppointment(found);
+    }
+  }, [pendingAppointments]);
   const dashboardNotifications = useDashboardNotifications({
     role: "doctor",
     initialNotifications: notificationSeed,
@@ -2481,33 +2500,10 @@ export default function DoctorDashboardClient({
           unreadCount={dashboardNotifications.unreadCount}
           onMarkAllRead={dashboardNotifications.markAllRead}
           onOpenNotifications={() => setActiveModule("notifications")}
+          onNotificationClick={handleNotificationClick}
         />
       }
-      statusIndicator={
-        <label className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition-colors ${
-          isDark
-            ? "border-slate-800 bg-slate-950 text-slate-200"
-            : "border-slate-200 bg-white text-slate-700 shadow-2xs"
-        }`}>
-          <span className={`h-2.5 w-2.5 rounded-full ${doctorStatusMeta.label === "Busy" ? "bg-amber-400" : doctorStatusMeta.label === "Offline" ? "bg-slate-400" : "bg-emerald-400"}`} />
-          <span className="sr-only">Update availability status</span>
-          <select
-            value={doctorStatus}
-            onChange={(event) => handleDoctorStatusChange(normalizeDoctorStatus(event.target.value))}
-            disabled={isUpdatingStatus}
-            className={`cursor-pointer bg-transparent text-[10px] font-black uppercase tracking-widest outline-none disabled:cursor-wait ${
-              isDark ? "text-slate-200" : "text-slate-700"
-            }`}
-            aria-label="Update availability status"
-          >
-            {DOCTOR_STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value} className={isDark ? "bg-slate-950 text-white" : "bg-white text-slate-900"}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      }
+
       collapsed={collapsed}
       onToggleCollapsed={() => setCollapsed((value) => !value)}
       onNavigate={setActiveModule}
@@ -3550,15 +3546,26 @@ export default function DoctorDashboardClient({
             onAnchorDateChange={setCalendarAnchorDate}
             availability={doctorAvailability}
             onConfirmAppointment={(appointment) => handleAccept(appointment.id)}
+            onCancelAppointment={(appointment) => handleCancel(appointment.id)}
             onCompleteConsultation={(appointment) => handleCompleteConsultationDirect(appointment.id)}
             onStartConsultation={handleStartConsultationFromCalendar}
             onFollowUpConsultation={handleFollowUpFromCalendar}
+            onViewPatient={(appointment) => {
+              const found = doctor.bookings.find((b) => b.id === appointment.id);
+              if (found) {
+                setCalendarViewPatient(found);
+              }
+            }}
             appointments={visibleScheduleAppointments.map((booking) => ({
               id: booking.id,
               title: `${booking.patient.firstName} ${booking.patient.lastName}`,
               subtitle: booking.reason || "No reason provided.",
               scheduledAt: booking.scheduledAt,
               status: booking.status,
+              reason: booking.reason,
+              duration: booking.duration,
+              notes: booking.notes,
+              patient: booking.patient,
             }))}
             onReschedule={handleReschedule}
           />
@@ -3566,20 +3573,12 @@ export default function DoctorDashboardClient({
       )}
 
       {activeModule === "notes" && (
-        <section className="space-y-3">
-          <h2 className={`text-lg font-black ${isDark ? "text-white" : "text-slate-900"}`}>Consultation Notes</h2>
-          {completedConsultations.length ? completedConsultations.map((booking) => (
-            <AppointmentCard
-              key={booking.id}
-              tone={tone}
-              title={`${booking.patient.firstName} ${booking.patient.lastName}`}
-              subtitle={booking.notes || "No notes captured"}
-              scheduledAt={booking.scheduledAt}
-              status={booking.status}
-              reason={booking.prescription ? `Rx: ${booking.prescription}` : booking.reason}
-            />
-          )) : <EmptyState tone={tone} title="No completed notes" body="Completed live consultations create clinical notes here." />}
-        </section>
+        <DoctorNotesHub
+          doctor={doctor}
+          completedConsultations={completedConsultations}
+          allConsultations={doctor.bookings}
+          tone={tone}
+        />
       )}
 
       {activeModule === "prescriptions" && (
@@ -3613,27 +3612,64 @@ export default function DoctorDashboardClient({
 
       {activeModule === "notifications" && (
         <section className="space-y-3">
-          {dashboardNotifications.notifications.length ? dashboardNotifications.notifications.map((item) => (
-            <article key={item.id} className={`rounded-xl border p-4 transition-colors ${isDark ? "border-slate-850 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-900 shadow-xs"}`}>
-              <p className={`text-sm font-black ${isDark ? "text-white" : "text-slate-900"}`}>{item.title}</p>
-              <p className={`mt-1 text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>{item.body}</p>
-              <p className={`mt-2 text-[10px] font-black uppercase tracking-wider ${isDark ? "text-slate-500" : "text-slate-400"}`}>{item.kind || "system"} / {formatDateTime(item.createdAt)}</p>
-            </article>
-          )) : <EmptyState tone={tone} title="No notifications" body="Appointment, message, and prescription alerts appear here." />}
+          {dashboardNotifications.notifications.length ? dashboardNotifications.notifications.map((item) => {
+            const isPendingBooking = item.kind === "appointment" && !!item.appointmentId && !item.readAt;
+            const meta: Record<string, string> = {
+              appointment: isDark ? "border-amber-500/30 bg-amber-500/8" : "border-amber-200 bg-amber-50",
+              consultation: isDark ? "border-sky-500/30 bg-sky-500/8" : "border-sky-200 bg-sky-50",
+              prescription: isDark ? "border-emerald-500/30 bg-emerald-500/8" : "border-emerald-200 bg-emerald-50",
+              message: isDark ? "border-violet-500/30 bg-violet-500/8" : "border-violet-200 bg-violet-50",
+            };
+            const cardCls = meta[item.kind ?? ""] ?? (isDark ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white");
+            return (
+              <article key={item.id} className={`rounded-xl border p-4 transition-colors shadow-xs ${cardCls} ${item.readAt ? "opacity-70" : ""}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-sm font-black ${isDark ? "text-white" : "text-slate-900"}`}>{item.title}</p>
+                    <p className={`mt-1 text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>{item.body}</p>
+                    <p className={`mt-2 text-[10px] font-black uppercase tracking-wider ${isDark ? "text-slate-600" : "text-slate-400"}`}>
+                      {item.kind || "system"} &middot; {formatDateTime(item.createdAt)}
+                    </p>
+                  </div>
+                  {!item.readAt && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-brand-red" aria-label="Unread" />}
+                </div>
+                {isPendingBooking && (
+                  <button
+                    type="button"
+                    onClick={() => handleNotificationClick(item)}
+                    className={`mt-3 flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-black uppercase tracking-wider transition active:scale-[0.97] ${
+                      isDark
+                        ? "border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+                        : "border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                    }`}
+                  >
+                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                    View Patient Profile &amp; Respond
+                  </button>
+                )}
+              </article>
+            );
+          }) : <EmptyState tone={tone} title="No notifications" body="Appointment, message, and prescription alerts appear here." />}
         </section>
       )}
 
       {activeModule === "analytics" && (
-        <div className="space-y-5">
-          <StatGrid
-            tone={tone}
-            stats={[
-              { label: "Completed", value: completedConsultations.length, helper: "closed consultations" },
-              { label: "Rating", value: doctor.rating.toFixed(1), helper: `${doctor.reviewCount} reviews` },
-              { label: "Rx issued", value: prescriptions.length, helper: "prescriptions documented" },
-            ]}
-          />
-        </div>
+        <DoctorAnalyticsHub
+          doctor={doctor}
+          appointments={doctor.bookings}
+          completedConsultations={completedConsultations}
+          confirmedAppointments={confirmedAppointments}
+          pendingAppointments={pendingAppointments}
+          cancelledAppointments={cancelledAppointments}
+          patients={patients}
+          prescriptions={prescriptions}
+          tone={tone}
+        />
       )}
 
       {activeModule === "research" && (
@@ -4477,6 +4513,37 @@ export default function DoctorDashboardClient({
           setActiveModule("overview");
         }}
       />
+
+      {/* Booking request modal — opens when doctor clicks a notification */}
+      {notifAppointment && (
+        <BookingRequestModal
+          appointment={notifAppointment}
+          pastAppointments={doctor.bookings.filter(
+            (b) => b.patient.id === notifAppointment.patient.id
+          )}
+          tone={tone}
+          actionLoadingId={actionLoadingId}
+          onConfirm={(id) => {
+            handleAccept(id);
+          }}
+          onReject={(id) => {
+            handleCancel(id);
+          }}
+          onClose={() => setNotifAppointment(null)}
+        />
+      )}
+
+      {/* Patient data modal — opens from appointment calendar "View Patient Data" */}
+      {calendarViewPatient && (
+        <PatientDataModal
+          appointment={calendarViewPatient}
+          pastAppointments={doctor.bookings.filter(
+            (b) => b.patient.id === calendarViewPatient.patient.id
+          )}
+          tone={tone}
+          onClose={() => setCalendarViewPatient(null)}
+        />
+      )}
     </DashboardShell>
   );
 }

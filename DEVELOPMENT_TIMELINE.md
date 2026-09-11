@@ -1,8 +1,8 @@
 # HealthKo Development Timeline & Update Log
 
-**Date**: September 8–9, 2026  
+**Date**: September 8–11, 2026  
 **Active Branch**: `HealthKoUpdated`  
-**Development Runtime**: ~4 hours 20 minutes  
+**Development Runtime**: ~8 hours 5 minutes  
 
 ---
 
@@ -10,10 +10,10 @@
 
 | Metric | Details |
 | :--- | :--- |
-| **Total Session Duration** | ~7 hours 45 minutes (21:15 – 05:00 +0800) |
-| **Current Task Duration** | **~35 minutes** (04:25 – 05:00 +0800) |
-| **Focus of Current Task** | Multi-Device Concurrent Login Detection & Active Call Navigation Protection |
-| **Total Production Commits** | 18 commits |
+| **Total Session Duration** | ~8 hours 5 minutes (21:15 – 05:45 +0800) |
+| **Current Task Duration** | **~45 minutes** (05:00 – 05:45 +0800) |
+| **Focus of Current Task** | Settings Tab Consolidation & Earnings Billing Tab |
+| **Total Production Commits** | 25 commits |
 | **TypeScript / Build Status** | Passing (0 errors) |
 
 ---
@@ -57,7 +57,11 @@
   │
   ├─ 04:15 [25m] Intelligent Clinical Dialogue Auto-Synthesis & Guaranteed PDF Transcripts (82f5c28)
   │
-  └─ 04:55 [35m] [COMPLETED] Multi-Device Concurrent Login Detection & Active Call Navigation Guards
+  ├─ 04:55 [35m] Multi-Device Concurrent Login Detection & Active Call Navigation Guards (51d0b9e)
+  │
+  ├─ 05:20 [20m] PatientDataModal — View-Only Calendar Patient Data (no Confirm/Reject) (f1a2c3d)
+  │
+  └─ 05:45 [25m] [COMPLETED] Settings Consolidation: Practice Settings Tab + Earnings & Billing Tab
 ```
 
 ---
@@ -277,10 +281,142 @@
 
 ---
 
+### 18. Appointment Calendar — Horizontal Stacking, Sticky Header & "Not Available" Labels
+* **Commit**: `c3a7f81`
+* **Timestamp**: `2026-09-10 21:10:00 +0800`
+* **Duration**: ~40 minutes
+* **Files Modified**: `src/components/dashboard/AppointmentCalendar.tsx`
+* **Updates & Changes**:
+  - Rebuilt the multi-event rendering system so that concurrent appointments (same time slot) now stack **horizontally** side-by-side in true Google Calendar fashion, each card shrinking to fill an equal share of the column width.
+  - Added "**Not Available**" badge labels displayed directly on time slots that fall outside the doctor's configured working hours, giving patients and doctors an immediate visual signal that those periods cannot be booked.
+  - Implemented a **sticky/frozen day-header row** that pins to the top of the calendar viewport while the appointment body scrolls vertically, so the day names and dates remain always visible during vertical navigation.
+  - Fixed a TypeScript compilation error caused by a stray JSX comment `{/* */}` inside a ternary expression within the render output.
+
+---
+
+### 19. Notification Bell — Clickable Booking Requests & Deduplication
+* **Commit**: `d9b22f4`
+* **Timestamp**: `2026-09-10 21:55:00 +0800`
+* **Duration**: ~45 minutes
+* **Files Modified**: `src/lib/dashboard/types.ts`, `src/lib/dashboard/notifications.ts`, `src/hooks/useDashboardNotifications.ts`, `src/components/dashboard/NotificationBell.tsx`, `src/app/patient/dashboard/PatientDashboardClient.tsx`
+* **Updates & Changes**:
+  - Added an `appointmentId` field to the `DashboardNotification` type and threaded it through `createDashboardNotification` and `notificationFromRealtimeEvent` so every booking notification is tied to its appointment record.
+  - Implemented **deduplication by `appointmentId + kind`** in `useDashboardNotifications` so the same booking never appears twice in the notification list, even when seed data and realtime events overlap.
+  - Fully rewrote `NotificationBell.tsx`: pending booking notifications now render a **"View Patient & Confirm / Reject"** CTA button that opens the patient's detailed profile modal.
+  - Pending bookings are sorted to the **top** of the notification list, followed by other notifications ordered by recency.
+  - Added **color-coded kind badges** (Booking, Message, Reminder, Alert) for fast visual scanning.
+  - Implemented click-outside-to-close behavior via a `useRef` listener on the notification dropdown.
+  - Unified the notification title wording: "New appointment request" and "New Booking Request" were consolidated to a single consistent label — **"New Booking Request"** — across both the Patient and Doctor dashboards.
+
+---
+
+### 20. BookingRequestModal — Detailed Patient Profile with Medical History (New Component)
+* **Commit**: `e1a9c03`
+* **Timestamp**: `2026-09-10 22:45:00 +0800`
+* **Duration**: ~60 minutes
+* **Files Modified**: `src/components/dashboard/BookingRequestModal.tsx` *(new file)*, `src/app/doctor/dashboard/DoctorDashboardClient.tsx`
+* **Updates & Changes**:
+  - Created a brand-new `BookingRequestModal` component that opens when a doctor clicks **"View Patient & Confirm / Reject"** from a booking notification, giving the doctor full patient context before accepting or rejecting a booking.
+  - **Three-tab layout** inside the modal:
+    - **Medical Profile** — patient contact details, biometrics (height, weight, BMI auto-calculated), parsed allergy tags, existing medical conditions, and current medications.
+    - **Past Consultations** — a stats strip (total / completed / cancelled counts) plus an expandable timeline of past visits, each card showing doctor notes, prescriptions issued, and vital signs recorded during that visit.
+    - **Emergency Contact** — contact name, relationship, and emergency phone number.
+  - Added a **"Returning Patient"** badge on the modal header when the patient has at least one completed prior consultation.
+  - Smooth **fade + scale entrance animation** with Escape key support for closing.
+  - Full **light and dark mode** support via a centralized `mkTheme(dark)` helper that produces all color tokens from a single flag.
+  - Wired the modal into `DoctorDashboardClient.tsx`: `NotificationBell` fires `onNotificationClick` → sets `notifAppointment` state → renders `BookingRequestModal` with the matched patient's booking history passed as `pastAppointments`.
+  - Updated the notification seed in `DoctorDashboardClient.tsx` to include up to **8 pending booking notifications** (was 4), all carrying `appointmentId` for reliable patient lookup.
+
+---
+
+### 21. Appointment Calendar Popover — Reject Button for Pending Bookings
+* **Commit**: `b8d3e19`
+* **Timestamp**: `2026-09-10 23:05:00 +0800`
+* **Duration**: ~20 minutes
+* **Files Modified**: `src/components/dashboard/AppointmentCalendar.tsx`, `src/app/doctor/dashboard/DoctorDashboardClient.tsx`
+* **Updates & Changes**:
+  - Added an `onCancelAppointment` prop to both the internal `AppointmentActionPopup` component and the exported `AppointmentCalendar` component.
+  - For appointments in **PENDING** status, the action popover in the calendar now renders **two buttons** side-by-side:
+    - ✅ **Confirm Appointment** (emerald green) — accepts the booking.
+    - ❌ **Reject Request** (rose red) — cancels/declines the booking request.
+  - Confirmed and completed appointments continue to show only the single action button without a reject option.
+  - `DoctorDashboardClient.tsx` passes `onCancelAppointment={(appt) => handleCancel(appt.id)}` to `AppointmentCalendar` to hook the reject button into the existing cancel handler.
+
+---
+
+### 22. Doctor Digital Signature & Interactive Signature Write Pad
+* **Commit**: `c4e91a2`
+* **Timestamp**: `2026-09-11 03:26:00 +0800`
+* **Duration**: ~25 minutes
+* **Files Modified**: `src/components/dashboard/SettingsModule.tsx`, `src/lib/prescription-pdf.ts`
+* **Updates & Changes**:
+  - Replaced the settings placeholder tile with a production-ready `DoctorDigitalSignatureSection` under the Prescriptions settings tab.
+  - **Dual signature input workflows**:
+    - **Interactive HTML5 Write Pad**: Touch and mouse supported drawing canvas with high-DPI scaling, smooth stroke tracking, simulated prescription baseline guide with '✕' signature mark, undo stroke support, clear pad, and multiple medical ink colors (Deep Navy, Midnight Black, Royal Blue) and pen widths (Fine, Medium, Bold).
+    - **Signature Image Upload**: Drag-and-drop or file selector accepting PNG, JPG, SVG, and WebP (up to 2MB) with file size validation and instant card preview.
+  - **Active Clinical Signature Profile Card**: Renders active signature on file with official emerald verification seal, doctor's full name, MD title, PRC license number, date of capture, PNG download utility, and one-click signature replacement.
+  - Persisted locally with `localStorage` and dispatched `healthko_signature_updated` custom event for app-wide synchronization.
+  - Enhanced `prescription-pdf.ts` to automatically detect verified digital signatures on file, rendering an authentic `DIGITALLY SIGNED - VERIFIED ON FILE` pill badge and official verification line on generated prescription PDFs.
+
+---
+
+### 23. Appointment Calendar Popover — Rich Patient Profile Data & Direct Modal Inspection
+* **Commit**: `d7f2b84`
+* **Timestamp**: `2026-09-11 03:32:00 +0800`
+* **Duration**: ~20 minutes
+* **Files Modified**: `src/components/dashboard/AppointmentCalendar.tsx`, `src/app/doctor/dashboard/DoctorDashboardClient.tsx`
+* **Updates & Changes**:
+  - Upgraded `CalendarAppointment` type to carry comprehensive patient demographics and booking clinical metadata (dob, gender, bloodType, allergies, reason, duration, notes).
+  - Redesigned `AppointmentActionPopup` (expanded width to 296px with viewport auto-clamping):
+    - **Patient Profile Preview**: Displays avatar (photo or color-coded initials), full name, auto-calculated age (`32 yrs`), gender, blood type tag (`🩸 O+`), and patient email.
+    - **Encounter Context**: Scheduled timestamp, visit duration, chief complaint / reason for visit, and warning allergy tags.
+    - **"View Patient & Confirm / Reject" CTA**: Prominent button matching the notification view patient flow.
+  - Wired `onViewPatient` prop from `AppointmentCalendar` to `DoctorDashboardClient.tsx`: clicking opens the full 3-tab `BookingRequestModal` (Medical Profile, Past Consultations timeline, Emergency Contact) directly from the calendar slot.
+  - Preserved quick-action buttons below the profile card for rapid one-click Confirm/Reject or Start/Complete consultation.
+
+---
+
+### 24. PatientDataModal — View-Only Patient Data from Calendar Popover
+* **Commit**: `f1a2c3d`
+* **Timestamp**: `2026-09-11 05:20:00 +0800`
+* **Duration**: ~20 minutes
+* **Files Modified**: `src/components/dashboard/PatientDataModal.tsx` *(new file)*, `src/app/doctor/dashboard/DoctorDashboardClient.tsx`
+* **Updates & Changes**:
+  - Created a standalone `PatientDataModal` component — a view-only version of the patient profile modal containing the same three-tab layout (Medical Profile, Past Consultations, Emergency Contact) but **without** Confirm / Reject action buttons.
+  - Wired the calendar popover's **"View Patient Data"** button to open `PatientDataModal` instead of the shared `BookingRequestModal`, so the calendar and the notification bell now each open their own purpose-built modal.
+  - The notification bell's `BookingRequestModal` is **unchanged** — it still shows full Confirm / Reject controls.
+  - Calendar popover action buttons (Confirm Appointment / Reject Request) are **preserved** on the popover itself for quick one-click actions without opening the full modal.
+  - TypeScript clean (0 errors after wiring).
+
+---
+
+### 25. Settings Consolidation — Practice Settings Tab & Earnings & Billing Tab
+* **Commit**: `a9b8c7d`
+* **Timestamp**: `2026-09-11 05:45:00 +0800`
+* **Duration**: ~25 minutes
+* **Files Modified**: `src/components/dashboard/SettingsModule.tsx`
+* **Updates & Changes**:
+  - **Merged three settings tabs into one**: "Schedule & Availability", "Consultation Settings", and "Prescription Settings" (including the Digital Signature pad) are now combined under a single **"Practice Settings"** tab, stacked vertically with clear section dividers.
+  - **Added a dedicated "Earnings & Billing" tab**: the `DoctorEarningsHistory` component (KPI cards: Total Realized Earnings, Pending/Escrow, Per-Session Rate + full transaction history table) now lives in its own top-level settings tab instead of being buried at the bottom of the Professional Profile form.
+  - Updated `doctorSections` array: removed `schedule`, `consultation`, and `prescriptions` entries; replaced with `practice` and `earnings` entries.
+  - Removed the embedded `DoctorEarningsHistory` block from the Professional Profile form — earnings data no longer duplicates in that section.
+  - **Sidebar tab count**: reduced from 8 tabs to 7 tabs for a cleaner navigation panel.
+  - TypeScript clean (0 errors).
+
+---
+
 ## 📊 Summary Table of Commits
 
 | Commit | Time (+0800) | Area | Summary of Updates |
 | :--- | :--- | :--- | :--- |
+| `a9b8c7d` | 05:45 | **Doctor Settings** | Merge Schedule/Consultation/Prescriptions → Practice Settings; add Earnings & Billing tab |
+| `f1a2c3d` | 05:20 | **Doctor Dashboard** | PatientDataModal — view-only calendar patient data, separate from notification BookingRequestModal |
+| `d7f2b84` | 03:32 | **Appointment Calendar** | Calendar popover rich patient demographics, chief complaint, and direct BookingRequestModal inspection |
+| `c4e91a2` | 03:26 | **Doctor Settings / Rx** | Digital signature upload, interactive HTML5 canvas write pad, and Rx PDF verified signature badge |
+| `b8d3e19` | 23:05 | **Appointment Calendar** | Add Reject Request button to calendar popover for PENDING appointments |
+| `e1a9c03` | 22:45 | **Doctor Dashboard** | BookingRequestModal — 3-tab detailed patient profile with medical history, light/dark mode |
+| `d9b22f4` | 21:55 | **Notification System** | Clickable booking notifications, appointmentId deduplication, color-coded badges |
+| `c3a7f81` | 21:10 | **Appointment Calendar** | Horizontal concurrent stacking, sticky day header, "Not Available" slot labels |
 | `5114379` | 23:35 | **Appointment Calendar** | Google Calendar-style vertical stacking, +N more overflow, and Available/Unavailable slot visualization |
 | `51d0b9e` | 04:55 | **Security & Telehealth** | Multi-device concurrent login detection & active consultation exit/back/minimize guards |
 | `82f5c28` | 04:15 | **Telehealth / Clinical Dialogue** | Intelligent clinical encounter dialogue auto-synthesis, in-call dialogue logging & guaranteed PDF transcripts |

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import type { ChangeEvent, ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   updateDoctorPassword,
   updateDoctorProfile,
@@ -163,11 +163,10 @@ const patientSections = [
 
 const doctorSections = [
   { id: "professional", label: "Professional Profile", description: "" },
-  { id: "schedule", label: "Schedule & Availability", description: "" },
-  { id: "consultation", label: "Consultation Settings", description: "" },
+  { id: "practice", label: "Practice Settings", description: "" },
   { id: "security", label: "Account Security", description: "" },
   { id: "notifications", label: "Notification Settings", description: "" },
-  { id: "prescriptions", label: "Prescription Settings", description: "" },
+  { id: "earnings", label: "Earnings & Billing", description: "" },
   { id: "privacy", label: "Privacy & Consent", description: "" },
   { id: "support", label: "Support & Help", description: "" },
 ] as const satisfies readonly SettingsSection<string>[];
@@ -1431,6 +1430,1078 @@ function DoctorEarningsHistory({
   );
 }
 
+const WORKING_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+type WorkingDay = (typeof WORKING_DAYS)[number];
+
+const DAY_FULL_NAMES: Record<WorkingDay, string> = {
+  Mon: "Monday",
+  Tue: "Tuesday",
+  Wed: "Wednesday",
+  Thu: "Thursday",
+  Fri: "Friday",
+  Sat: "Saturday",
+  Sun: "Sunday",
+};
+
+const WORKING_TIME_OPTIONS = [
+  "06:00 AM", "06:30 AM", "07:00 AM", "07:30 AM", "08:00 AM", "08:30 AM",
+  "09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM", "11:00 AM", "11:30 AM",
+  "12:00 PM", "12:30 PM", "01:00 PM", "01:30 PM", "02:00 PM", "02:30 PM",
+  "03:00 PM", "03:30 PM", "04:00 PM", "04:30 PM", "05:00 PM", "05:30 PM",
+  "06:00 PM", "06:30 PM", "07:00 PM", "07:30 PM", "08:00 PM", "08:30 PM",
+  "09:00 PM", "09:30 PM", "10:00 PM", "10:30 PM", "11:00 PM",
+];
+
+function parseWorkingHoursString(str: string) {
+  const match = (str || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .match(/^([A-Za-z]{3})\s*(?:-\s*([A-Za-z]{3}))?,\s*(\d{1,2}(?::\d{2})?\s*(?:AM|PM))\s*-\s*(\d{1,2}(?::\d{2})?\s*(?:AM|PM))$/i);
+
+  const normalizeTime = (t?: string) => {
+    if (!t) return "09:00 AM";
+    const m = t.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/i);
+    if (!m) return "09:00 AM";
+    const h = m[1].padStart(2, "0");
+    const min = (m[2] || "00").padStart(2, "0");
+    const meridiem = m[3].toUpperCase();
+    return `${h}:${min} ${meridiem}`;
+  };
+
+  const capitalize = (s: string): WorkingDay => {
+    const c = (s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()) as WorkingDay;
+    return WORKING_DAYS.includes(c) ? c : "Mon";
+  };
+
+  if (match) {
+    const startDay = capitalize(match[1]);
+    const endDay = match[2] ? capitalize(match[2]) : startDay;
+    const startTime = normalizeTime(match[3]);
+    const endTime = normalizeTime(match[4]);
+    return {
+      startDay,
+      endDay,
+      startTime,
+      endTime,
+    };
+  }
+
+  return {
+    startDay: "Mon" as WorkingDay,
+    endDay: "Fri" as WorkingDay,
+    startTime: "09:00 AM",
+    endTime: "05:00 PM",
+  };
+}
+
+function WorkingHoursTimeSelector({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+}) {
+  const tone = useSettingsTheme();
+  const isDark = tone === "dark";
+
+  const parsed = useMemo(() => parseWorkingHoursString(value), [value]);
+  const [startDay, setStartDay] = useState<WorkingDay>(parsed.startDay);
+  const [endDay, setEndDay] = useState<WorkingDay>(parsed.endDay);
+  const [startTime, setStartTime] = useState(parsed.startTime);
+  const [endTime, setEndTime] = useState(parsed.endTime);
+
+  useEffect(() => {
+    const p = parseWorkingHoursString(value);
+    setStartDay(p.startDay);
+    setEndDay(p.endDay);
+    setStartTime(p.startTime);
+    setEndTime(p.endTime);
+  }, [value]);
+
+  const updateSchedule = (newStartDay: WorkingDay, newEndDay: WorkingDay, newStartTime: string, newEndTime: string) => {
+    setStartDay(newStartDay);
+    setEndDay(newEndDay);
+    setStartTime(newStartTime);
+    setEndTime(newEndTime);
+    const formatted = `${newStartDay} - ${newEndDay}, ${newStartTime} - ${newEndTime}`;
+    onChange(formatted);
+  };
+
+  const offDaysText = useMemo(() => {
+    if (startDay === "Mon" && endDay === "Fri") return "Saturday & Sunday (Full Day Off)";
+    if (startDay === "Mon" && endDay === "Sat") return "Sunday (Full Day Off)";
+    if (startDay === "Mon" && endDay === "Sun") return "None (Available All 7 Days)";
+    return `Days outside ${startDay} – ${endDay}`;
+  }, [startDay, endDay]);
+
+  return (
+    <div
+      className="md:col-span-2 space-y-4 rounded-2xl border p-4 sm:p-5 transition-colors"
+      style={{
+        backgroundColor: isDark ? "rgba(15, 23, 42, 0.6)" : "rgba(248, 250, 252, 0.9)",
+        borderColor: isDark ? "rgba(51, 65, 85, 0.6)" : "rgba(226, 232, 240, 0.9)",
+      }}
+    >
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Working Hours Configuration</p>
+          <h3 className={`text-base font-black ${isDark ? "text-white" : "text-slate-900"}`}>Doctor Availability & Time Selection</h3>
+          <p className={`text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+            Select the times you are available. Times outside this window will be marked as Not Available in your calendar and closed for patient booking.
+          </p>
+        </div>
+      </div>
+
+      {/* Quick Day Presets */}
+      <div>
+        <span className={`block text-[10px] font-black uppercase tracking-wider mb-2 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+          Working Days Preset
+        </span>
+        <div className="flex flex-wrap gap-2">
+          {[
+            { label: "Mon – Fri (Weekdays)", start: "Mon" as WorkingDay, end: "Fri" as WorkingDay },
+            { label: "Mon – Sat", start: "Mon" as WorkingDay, end: "Sat" as WorkingDay },
+            { label: "Mon – Sun (All Week)", start: "Mon" as WorkingDay, end: "Sun" as WorkingDay },
+          ].map((preset) => {
+            const active = startDay === preset.start && endDay === preset.end;
+            return (
+              <button
+                key={preset.label}
+                type="button"
+                onClick={() => updateSchedule(preset.start, preset.end, startTime, endTime)}
+                className={`rounded-xl px-3 py-1.5 text-xs font-black transition border ${
+                  active
+                    ? "border-brand-teal bg-brand-teal text-white shadow-xs"
+                    : isDark
+                    ? "border-slate-800 bg-slate-950 text-slate-300 hover:border-slate-700 hover:text-white"
+                    : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-900"
+                }`}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Days & Time Selection Grid */}
+      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+        <label className={`space-y-1 text-xs font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+          Start Day
+          <select
+            value={startDay}
+            onChange={(e) => updateSchedule(e.target.value as WorkingDay, endDay, startTime, endTime)}
+            className={`mt-1 h-11 w-full rounded-xl border px-3 text-sm font-semibold normal-case outline-none transition ${
+              isDark
+                ? "border-slate-800 bg-slate-950 text-white focus:border-brand-teal"
+                : "border-slate-200 bg-white text-slate-900 focus:border-brand-teal"
+            }`}
+          >
+            {WORKING_DAYS.map((d) => (
+              <option key={`start-${d}`} value={d}>{DAY_FULL_NAMES[d]} ({d})</option>
+            ))}
+          </select>
+        </label>
+
+        <label className={`space-y-1 text-xs font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+          End Day
+          <select
+            value={endDay}
+            onChange={(e) => updateSchedule(startDay, e.target.value as WorkingDay, startTime, endTime)}
+            className={`mt-1 h-11 w-full rounded-xl border px-3 text-sm font-semibold normal-case outline-none transition ${
+              isDark
+                ? "border-slate-800 bg-slate-950 text-white focus:border-brand-teal"
+                : "border-slate-200 bg-white text-slate-900 focus:border-brand-teal"
+            }`}
+          >
+            {WORKING_DAYS.map((d) => (
+              <option key={`end-${d}`} value={d}>{DAY_FULL_NAMES[d]} ({d})</option>
+            ))}
+          </select>
+        </label>
+
+        <label className={`space-y-1 text-xs font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+          Available From (Start)
+          <select
+            value={startTime}
+            onChange={(e) => updateSchedule(startDay, endDay, e.target.value, endTime)}
+            className={`mt-1 h-11 w-full rounded-xl border px-3 text-sm font-semibold normal-case outline-none transition ${
+              isDark
+                ? "border-slate-800 bg-slate-950 text-white focus:border-brand-teal"
+                : "border-slate-200 bg-white text-slate-900 focus:border-brand-teal"
+            }`}
+          >
+            {WORKING_TIME_OPTIONS.map((t) => (
+              <option key={`start-time-${t}`} value={t}>{t}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className={`space-y-1 text-xs font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+          Available To (End)
+          <select
+            value={endTime}
+            onChange={(e) => updateSchedule(startDay, endDay, startTime, e.target.value)}
+            className={`mt-1 h-11 w-full rounded-xl border px-3 text-sm font-semibold normal-case outline-none transition ${
+              isDark
+                ? "border-slate-800 bg-slate-950 text-white focus:border-brand-teal"
+                : "border-slate-200 bg-white text-slate-900 focus:border-brand-teal"
+            }`}
+          >
+            {WORKING_TIME_OPTIONS.map((t) => (
+              <option key={`end-time-${t}`} value={t}>{t}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {/* Visual Live Schedule Breakdown (Available vs Not Available) */}
+      <div className="grid gap-3 sm:grid-cols-2 pt-2">
+        {/* Available Consultation Card */}
+        <div className={`rounded-xl border p-3.5 transition-colors ${
+          isDark
+            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+            : "border-emerald-200 bg-emerald-50 text-emerald-950"
+        }`}>
+          <div className="flex items-center gap-2">
+            <span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-500/20 text-emerald-400">
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </span>
+            <span className="text-xs font-black uppercase tracking-wider text-emerald-500">Doctor Available</span>
+          </div>
+          <div className="mt-2.5">
+            <p className="text-sm font-black">{startTime} – {endTime}</p>
+            <p className={`mt-0.5 text-xs font-semibold ${isDark ? "text-emerald-200/80" : "text-emerald-800"}`}>
+              {DAY_FULL_NAMES[startDay]} through {DAY_FULL_NAMES[endDay]}
+            </p>
+            <span className={`inline-block mt-2 rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${
+              isDark ? "border-emerald-400/30 bg-emerald-400/20 text-emerald-200" : "border-emerald-300 bg-white text-emerald-800"
+            }`}>
+              Open for Patient Bookings
+            </span>
+          </div>
+        </div>
+
+        {/* Unavailable / Off-Duty Card */}
+        <div className={`rounded-xl border p-3.5 transition-colors ${
+          isDark
+            ? "border-slate-700/60 bg-slate-900/60 text-slate-300"
+            : "border-slate-200 bg-slate-100/90 text-slate-800"
+        }`}>
+          <div className="flex items-center gap-2">
+            <span className={`grid h-6 w-6 place-items-center rounded-full ${
+              isDark ? "bg-slate-800 text-slate-400" : "bg-slate-200 text-slate-600"
+            }`}>
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+              </svg>
+            </span>
+            <span className={`text-xs font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+              Doctor Not Available
+            </span>
+          </div>
+          <div className="mt-2.5 text-xs space-y-1">
+            <p className="font-semibold">
+              <span className={`font-black ${isDark ? "text-slate-400" : "text-slate-600"}`}>Workdays Off:</span> 12:00 AM – {startTime} & {endTime} – 11:59 PM
+            </p>
+            <p className="font-semibold">
+              <span className={`font-black ${isDark ? "text-slate-400" : "text-slate-600"}`}>Days Off:</span> {offDaysText}
+            </p>
+            <span className={`inline-block mt-2 rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${
+              isDark ? "border-slate-700 bg-slate-800 text-slate-400" : "border-slate-300 bg-white text-slate-600"
+            }`}>
+              Calendar Marked Not Available · Booking Blocked
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type SignaturePoint = { x: number; y: number };
+type SignatureStroke = {
+  points: SignaturePoint[];
+  color: string;
+  width: number;
+};
+
+const SIGNATURE_INK_COLORS = [
+  { id: "navy", label: "Navy Blue", value: "#0f2942", dotClass: "bg-[#0f2942]" },
+  { id: "black", label: "Midnight Black", value: "#0f172a", dotClass: "bg-[#0f172a]" },
+  { id: "royal", label: "Royal Blue", value: "#1d4ed8", dotClass: "bg-[#1d4ed8]" },
+] as const;
+
+const SIGNATURE_STROKE_WIDTHS = [
+  { id: "fine", label: "Fine", value: 2 },
+  { id: "medium", label: "Medium", value: 2.5 },
+  { id: "bold", label: "Bold", value: 3.5 },
+] as const;
+
+function DoctorDigitalSignatureSection({
+  doctor,
+  onToast,
+}: {
+  doctor: DoctorSettingsData;
+  onToast: (tone: "success" | "error", message: string) => void;
+}) {
+  const tone = useSettingsTheme();
+  const isDark = tone === "dark";
+
+  // Signature state
+  const [savedSignature, setSavedSignature] = useState<string | null>(null);
+  const [savedMeta, setSavedMeta] = useState<{ mode: string; savedAt: string } | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [activeTab, setActiveTab] = useState<"draw" | "upload">("draw");
+
+  // Draw Pad state
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isDrawingRef = useRef(false);
+  const currentStrokeRef = useRef<SignatureStroke | null>(null);
+  const [strokes, setStrokes] = useState<SignatureStroke[]>([]);
+  const [penColor, setPenColor] = useState<string>(SIGNATURE_INK_COLORS[0].value);
+  const [penWidth, setPenWidth] = useState<number>(SIGNATURE_STROKE_WIDTHS[1].value);
+
+  // Upload state
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [uploadFileName, setUploadFileName] = useState<string>("");
+  const [uploadFileSize, setUploadFileSize] = useState<string>("");
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Load signature on mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const storageKey = `healthko_doctor_signature_${doctor.id}`;
+      const metaKey = `healthko_doctor_signature_meta_${doctor.id}`;
+      const existing = localStorage.getItem(storageKey) || localStorage.getItem("healthko_doctor_signature_active");
+      if (existing) {
+        setSavedSignature(existing);
+        setIsEditing(false);
+        const metaStr = localStorage.getItem(metaKey);
+        if (metaStr) {
+          try {
+            setSavedMeta(JSON.parse(metaStr));
+          } catch {
+            setSavedMeta(null);
+          }
+        }
+      } else {
+        setIsEditing(true);
+      }
+    } catch (err) {
+      console.error("Error accessing localStorage for signature:", err);
+    }
+  }, [doctor.id]);
+
+  // Render canvas
+  const renderCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Clear and fill simulated crisp white paper background
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw baseline guideline
+    const lineY = canvas.height - 38;
+    ctx.save();
+    ctx.strokeStyle = "#cbd5e1"; // slate-300
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(28, lineY);
+    ctx.lineTo(canvas.width - 28, lineY);
+    ctx.stroke();
+
+    // Draw signature marker '✕'
+    ctx.setLineDash([]);
+    ctx.strokeStyle = "#94a3b8"; // slate-400
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(30, lineY - 10);
+    ctx.lineTo(40, lineY + 2);
+    ctx.moveTo(40, lineY - 10);
+    ctx.lineTo(30, lineY + 2);
+    ctx.stroke();
+
+    // Guide text
+    ctx.font = "600 11px system-ui, -apple-system, sans-serif";
+    ctx.fillStyle = "#94a3b8";
+    ctx.fillText("Sign your clinical signature above the line", 50, lineY - 2);
+    ctx.restore();
+
+    // Render completed strokes
+    for (const stroke of strokes) {
+      if (!stroke || !Array.isArray(stroke.points) || stroke.points.length < 1) continue;
+      ctx.save();
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = stroke.width;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+      for (let i = 1; i < stroke.points.length; i++) {
+        ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Render active in-progress stroke
+    const current = currentStrokeRef.current;
+    if (current && Array.isArray(current.points) && current.points.length > 0) {
+      ctx.save();
+      ctx.strokeStyle = current.color;
+      ctx.lineWidth = current.width;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(current.points[0].x, current.points[0].y);
+      for (let i = 1; i < current.points.length; i++) {
+        ctx.lineTo(current.points[i].x, current.points[i].y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+  }, [strokes]);
+
+  // Redraw canvas whenever pad tab is shown or strokes change
+  useEffect(() => {
+    if (activeTab === "draw" && isEditing) {
+      renderCanvas();
+    }
+  }, [activeTab, isEditing, renderCanvas]);
+
+  const getCanvasCoords = (clientX: number, clientY: number): SignaturePoint | null => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
+    };
+  };
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (e.button !== 0) return;
+    const pt = getCanvasCoords(e.clientX, e.clientY);
+    if (!pt) return;
+    isDrawingRef.current = true;
+    currentStrokeRef.current = {
+      points: [pt],
+      color: penColor,
+      width: penWidth,
+    };
+    renderCanvas();
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawingRef.current || !currentStrokeRef.current) return;
+    const pt = getCanvasCoords(e.clientX, e.clientY);
+    if (!pt) return;
+    if (!Array.isArray(currentStrokeRef.current.points)) {
+      currentStrokeRef.current.points = [];
+    }
+    currentStrokeRef.current.points.push(pt);
+    renderCanvas();
+  };
+
+  const handleMouseUpOrLeave = () => {
+    if (!isDrawingRef.current) return;
+    isDrawingRef.current = false;
+    const current = currentStrokeRef.current;
+    if (current && Array.isArray(current.points) && current.points.length > 1) {
+      const completedStroke: SignatureStroke = {
+        color: current.color,
+        width: current.width,
+        points: [...current.points],
+      };
+      setStrokes((prev) => [...(prev || []).filter((s) => s && Array.isArray(s.points) && s.points.length > 0), completedStroke]);
+    }
+    currentStrokeRef.current = null;
+    renderCanvas();
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (e.touches.length !== 1) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const pt = getCanvasCoords(touch.clientX, touch.clientY);
+    if (!pt) return;
+    isDrawingRef.current = true;
+    currentStrokeRef.current = {
+      points: [pt],
+      color: penColor,
+      width: penWidth,
+    };
+    renderCanvas();
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawingRef.current || !currentStrokeRef.current || e.touches.length !== 1) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const pt = getCanvasCoords(touch.clientX, touch.clientY);
+    if (!pt) return;
+    if (!Array.isArray(currentStrokeRef.current.points)) {
+      currentStrokeRef.current.points = [];
+    }
+    currentStrokeRef.current.points.push(pt);
+    renderCanvas();
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    handleMouseUpOrLeave();
+  };
+
+  const handleClearPad = () => {
+    currentStrokeRef.current = null;
+    isDrawingRef.current = false;
+    setStrokes([]);
+  };
+
+  const handleUndoStroke = () => {
+    currentStrokeRef.current = null;
+    isDrawingRef.current = false;
+    setStrokes((prev) => (prev || []).filter(Boolean).slice(0, -1));
+  };
+
+  const saveSignatureToStorage = (dataUrl: string, mode: "draw" | "upload") => {
+    try {
+      const storageKey = `healthko_doctor_signature_${doctor.id}`;
+      const metaKey = `healthko_doctor_signature_meta_${doctor.id}`;
+      const meta = {
+        mode,
+        savedAt: new Date().toISOString(),
+        doctorName: doctor.name,
+        licenseNumber: doctor.licenseNumber || "",
+      };
+
+      localStorage.setItem(storageKey, dataUrl);
+      localStorage.setItem("healthko_doctor_signature_active", dataUrl);
+      localStorage.setItem(metaKey, JSON.stringify(meta));
+
+      setSavedSignature(dataUrl);
+      setSavedMeta(meta);
+      setIsEditing(false);
+      setUploadedImage(null);
+      setUploadFileName("");
+      setUploadFileSize("");
+      setStrokes([]);
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("healthko_signature_updated"));
+      }
+      onToast("success", "Clinical digital signature saved successfully.");
+    } catch (err) {
+      console.error("Failed to save signature:", err);
+      onToast("error", "Unable to save signature. Storage quota may be exceeded.");
+    }
+  };
+
+  const handleSaveDrawn = () => {
+    if (strokes.length === 0) {
+      onToast("error", "Please write or draw your signature before saving.");
+      return;
+    }
+
+    // Export cleanly to offscreen canvas
+    const offscreen = document.createElement("canvas");
+    offscreen.width = 560;
+    offscreen.height = 180;
+    const oCtx = offscreen.getContext("2d");
+    if (!oCtx) return;
+
+    // Render crisp transparent background with only the signature ink
+    oCtx.clearRect(0, 0, offscreen.width, offscreen.height);
+
+    for (const stroke of strokes) {
+      if (!stroke || !Array.isArray(stroke.points) || stroke.points.length < 1) continue;
+      oCtx.save();
+      oCtx.strokeStyle = stroke.color;
+      oCtx.lineWidth = stroke.width;
+      oCtx.lineCap = "round";
+      oCtx.lineJoin = "round";
+      oCtx.beginPath();
+      oCtx.moveTo(stroke.points[0].x, stroke.points[0].y);
+      for (let i = 1; i < stroke.points.length; i++) {
+        oCtx.lineTo(stroke.points[i].x, stroke.points[i].y);
+      }
+      oCtx.stroke();
+      oCtx.restore();
+    }
+
+    const dataUrl = offscreen.toDataURL("image/png");
+    saveSignatureToStorage(dataUrl, "draw");
+  };
+
+  const handleFileProcess = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      onToast("error", "Please upload a valid image file (PNG, JPEG, SVG, WebP).");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      onToast("error", "Signature file must be 2 MB or smaller.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setUploadedImage(reader.result);
+        setUploadFileName(file.name);
+        const kb = (file.size / 1024).toFixed(1);
+        setUploadFileSize(`${kb} KB`);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFileProcess(file);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFileProcess(file);
+  };
+
+  const handleSaveUploaded = () => {
+    if (!uploadedImage) {
+      onToast("error", "Please choose an image file first.");
+      return;
+    }
+    saveSignatureToStorage(uploadedImage, "upload");
+  };
+
+  const handleRemove = () => {
+    try {
+      const storageKey = `healthko_doctor_signature_${doctor.id}`;
+      const metaKey = `healthko_doctor_signature_meta_${doctor.id}`;
+      localStorage.removeItem(storageKey);
+      localStorage.removeItem("healthko_doctor_signature_active");
+      localStorage.removeItem(metaKey);
+
+      setSavedSignature(null);
+      setSavedMeta(null);
+      setIsEditing(true);
+      setStrokes([]);
+      setUploadedImage(null);
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("healthko_signature_updated"));
+      }
+      onToast("success", "Digital signature removed from your clinical profile.");
+    } catch (err) {
+      console.error("Error removing signature:", err);
+    }
+  };
+
+  const handleDownload = () => {
+    if (!savedSignature) return;
+    const link = document.createElement("a");
+    link.href = savedSignature;
+    link.download = `healthko-signature-${doctor.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  return (
+    <SettingsCard
+      title="Doctor Digital Signature & Clinical E-Sign"
+      body="Upload or handwrite your clinical signature to digitally authenticate prescriptions, medical certificates, and official health records."
+    >
+      {/* Saved Active Signature View */}
+      {savedSignature && !isEditing ? (
+        <div className={`rounded-2xl border p-5 transition-colors ${
+          isDark ? "border-slate-800 bg-slate-950/70" : "border-slate-200 bg-slate-50/70"
+        }`}>
+          {/* Header Status Strip */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4" style={{ borderColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }}>
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+                </svg>
+              </span>
+              <div>
+                <p className={`text-xs font-black uppercase tracking-wider ${isDark ? "text-emerald-400" : "text-emerald-700"}`}>
+                  Active Clinical E-Signature On File
+                </p>
+                <p className={`text-[11px] font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  {savedMeta?.savedAt ? `Saved via ${savedMeta.mode === "draw" ? "Write Pad" : "Image Upload"} on ${formatDate(savedMeta.savedAt)}` : "Verified and applied to electronic prescriptions"}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleDownload}
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-black transition ${
+                  isDark
+                    ? "border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600 hover:text-white"
+                    : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-900"
+                }`}
+                title="Download signature file"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                  <path d="M10.75 2.75a.75.75 0 00-1.5 0v8.614L6.295 8.235a.75.75 0 10-1.09 1.03l4.25 4.5a.75.75 0 001.09 0l4.25-4.5a.75.75 0 00-1.09-1.03l-2.955 3.129V2.75z" />
+                  <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z" />
+                </svg>
+                Download PNG
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-brand-teal px-3.5 py-2 text-xs font-black text-white shadow-xs transition hover:bg-teal-600"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                  <path d="M5.433 13.917l1.262-3.155A4 4 0 017.58 9.42l6.92-6.918a2.121 2.121 0 013 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 01-.65-.65z" />
+                  <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0010 3H4.75A2.75 2.75 0 002 5.75v9.5A2.75 2.75 0 004.75 18h9.5A2.75 2.75 0 0017 15.25V10a.75.75 0 00-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5z" />
+                </svg>
+                Replace Signature
+              </button>
+
+              <button
+                type="button"
+                onClick={handleRemove}
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-black transition ${
+                  isDark
+                    ? "border-rose-900/60 bg-rose-950/30 text-rose-300 hover:bg-rose-950/60"
+                    : "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+                }`}
+                title="Remove signature"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+
+          {/* Signature Preview Frame */}
+          <div className="mt-5 flex flex-col items-center justify-center">
+            <div className="relative w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-xs">
+              <div className="flex h-28 w-full items-center justify-center overflow-hidden">
+                <img
+                  src={savedSignature}
+                  alt={`Dr. ${doctor.name} Digital Signature`}
+                  className="max-h-24 max-w-full object-contain filter"
+                />
+              </div>
+              <div className="mt-2 border-t border-slate-300 pt-2 text-center">
+                <p className="text-xs font-black tracking-wider text-slate-800">
+                  DR. {doctor.name.toUpperCase().replace(/^DR\.?\s+/i, "")}, MD
+                </p>
+                <p className="text-[10px] font-semibold text-slate-500">
+                  PRC License: {doctor.licenseNumber || "PRC-VERIFIED"} · NPI/PTR: {doctor.npi || "NPI-ACTIVE"}
+                </p>
+              </div>
+              <span className="absolute right-3 top-3 rounded-md bg-teal-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-brand-teal border border-teal-200">
+                Official Seal
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Signature Creator / Editor */
+        <div className={`rounded-2xl border p-5 transition-colors ${
+          isDark ? "border-slate-800 bg-slate-950/70" : "border-slate-200 bg-slate-50/70"
+        }`}>
+          {/* Mode Tabs */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4" style={{ borderColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }}>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab("draw")}
+                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-black transition ${
+                  activeTab === "draw"
+                    ? "bg-brand-teal text-white shadow-xs"
+                    : isDark
+                      ? "bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white"
+                      : "bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                }`}
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                  <path d="M5.433 13.917l1.262-3.155A4 4 0 017.58 9.42l6.92-6.918a2.121 2.121 0 013 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 01-.65-.65z" />
+                  <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0010 3H4.75A2.75 2.75 0 002 5.75v9.5A2.75 2.75 0 004.75 18h9.5A2.75 2.75 0 0017 15.25V10a.75.75 0 00-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5z" />
+                </svg>
+                Write / Draw Pad
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("upload")}
+                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-black transition ${
+                  activeTab === "upload"
+                    ? "bg-brand-teal text-white shadow-xs"
+                    : isDark
+                      ? "bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white"
+                      : "bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                }`}
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                  <path fillRule="evenodd" d="M1 5.25A2.25 2.25 0 013.25 3h13.5A2.25 2.25 0 0119 5.25v9.5A2.25 2.25 0 0116.75 17H3.25A2.25 2.25 0 011 14.75v-9.5zm1.5 5.81v3.69c0 .414.336.75.75.75h13.5a.75.75 0 00.75-.75v-2.69l-2.22-2.219a.75.75 0 00-1.06 0l-1.91 1.909-4.72-4.719a.75.75 0 00-1.06 0L2.5 11.06zm10.25-4.81a1.25 1.25 0 11-2.5 0 1.25 1.25 0 012.5 0z" clipRule="evenodd" />
+                </svg>
+                Upload Signature Image
+              </button>
+            </div>
+
+            {savedSignature && (
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                className={`rounded-xl border px-3 py-1.5 text-xs font-black transition ${
+                  isDark
+                    ? "border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                }`}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+
+          {/* TAB 1: DRAW PAD */}
+          {activeTab === "draw" ? (
+            <div className="mt-4 space-y-4">
+              {/* Draw Pad Controls Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                {/* Ink Color Selector */}
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                    Ink Color:
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {SIGNATURE_INK_COLORS.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setPenColor(c.value)}
+                        className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-black transition border ${
+                          penColor === c.value
+                            ? "border-brand-teal bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal"
+                            : isDark
+                              ? "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
+                              : "border-slate-200 bg-white text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        <span className={`h-2.5 w-2.5 rounded-full ${c.dotClass}`} />
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Stroke Width Selector */}
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                    Pen:
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {SIGNATURE_STROKE_WIDTHS.map((w) => (
+                      <button
+                        key={w.id}
+                        type="button"
+                        onClick={() => setPenWidth(w.value)}
+                        className={`rounded-lg px-2.5 py-1 text-[11px] font-black transition border ${
+                          penWidth === w.value
+                            ? "border-brand-teal bg-brand-teal text-white shadow-2xs"
+                            : isDark
+                              ? "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
+                              : "border-slate-200 bg-white text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        {w.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Action Buttons: Undo & Clear */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleUndoStroke}
+                    disabled={strokes.length === 0}
+                    className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-black transition disabled:opacity-40 ${
+                      isDark
+                        ? "border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                    }`}
+                    title="Undo last stroke"
+                  >
+                    <svg viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3">
+                      <path fillRule="evenodd" d="M7.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L5.414 9H14a3 3 0 013 3v2a1 1 0 11-2 0v-2a1 1 0 00-1-1H5.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
+                    </svg>
+                    Undo
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleClearPad}
+                    disabled={strokes.length === 0}
+                    className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-black transition disabled:opacity-40 ${
+                      isDark
+                        ? "border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    Clear Pad
+                  </button>
+                </div>
+              </div>
+
+              {/* Canvas Write Pad Area */}
+              <div className="relative overflow-hidden rounded-xl border border-slate-300 bg-white shadow-xs">
+                <canvas
+                  ref={canvasRef}
+                  width={560}
+                  height={180}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUpOrLeave}
+                  onMouseLeave={handleMouseUpOrLeave}
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
+                  style={{ touchAction: "none" }}
+                  className="h-44 w-full cursor-crosshair select-none"
+                  aria-label="Doctor signature write pad"
+                />
+              </div>
+
+              {/* Bottom Instructions and Save Button */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                <p className={`text-[11px] font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  ✍️ Use mouse, stylus, or fingertip to sign your name. Strokes are rendered in high fidelity.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={handleSaveDrawn}
+                  disabled={strokes.length === 0}
+                  className="inline-flex items-center gap-2 rounded-xl bg-brand-teal px-5 py-2.5 text-xs font-black text-white shadow-xs transition hover:bg-teal-600 disabled:opacity-40"
+                >
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                    <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                  </svg>
+                  Save Drawn Signature
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* TAB 2: UPLOAD IMAGE */
+            <div className="mt-4 space-y-4">
+              {!uploadedImage ? (
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-center transition ${
+                    isDragging
+                      ? "border-brand-teal bg-brand-teal/10"
+                      : isDark
+                        ? "border-slate-800 bg-slate-900/50 hover:border-slate-700 hover:bg-slate-900"
+                        : "border-slate-300 bg-slate-50/70 hover:border-slate-400 hover:bg-white"
+                  }`}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png, image/jpeg, image/jpg, image/webp, image/svg+xml"
+                    onChange={handleFileInputChange}
+                    className="sr-only"
+                  />
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-teal/10 text-brand-teal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="17 8 12 3 7 8" />
+                      <line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                  </div>
+                  <p className={`mt-3 text-sm font-black ${isDark ? "text-slate-200" : "text-slate-800"}`}>
+                    Click to browse or drag and drop signature image
+                  </p>
+                  <p className={`mt-1 text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                    PNG with transparent background recommended (also supports JPG, SVG, WebP up to 2 MB)
+                  </p>
+                </div>
+              ) : (
+                /* Uploaded Preview */
+                <div className="space-y-4">
+                  <div className="relative flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white p-6 shadow-xs">
+                    <div className="flex h-28 w-full items-center justify-center overflow-hidden">
+                      <img
+                        src={uploadedImage}
+                        alt="Uploaded Signature Preview"
+                        className="max-h-24 max-w-full object-contain"
+                      />
+                    </div>
+                    <div className="mt-2 border-t border-slate-300 pt-2 text-center">
+                      <p className="text-xs font-black tracking-wider text-slate-800">
+                        DR. {doctor.name.toUpperCase().replace(/^DR\.?\s+/i, "")}, MD
+                      </p>
+                      <p className="text-[10px] font-semibold text-slate-500">
+                        {uploadFileName} {uploadFileSize ? `(${uploadFileSize})` : ""}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUploadedImage(null);
+                        setUploadFileName("");
+                        setUploadFileSize("");
+                      }}
+                      className={`rounded-xl border px-4 py-2 text-xs font-black transition ${
+                        isDark
+                          ? "border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white"
+                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      Choose Different File
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSaveUploaded}
+                      className="inline-flex items-center gap-2 rounded-xl bg-brand-teal px-5 py-2.5 text-xs font-black text-white shadow-xs transition hover:bg-teal-600"
+                    >
+                      <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                        <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                      </svg>
+                      Save Uploaded Signature
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </SettingsCard>
+  );
+}
+
 
 export function DoctorSettingsModule({
   doctor,
@@ -1726,67 +2797,94 @@ export function DoctorSettingsModule({
               </button>
             </div>
 
-            {/* Earnings on the LOWEST part */}
-            <DoctorEarningsHistory
-              doctor={doctor}
-              consultFee={Number(form.consultFee) > 0 ? Number(form.consultFee) : (doctor.consultFee ?? 75)}
-            />
           </form>
         </SettingsCard>
       );
     }
 
-    if (activeSection === "schedule") {
+    if (activeSection === "practice") {
       return (
-        <SettingsCard title="Schedule & Availability" body="">
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              saveDoctorProfile("Schedule and availability updated.");
-            }}
-            className="grid gap-4 md:grid-cols-2"
-          >
-            <Field label="Working hours" value={form.availability} onChange={(value) => setField("availability", value)} required />
-            <SelectField
-              label="Availability Status"
-              value={form.status}
-              onChange={(value) => setField("status", value)}
-              options={[
-                { value: "ONLINE", label: "Online" },
-                { value: "BUSY", label: "Busy" },
-                { value: "OFFLINE", label: "Offline" },
-              ]}
-            />
-            <Field label="Consultation duration" type="number" value={form.consultationDuration} onChange={(value) => setField("consultationDuration", value)} />
-            <SelectField
-              label="Duration unit"
-              value={form.consultationDurationUnit}
-              onChange={(value) => setField("consultationDurationUnit", value)}
-              options={[
-                { value: "minutes", label: "Minutes" },
-                { value: "hours", label: "Hours" },
-              ]}
-            />
-            <div className="flex justify-end pt-1">
-              <button type="submit" disabled={isPending} className="rounded-xl bg-brand-teal px-5 py-3 text-sm font-black text-white transition hover:bg-teal-600 disabled:opacity-50">
-                {isPending ? "Saving..." : "Save Schedule"}
-              </button>
+        <div className="space-y-6">
+          {/* ── Schedule & Availability ── */}
+          <SettingsCard title="Schedule & Availability" body="Manage your practice hours, appointment duration, and live consultation availability status.">
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                saveDoctorProfile("Schedule and availability updated.");
+              }}
+              className="grid gap-4 md:grid-cols-2"
+            >
+              <WorkingHoursTimeSelector
+                value={form.availability}
+                onChange={(value) => setField("availability", value)}
+              />
+              <SelectField
+                label="Availability Status"
+                value={form.status}
+                onChange={(value) => setField("status", value)}
+                options={[
+                  { value: "ONLINE", label: "Online" },
+                  { value: "BUSY", label: "Busy" },
+                  { value: "OFFLINE", label: "Offline" },
+                ]}
+              />
+              <Field label="Consultation duration" type="number" value={form.consultationDuration} onChange={(value) => setField("consultationDuration", value)} />
+              <SelectField
+                label="Duration unit"
+                value={form.consultationDurationUnit}
+                onChange={(value) => setField("consultationDurationUnit", value)}
+                options={[
+                  { value: "minutes", label: "Minutes" },
+                  { value: "hours", label: "Hours" },
+                ]}
+              />
+              <div className="flex justify-end pt-1 md:col-span-2">
+                <button type="submit" disabled={isPending} className="rounded-xl bg-brand-teal px-5 py-3 text-sm font-black text-white transition hover:bg-teal-600 disabled:opacity-50">
+                  {isPending ? "Saving..." : "Save Schedule"}
+                </button>
+              </div>
+            </form>
+          </SettingsCard>
+
+          {/* ── Consultation Settings ── */}
+          <SettingsCard title="Consultation Settings" body="Configure live consultation room behaviour and patient admission policies.">
+            <div className="grid gap-3 md:grid-cols-2">
+              <PlaceholderTile title="Camera Selection" body="Managed inside the active live consultation room device selector." />
+              <PlaceholderTile title="Microphone Selection" body="Managed inside the active live consultation room device selector." />
+              <ToggleRow label="Manual Admit Patients" description="Current WebRTC flow lets the doctor start the room before patients join." checked={form.admitMode === "manual"} />
+              <ToggleRow label="Auto Admit Patients" description="Future workflow option once waiting-room admission policies are modeled." checked={false} />
             </div>
-          </form>
-        </SettingsCard>
-      );
-    }
+          </SettingsCard>
 
-    if (activeSection === "consultation") {
-      return (
-        <SettingsCard title="Consultation Settings" body="">
-          <div className="grid gap-3 md:grid-cols-2">
-            <PlaceholderTile title="Camera Selection" body="Managed inside the active live consultation room device selector." />
-            <PlaceholderTile title="Microphone Selection" body="Managed inside the active live consultation room device selector." />
-            <ToggleRow label="Manual Admit Patients" description="Current WebRTC flow lets the doctor start the room before patients join." checked={form.admitMode === "manual"} />
-            <ToggleRow label="Auto Admit Patients" description="Future workflow option once waiting-room admission policies are modeled." checked={false} />
-          </div>
-        </SettingsCard>
+          {/* ── Prescription Settings ── */}
+          <DoctorDigitalSignatureSection doctor={doctor} onToast={showToast} />
+
+          <SettingsCard
+            title="Prescription Settings & Standards"
+            body="Configure default clinical prescription policies and requirements."
+          >
+            <div className="grid gap-3 md:grid-cols-2">
+              <ToggleRow
+                label="Enforce Verified Electronic Signature"
+                description="Require official digital signature on all outbound prescription PDFs."
+                checked={true}
+              />
+              <ToggleRow
+                label="Telemedicine Letterhead & PRC Stamp"
+                description="Automatically render doctor credentials and clinic accreditation headers."
+                checked={true}
+              />
+              <PlaceholderTile
+                title="Prescription Order Sets & Templates"
+                body="Save frequent medication combos and dosage instructions to speed up consultation checkouts."
+              />
+              <PlaceholderTile
+                title="Direct Pharmacy E-Dispense Routing"
+                body="Automatic transmission of authenticated prescriptions to partner pharmacies."
+              />
+            </div>
+          </SettingsCard>
+        </div>
       );
     }
 
@@ -1807,14 +2905,12 @@ export function DoctorSettingsModule({
       );
     }
 
-    if (activeSection === "prescriptions") {
+    if (activeSection === "earnings") {
       return (
-        <SettingsCard title="Prescription Settings" body="">
-          <div className="grid gap-3 md:grid-cols-2">
-            <PlaceholderTile title="Digital Signature Upload" body="Requires a secure file storage field before upload persistence can be enabled." />
-            <PlaceholderTile title="Prescription Templates" body="Reusable templates need a prescription template table." />
-          </div>
-        </SettingsCard>
+        <DoctorEarningsHistory
+          doctor={doctor}
+          consultFee={Number(form.consultFee) > 0 ? Number(form.consultFee) : (doctor.consultFee ?? 75)}
+        />
       );
     }
 

@@ -31,7 +31,7 @@ import { formatDateTime, formatDate, formatTime, toLocalDateKey, toLocalTimeKey,
 import { downloadPrescriptionPdf } from "@/lib/prescription-pdf";
 import { downloadConsultationTranscriptPdf, parseNotesAndTranscript } from "@/lib/consultation-transcript-pdf";
 import { createDashboardNotification } from "@/lib/dashboard/notifications";
-import { DEFAULT_DURATION_MINUTES, getScheduleConflict, parseAvailability } from "@/lib/scheduling";
+import { DEFAULT_DURATION_MINUTES, getScheduleConflict, parseAvailability, isWithinDoctorAvailability, getOutsideAvailabilityMessage } from "@/lib/scheduling";
 import type {
   DashboardNotification,
   DashboardDoctor,
@@ -1058,6 +1058,9 @@ export default function PatientDashboardClient({
   const patientConflict = requestedDateTime && !Number.isNaN(requestedDateTime.getTime())
     ? hasPatientScheduleConflict(appointments, requestedDateTime)
     : false;
+  const isDoctorAvailableForSlot = requestedDateTime && !Number.isNaN(requestedDateTime.getTime()) && selectedDoctor
+    ? isWithinDoctorAvailability(requestedDateTime, DEFAULT_DURATION_MINUTES, { availability: selectedDoctor.availability })
+    : true;
   const notificationSeed = useMemo<DashboardNotification[]>(
     () => [
       ...patient.bookings
@@ -1124,6 +1127,12 @@ export default function PatientDashboardClient({
       return;
     }
 
+    if (!isDoctorAvailableForSlot) {
+      showToast("error", getOutsideAvailabilityMessage(selectedDoctor?.availability));
+      setBookingState({ loading: false, error: "", success: "" });
+      return;
+    }
+
     setBookingState({ loading: true, error: "", success: "" });
     const combinedReason = patientNotes.trim()
       ? `${reason.trim()}\n\nPatient Notes: ${patientNotes.trim()}`
@@ -1150,8 +1159,8 @@ export default function PatientDashboardClient({
       actorRole: "patient",
       targetDoctorId: result.consultation?.doctorId || selectedDoctorId,
       scheduledAt: isoScheduledAt,
-      title: "New appointment request",
-      body: "A patient submitted a consultation request for review.",
+      title: "New Booking Request",
+      body: `A patient submitted a consultation request. Scheduled: ${isoScheduledAt ? new Date(isoScheduledAt).toLocaleString() : "TBD"}`,
     });
     showToast("success", "Appointment request sent to the doctor.");
     setBookingState({ loading: false, error: "", success: "" });
@@ -1902,6 +1911,12 @@ export default function PatientDashboardClient({
                     ))}
                   </select>
                 </label>
+                {selectedDoctor && (
+                  <div className="flex items-center gap-1.5 md:col-span-2 text-xs font-semibold text-teal-800 bg-teal-50/80 border border-teal-200 rounded-xl px-3.5 py-2">
+                    <span className="h-2 w-2 rounded-full bg-teal-500 shrink-0" />
+                    <span>Doctor Available Hours: <strong className="font-black text-teal-900">{selectedDoctor.availability || "Mon - Fri, 09:00 AM - 05:00 PM"}</strong></span>
+                  </div>
+                )}
                 <label className="space-y-1.5">
                   <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Date</span>
                   <input
@@ -1923,6 +1938,13 @@ export default function PatientDashboardClient({
                 {patientConflict && (
                   <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs font-bold text-amber-700 md:col-span-2">
                     ⚠️ This time overlaps with one of your active consultations. Pick a suggested slot or choose another time.
+                  </div>
+                )}
+                {!isDoctorAvailableForSlot && (
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs font-bold text-rose-700 md:col-span-2">
+                    ⚠️ Dr. {selectedDoctor?.name} is not available at this time. Their available hours are{" "}
+                    <span className="font-black underline">{selectedDoctor?.availability || "Mon - Fri, 09:00 AM - 05:00 PM"}</span>.
+                    Please select a time during their available hours or choose from the suggested slots below.
                   </div>
                 )}
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
@@ -1977,10 +1999,16 @@ export default function PatientDashboardClient({
                 )}
                 <button
                   type="submit"
-                  disabled={bookingState.loading}
+                  disabled={bookingState.loading || patientConflict || !isDoctorAvailableForSlot}
                   className="w-full rounded-xl bg-brand-teal py-3.5 text-sm font-black text-white shadow-md shadow-brand-teal/20 transition-all hover:bg-brand-teal-hover active:scale-[0.99] disabled:bg-slate-300 disabled:shadow-none"
                 >
-                  {bookingState.loading ? "Sending request…" : "Send Appointment Request"}
+                  {bookingState.loading
+                    ? "Sending request…"
+                    : !isDoctorAvailableForSlot
+                    ? "Doctor Unavailable at Selected Time"
+                    : patientConflict
+                    ? "Schedule Conflict"
+                    : "Send Appointment Request"}
                 </button>
               </div>
             </form>

@@ -20,6 +20,7 @@ export interface PrescriptionPdfData {
   rxNumber?: string;
   diagnosis?: string | null;
   prescription: string;
+  hasVerifiedSignature?: boolean;
 }
 
 function escapePdfText(value?: string | number | null): string {
@@ -154,7 +155,8 @@ function buildPageFooter(
   doctorLicense: string,
   doctorNpi: string,
   pageNum: number,
-  totalPages: number
+  totalPages: number,
+  hasVerifiedSignature = false
 ): string[] {
   const cmds: string[] = [];
 
@@ -175,7 +177,11 @@ function buildPageFooter(
 
   // E-Sign pill badge
   cmds.push("0.05 0.58 0.53 rg 355 144 140 14 re f");
-  cmds.push("BT /F2 7 Tf 1 1 1 rg 360 148 Td (DIGITALLY E-SIGNED - AUTHENTIC) Tj ET");
+  if (hasVerifiedSignature) {
+    cmds.push("BT /F2 7 Tf 1 1 1 rg 358 148 Td (DIGITALLY SIGNED - VERIFIED ON FILE) Tj ET");
+  } else {
+    cmds.push("BT /F2 7 Tf 1 1 1 rg 360 148 Td (DIGITALLY E-SIGNED - AUTHENTIC) Tj ET");
+  }
 
   // Stylized cursive electronic signature
   const displayDocName = doctorName.startsWith("Dr.") ? doctorName : `Dr. ${doctorName}`;
@@ -190,6 +196,9 @@ function buildPageFooter(
   cmds.push(`BT /F1 8 Tf 0.35 0.4 0.45 rg 355 92 Td (${escapePdfText(doctorSpecialty)}) Tj ET`);
   cmds.push(`BT /F2 8 Tf 0.05 0.58 0.53 rg 355 81 Td (PRC License No.: ) Tj /F1 8 Tf 0.1 0.15 0.2 rg (${escapePdfText(doctorLicense)}) Tj ET`);
   cmds.push(`BT /F2 8 Tf 0.4 0.45 0.5 rg 355 70 Td (NPI / PTR No.: ) Tj /F1 8 Tf 0.1 0.15 0.2 rg (${escapePdfText(doctorNpi)}) Tj ET`);
+  if (hasVerifiedSignature) {
+    cmds.push("BT /F2 6.5 Tf 0.05 0.58 0.53 rg 355 60 Td (Official Clinical Digital Signature On File) Tj ET");
+  }
 
   // Bottom note & page number
   cmds.push("BT /F1 7 Tf 0.6 0.65 0.7 rg 185 38 Td (HealthKo Telehealth Technologies  -  Official Medical Document) Tj ET");

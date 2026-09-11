@@ -55,15 +55,21 @@ export function useDashboardNotifications({
   }, [realtimeEvent, role]);
 
   const notifications = useMemo(() => {
-    const seen = new Set<string>();
+    const seenIds = new Set<string>();
+    // Also deduplicate by appointmentId+kind so the same booking never shows
+    // twice (once from the initial seed and once from the realtime event).
+    // Realtime notifications are sorted first so they win when there is a tie.
+    const seenApptKeys = new Set<string>();
 
     return sortNotifications([...realtimeNotifications, ...initialSnapshot])
       .filter((item) => {
-        if (seen.has(item.id)) {
-          return false;
+        if (seenIds.has(item.id)) return false;
+        if (item.appointmentId) {
+          const key = `${item.kind ?? "system"}:${item.appointmentId}`;
+          if (seenApptKeys.has(key)) return false;
+          seenApptKeys.add(key);
         }
-
-        seen.add(item.id);
+        seenIds.add(item.id);
         return true;
       })
       .map((item) => ({ ...item, readAt: readAtById[item.id] || item.readAt }));

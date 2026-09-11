@@ -132,17 +132,25 @@ function getLocalDayAndMinutes(date: Date, timeZone = "Asia/Manila") {
   }
 }
 
+export const DEFAULT_AVAILABILITY_STRING = "Mon - Fri, 09:00 AM - 05:00 PM";
+
+export const DEFAULT_AVAILABILITY_WINDOW: AvailabilityWindow = {
+  days: [1, 2, 3, 4, 5], // Monday - Friday
+  startMinutes: 9 * 60,   // 9:00 AM
+  endMinutes: 17 * 60,   // 5:00 PM
+};
+
+export function getEffectiveAvailabilityWindow(availability?: string | null): AvailabilityWindow {
+  return parseAvailability(availability) ?? DEFAULT_AVAILABILITY_WINDOW;
+}
+
 export function isWithinDoctorAvailability(
   scheduledAt: Date,
   durationMinutes: number,
   doctor: ScheduleDoctor,
   timeZone = "Asia/Manila"
 ) {
-  const window = parseAvailability(doctor.availability);
-
-  if (!window) {
-    return true;
-  }
+  const window = getEffectiveAvailabilityWindow(doctor.availability);
 
   const { day, minutes: startMinutes } = getLocalDayAndMinutes(scheduledAt, timeZone);
   const endMinutes = startMinutes + durationMinutes;
@@ -182,7 +190,9 @@ export function getFullyBookedMessage() {
 }
 
 export function getOutsideAvailabilityMessage(availability?: string | null) {
-  return `This consultation time is outside the doctor's available schedule${availability ? ` (${availability})` : ""}. Please choose another available time slot.`;
+  const display = availability && availability.toLowerCase() !== "available" ? availability : DEFAULT_AVAILABILITY_STRING;
+  return `This consultation time is outside the doctor's available schedule (${display}). Please choose another available time slot.`;
 }
 
 export { DEFAULT_DURATION_MINUTES };
+

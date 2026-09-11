@@ -36,6 +36,8 @@ export type DashboardNotification = {
   kind?: "appointment" | "consultation" | "message" | "prescription" | "system";
   createdAt: Date | string;
   readAt?: Date | string | null;
+  /** Links this notification to a specific appointment/booking. */
+  appointmentId?: string | null;
 };
 
 export type DashboardDoctor = {
