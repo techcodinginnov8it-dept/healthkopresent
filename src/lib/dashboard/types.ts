@@ -19,6 +19,7 @@ export type DoctorModuleId =
   | "schedule"
   | "notes"
   | "prescriptions"
+  | "certificates"
   | "messages"
   | "notifications"
   | "analytics"

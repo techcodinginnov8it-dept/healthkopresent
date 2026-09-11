@@ -13,6 +13,7 @@ import { DoctorSettingsModule } from "@/components/dashboard/SettingsModule";
 import { DoctorResearchModule } from "@/components/dashboard/DoctorResearchModule";
 import { DoctorNotesHub } from "@/components/dashboard/DoctorNotesHub";
 import { DoctorAnalyticsHub } from "@/components/dashboard/DoctorAnalyticsHub";
+import { MedicalCertificateHub } from "@/components/dashboard/MedicalCertificateHub";
 import { ConcurrentLoginModal } from "@/components/dashboard/ConcurrentLoginModal";
 import { BookingRequestModal } from "@/components/dashboard/BookingRequestModal";
 import { PatientDataModal } from "@/components/dashboard/PatientDataModal";
@@ -104,6 +105,7 @@ const DOCTOR_MODULES = [
   "research",
   "notes",
   "prescriptions",
+  "certificates",
   "messages",
   "notifications",
   "analytics",
@@ -1733,12 +1735,18 @@ export default function DoctorDashboardClient({
       showToast("error", "The other participant ended the consultation.");
       setActiveModule("overview");
     },
+    onCounterpartScreenShareChange: (isSharing: boolean) => {
+      session.setCounterpartScreenSharing(isSharing);
+    },
   });
   const receiveRealtimeEvent = session.receiveRealtimeEvent;
   const handleToggleScreenShare = useCallback(async () => {
-    if (webRTC.isScreenSharing) {
-      await webRTC.stopScreenShare();
+    if (webRTC.isScreenSharing || session.isScreenSharing || session.counterpartScreenSharing) {
+      if (webRTC.isScreenSharing) {
+        await webRTC.stopScreenShare();
+      }
       session.setScreenSharing(false);
+      session.setCounterpartScreenSharing(false);
       return;
     }
 
@@ -1747,6 +1755,21 @@ export default function DoctorDashboardClient({
       session.setScreenSharing(true);
     }
   }, [session, webRTC.isScreenSharing, webRTC.startScreenShare, webRTC.stopScreenShare]);
+
+  const handleDismissPresentation = useCallback(async () => {
+    if (webRTC.isScreenSharing) {
+      await webRTC.stopScreenShare();
+    }
+    session.setScreenSharing(false);
+    session.setCounterpartScreenSharing(false);
+  }, [session, webRTC]);
+
+  // Synchronize consultation session state when screen sharing is stopped via browser UI controls
+  useEffect(() => {
+    if (!webRTC.isScreenSharing && session.isScreenSharing) {
+      session.setScreenSharing(false);
+    }
+  }, [webRTC.isScreenSharing, session.isScreenSharing, session.setScreenSharing]);
 
   const handleExtendCall = useCallback((additionalMinutes: number, newTotalMinutes: number) => {
     setCallExtendedMinutes((prev) => prev + additionalMinutes);
@@ -2081,6 +2104,7 @@ export default function DoctorDashboardClient({
     { id: "schedule", label: "Appointment Calendar", badge: pendingAppointments.length || undefined },
     { id: "live", label: "Patient Consultation", badge: confirmedAppointments.length || undefined },
     { id: "patients", label: "Patient Management" },
+    { id: "certificates", label: "Medical Certificates" },
     { id: "research", label: "Blogs & Research" },
     { id: "settings", label: "Settings" },
   ];
@@ -2721,6 +2745,7 @@ export default function DoctorDashboardClient({
             onToggleCamera={session.toggleCamera}
             onToggleMic={session.toggleMic}
             onToggleScreenShare={handleToggleScreenShare}
+            onDismissPresentation={handleDismissPresentation}
             canEndCall={Boolean(clinicalNotes.trim())}
             onEnd={() => {
               if (session.status === "connected" && !clinicalNotes.trim()) {
@@ -3545,6 +3570,7 @@ export default function DoctorDashboardClient({
             anchorDate={calendarAnchorDate}
             onAnchorDateChange={setCalendarAnchorDate}
             availability={doctorAvailability}
+            consultationDuration={doctor.consultationDuration ?? 30}
             onConfirmAppointment={(appointment) => handleAccept(appointment.id)}
             onCancelAppointment={(appointment) => handleCancel(appointment.id)}
             onCompleteConsultation={(appointment) => handleCompleteConsultationDirect(appointment.id)}
@@ -3674,6 +3700,10 @@ export default function DoctorDashboardClient({
 
       {activeModule === "research" && (
         <DoctorResearchModule doctor={doctor} tone={tone} />
+      )}
+
+      {activeModule === "certificates" && (
+        <MedicalCertificateHub doctor={doctor} tone={tone} />
       )}
 
       {activeModule === "settings" && (
@@ -4069,43 +4099,17 @@ export default function DoctorDashboardClient({
                       {isEndCallLoading ? "Ending..." : "✓ End Call & Mark as Completed"}
                     </button>
 
-                    {/* End call only */}
+                    {/* End call only — ends the video call WITHOUT completing the consultation */}
                     <button
                       type="button"
-                      disabled={isEndCallLoading || isNotesMissing}
+                      disabled={isEndCallLoading}
                       onClick={async () => {
-                        if (isNotesMissing) {
-                          showToast("error", "Consultation notes / clinical observations cannot be empty.");
-                          return;
-                        }
                         setIsEndCallLoading(true);
-                        if (session.activeAppointment && clinicalNotes.trim()) {
-                          let liveTurns: any[] = session.transcriptTurns || [];
-                          if (liveTurns.length === 0 && typeof window !== "undefined") {
-                            try {
-                              const saved = localStorage.getItem(`healthko:transcript:${session.activeAppointment.id}`);
-                              if (saved) liveTurns = JSON.parse(saved);
-                            } catch {}
-                          }
-                          const patName = `${session.activeAppointment.patient.firstName} ${session.activeAppointment.patient.lastName}`.trim();
-                          const combinedNotes = formatNotesWithTranscript(clinicalNotes.trim(), liveTurns, {
-                            doctorName: doctor?.name || "Dr. Attending Physician",
-                            patientName: patName,
-                            reason: diagnosisText || session.activeAppointment.reason || undefined,
-                            prescription: prescriptionText || session.activeAppointment.prescription || undefined,
-                            duration: session.activeAppointment.duration || 15,
-                          });
-
-                          await completeConsultation({
-                            consultationId: session.activeAppointment.id,
-                            notes: combinedNotes,
-                            prescription: prescriptionText || session.activeAppointment.prescription || undefined,
-                            reason: diagnosisText || session.activeAppointment.reason || undefined,
-                          });
-                        }
+                        // Just end the call — do NOT call completeConsultation
                         await handleEndSession();
                         setShowEndCallConfirm(false);
                         setIsEndCallLoading(false);
+                        showToast("success", "Call ended. Consultation status has not been changed.");
                       }}
                       className={`w-full rounded-xl border px-5 py-2.5 text-xs font-black transition disabled:opacity-40 disabled:cursor-not-allowed ${
                         isDark
@@ -4113,7 +4117,7 @@ export default function DoctorDashboardClient({
                           : "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
                       }`}
                     >
-                      End Call Only (keep status)
+                      End Call Only (does not complete consultation)
                     </button>
                   </>
                 );

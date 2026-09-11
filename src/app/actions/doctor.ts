@@ -384,3 +384,127 @@ export async function referAppointment(data: ReferAppointmentPayload) {
     return { success: false, error: "Failed to refer appointment in database." };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Medical Certificate Actions
+// ---------------------------------------------------------------------------
+
+export type IssueMedicalCertificatePayload = {
+  patientId: string;
+  consultationId?: string;
+  purpose: "sick_leave" | "fitness_to_work" | "school" | "other";
+  diagnosis?: string;
+  remarks?: string;
+  restDaysFrom?: string; // ISO date string
+  restDaysTo?: string;   // ISO date string
+};
+
+export async function issueMedicalCertificate(data: IssueMedicalCertificatePayload) {
+  try {
+    const session = await requireDoctorSession();
+
+    if (!data.patientId) {
+      return { success: false, error: "Patient is required." };
+    }
+
+    const doctor = await prisma.doctor.findUnique({
+      where: { id: session.userId },
+      select: { id: true, name: true, specialty: true, licenseNumber: true, npi: true },
+    });
+
+    if (!doctor) {
+      return { success: false, error: "Doctor profile not found." };
+    }
+
+    const patient = await prisma.patient.findUnique({
+      where: { id: data.patientId },
+      select: { id: true, firstName: true, lastName: true },
+    });
+
+    if (!patient) {
+      return { success: false, error: "Patient not found." };
+    }
+
+    // Verify relationship if consultation is provided
+    if (data.consultationId) {
+      const consultation = await prisma.consultation.findUnique({
+        where: { id: data.consultationId },
+      });
+      if (!consultation || consultation.doctorId !== session.userId || consultation.patientId !== data.patientId) {
+        return { success: false, error: "Consultation not found or unauthorized." };
+      }
+    }
+
+    // Generate a unique cert number: MC-XXXXXXXX
+    const certNumber = `MC-${Date.now().toString(36).toUpperCase().slice(-6)}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+
+    const cert = await prisma.medicalCertificate.create({
+      data: {
+        doctorId: session.userId,
+        patientId: data.patientId,
+        consultationId: data.consultationId || null,
+        purpose: data.purpose,
+        diagnosis: data.diagnosis || null,
+        remarks: data.remarks || null,
+        restDaysFrom: data.restDaysFrom ? new Date(data.restDaysFrom) : null,
+        restDaysTo: data.restDaysTo ? new Date(data.restDaysTo) : null,
+        certNumber,
+      },
+      include: {
+        patient: {
+          select: { id: true, firstName: true, lastName: true, dob: true, gender: true, address: true, city: true, state: true },
+        },
+        doctor: {
+          select: { id: true, name: true, specialty: true, licenseNumber: true, npi: true },
+        },
+      },
+    });
+
+    revalidatePath("/doctor/dashboard");
+    revalidatePath("/patient/dashboard");
+    return { success: true, certificate: cert };
+  } catch (error: unknown) {
+    console.error("issueMedicalCertificate failed:", error);
+    return { success: false, error: "Failed to issue medical certificate." };
+  }
+}
+
+export async function getDoctorMedicalCertificates() {
+  try {
+    const session = await requireDoctorSession();
+
+    const certificates = await prisma.medicalCertificate.findMany({
+      where: { doctorId: session.userId },
+      include: {
+        patient: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            dob: true,
+            gender: true,
+            address: true,
+            city: true,
+            state: true,
+          },
+        },
+        doctor: {
+          select: {
+            id: true,
+            name: true,
+            specialty: true,
+            licenseNumber: true,
+            npi: true,
+          },
+        },
+      },
+      orderBy: { issuedAt: "desc" },
+    });
+
+    return { success: true, certificates };
+  } catch (error: unknown) {
+    console.error("getDoctorMedicalCertificates failed:", error);
+    return { success: false, error: "Failed to fetch medical certificates." };
+  }
+}
+

@@ -7,12 +7,17 @@ interface UseActiveCallGuardOptions {
   onEndCall?: () => void;
 }
 
-export function useActiveCallGuard({ isCallActive }: UseActiveCallGuardOptions) {
+export function useActiveCallGuard({ isCallActive, onEndCall }: UseActiveCallGuardOptions) {
   const [showWarningModal, setShowWarningModal] = useState(false);
   const originalTitleRef = useRef<string>("");
   const titleIntervalRef = useRef<number | null>(null);
+  const onEndCallRef = useRef(onEndCall);
 
-  // 1. Intercept beforeunload (window/tab close, refresh, browser quit)
+  useEffect(() => {
+    onEndCallRef.current = onEndCall;
+  }, [onEndCall]);
+
+  // 1. Intercept beforeunload and pagehide (window/tab close, refresh, browser quit)
   useEffect(() => {
     if (!isCallActive) return;
 
@@ -22,9 +27,15 @@ export function useActiveCallGuard({ isCallActive }: UseActiveCallGuardOptions) 
       return e.returnValue;
     };
 
+    const handlePageHide = () => {
+      onEndCallRef.current?.();
+    };
+
     window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("pagehide", handlePageHide);
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("pagehide", handlePageHide);
     };
   }, [isCallActive]);
 

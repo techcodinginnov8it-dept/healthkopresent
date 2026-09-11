@@ -10,6 +10,7 @@ const DOCTOR_MODULES = [
   "schedule",
   "notes",
   "prescriptions",
+  "certificates",
   "messages",
   "notifications",
   "analytics",

@@ -68,6 +68,29 @@ const PATIENT_PROFILE_SELECT = {
   createdAt: true,
   updatedAt: true,
   bookings: PATIENT_BOOKINGS_SELECT,
+  medicalCertificates: {
+    orderBy: { issuedAt: "desc" as const },
+    select: {
+      id: true,
+      certNumber: true,
+      purpose: true,
+      diagnosis: true,
+      remarks: true,
+      restDaysFrom: true,
+      restDaysTo: true,
+      issuedAt: true,
+      consultationId: true,
+      doctor: {
+        select: {
+          id: true,
+          name: true,
+          specialty: true,
+          licenseNumber: true,
+          npi: true,
+        },
+      },
+    },
+  },
 };
 
 export const getPatientDashboardData = cache(async () => {

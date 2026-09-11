@@ -59,6 +59,13 @@ function NavIcon({ id }: { id: ModuleId }) {
           <path d="M9 15h6" />
         </svg>
       );
+    case "certificates":
+      return (
+        <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <path d="M12 2 3 7v6c0 5 4 9 9 9s9-4 9-9V7z" />
+          <path d="m9 12 2 2 4-4" />
+        </svg>
+      );
     case "research":
       return (
         <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -271,11 +278,12 @@ export function DashboardShell<TModule extends ModuleId>({
                   <p className="truncate text-sm font-black">{profile.name}</p>
                   {profile.isVerified && (
                     <span
-                      title="Verified Account"
-                      className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-teal text-white shadow-2xs"
+                      title="Verified Doctor Account"
+                      className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-brand-teal"
                     >
-                      <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <polyline points="20 6 9 17 4 12" />
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M12 2 3 7v6c0 5 4 9 9 9s9-4 9-9V7z" />
+                        <path d="m9 12 2 2 4-4" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     </span>
                   )}
@@ -339,11 +347,12 @@ export function DashboardShell<TModule extends ModuleId>({
                   <p className="truncate text-sm font-black">{profile.name}</p>
                   {profile.isVerified && (
                     <span
-                      title="Verified Account"
-                      className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-teal text-white shadow-2xs"
+                      title="Verified Doctor Account"
+                      className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-brand-teal"
                     >
-                      <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <polyline points="20 6 9 17 4 12" />
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M12 2 3 7v6c0 5 4 9 9 9s9-4 9-9V7z" />
+                        <path d="m9 12 2 2 4-4" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     </span>
                   )}

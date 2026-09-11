@@ -695,6 +695,7 @@ export function AppointmentCalendar({
   anchorDate,
   onAnchorDateChange,
   availability,
+  consultationDuration = 30,
 }: {
   appointments: CalendarAppointment[];
   tone?: "light" | "dark";
@@ -712,12 +713,22 @@ export function AppointmentCalendar({
   anchorDate?: Date;
   onAnchorDateChange?: (date: Date) => void;
   availability?: string | null;
+  consultationDuration?: number;
 }) {
   const resolvedAnchorDate = startOfDay(anchorDate || new Date());
   const [selectedEntry, setSelectedEntry] = useState<{ appointment: CalendarAppointment; rect: DOMRect } | null>(null);
   const days = getCalendarDays(viewMode, resolvedAnchorDate);
   const availabilityWindow = getEffectiveAvailabilityWindow(availability);
-  const hours = Array.from({ length: 24 }, (_, index) => index);
+
+  // Capacity: how many consultations fit in one hour slot
+  const slotsPerHour = consultationDuration > 0 ? Math.floor(60 / consultationDuration) : 2;
+
+  // Only show hours within the doctor's availability window
+  const availStartHour = Math.floor(availabilityWindow.startMinutes / 60);
+  const availEndHour = Math.ceil(availabilityWindow.endMinutes / 60);
+  const hours = Array.from({ length: 24 }, (_, i) => i).filter(
+    (h) => h >= availStartHour && h < availEndHour
+  );
   const dark = tone === "dark";
   const stage = variant === "stage";
   const periodLabel = viewMode === "month"
@@ -974,6 +985,13 @@ export function AppointmentCalendar({
                         slotMinutes < availabilityWindow.endMinutes
                       );
 
+                      // Active (non-cancelled) bookings count against slot capacity
+                      const activeInSlot = slotAppointments.filter(
+                        (a) => a.status !== "CANCELLED"
+                      ).length;
+                      const slotFull = slotAvailable && slotsPerHour > 0 && activeInSlot >= slotsPerHour;
+                      const slotsLeft = slotAvailable ? Math.max(0, slotsPerHour - activeInSlot) : 0;
+
                       const MAX_VISIBLE = viewMode === "day" ? 4 : 3;
                       const visibleAppts = slotAppointments.slice(0, MAX_VISIBLE);
                       const overflowCount = slotAppointments.length - MAX_VISIBLE;
@@ -1030,11 +1048,25 @@ export function AppointmentCalendar({
                             </div>
                           )}
 
-                          {/* Available empty-slot hover hint */}
-                          {slotAvailable && slotAppointments.length === 0 && editable && (
-                            <span className={`pointer-events-none absolute inset-0 flex items-center justify-center text-[9px] font-black uppercase tracking-wider opacity-0 transition-opacity hover:opacity-100 ${
-                              dark ? "text-teal-500/40" : "text-teal-600/30"
-                            } group-hover:opacity-100`} />
+                          {/* Slot capacity badge */}
+                          {slotAvailable && (
+                            <span
+                              className={`absolute top-1 right-1 z-10 rounded px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider border ${
+                                slotFull
+                                  ? dark
+                                    ? "bg-rose-500/20 text-rose-300 border-rose-500/30"
+                                    : "bg-rose-100 text-rose-700 border-rose-300"
+                                  : slotsLeft <= 1
+                                    ? dark
+                                      ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                                      : "bg-amber-100 text-amber-700 border-amber-300"
+                                    : dark
+                                      ? "bg-teal-500/10 text-teal-400 border-teal-500/20"
+                                      : "bg-teal-50 text-teal-700 border-teal-200"
+                              }`}
+                            >
+                              {slotFull ? "Full" : `${slotsLeft} left`}
+                            </span>
                           )}
 
                           {/* Appointments: Stacked horizontally side-by-side with partial preview (Google Calendar style) */}

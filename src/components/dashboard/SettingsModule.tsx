@@ -1756,12 +1756,15 @@ function DoctorDigitalSignatureSection({
   const [savedMeta, setSavedMeta] = useState<{ mode: string; savedAt: string } | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<"draw" | "upload">("draw");
+  const [showDrawPadModal, setShowDrawPadModal] = useState(false);
 
   // Draw Pad state
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isDrawingRef = useRef(false);
   const currentStrokeRef = useRef<SignatureStroke | null>(null);
   const [strokes, setStrokes] = useState<SignatureStroke[]>([]);
+  const strokesRef = useRef<SignatureStroke[]>([]);
+  strokesRef.current = strokes;
   const [penColor, setPenColor] = useState<string>(SIGNATURE_INK_COLORS[0].value);
   const [penWidth, setPenWidth] = useState<number>(SIGNATURE_STROKE_WIDTHS[1].value);
 
@@ -1799,7 +1802,7 @@ function DoctorDigitalSignatureSection({
   }, [doctor.id]);
 
   // Render canvas
-  const renderCanvas = useCallback(() => {
+  const drawCanvas = useCallback((overrideStrokes?: SignatureStroke[]) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -1838,8 +1841,10 @@ function DoctorDigitalSignatureSection({
     ctx.fillText("Sign your clinical signature above the line", 50, lineY - 2);
     ctx.restore();
 
+    const strokeList = overrideStrokes ?? strokesRef.current;
+
     // Render completed strokes
-    for (const stroke of strokes) {
+    for (const stroke of strokeList) {
       if (!stroke || !Array.isArray(stroke.points) || stroke.points.length < 1) continue;
       ctx.save();
       ctx.strokeStyle = stroke.color;
@@ -1871,19 +1876,23 @@ function DoctorDigitalSignatureSection({
       ctx.stroke();
       ctx.restore();
     }
-  }, [strokes]);
+  }, []);
 
-  // Redraw canvas whenever pad tab is shown or strokes change
+  // Redraw canvas whenever modal opens
   useEffect(() => {
-    if (activeTab === "draw" && isEditing) {
-      renderCanvas();
+    if (showDrawPadModal) {
+      const timer = setTimeout(() => {
+        drawCanvas();
+      }, 10);
+      return () => clearTimeout(timer);
     }
-  }, [activeTab, isEditing, renderCanvas]);
+  }, [showDrawPadModal, drawCanvas]);
 
   const getCanvasCoords = (clientX: number, clientY: number): SignaturePoint | null => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     return {
@@ -1892,8 +1901,12 @@ function DoctorDigitalSignatureSection({
     };
   };
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (e.button !== 0) return;
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    e.preventDefault();
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {}
     const pt = getCanvasCoords(e.clientX, e.clientY);
     if (!pt) return;
     isDrawingRef.current = true;
@@ -1902,79 +1915,66 @@ function DoctorDigitalSignatureSection({
       color: penColor,
       width: penWidth,
     };
-    renderCanvas();
+    drawCanvas();
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isDrawingRef.current || !currentStrokeRef.current) return;
+    e.preventDefault();
     const pt = getCanvasCoords(e.clientX, e.clientY);
     if (!pt) return;
     if (!Array.isArray(currentStrokeRef.current.points)) {
       currentStrokeRef.current.points = [];
     }
     currentStrokeRef.current.points.push(pt);
-    renderCanvas();
+    drawCanvas();
   };
 
-  const handleMouseUpOrLeave = () => {
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isDrawingRef.current) return;
     isDrawingRef.current = false;
+    try {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+    } catch {}
+
     const current = currentStrokeRef.current;
-    if (current && Array.isArray(current.points) && current.points.length > 1) {
+    if (current && Array.isArray(current.points) && current.points.length > 0) {
       const completedStroke: SignatureStroke = {
         color: current.color,
         width: current.width,
-        points: [...current.points],
+        points:
+          current.points.length === 1
+            ? [current.points[0], { x: current.points[0].x + 0.1, y: current.points[0].y + 0.1 }]
+            : [...current.points],
       };
-      setStrokes((prev) => [...(prev || []).filter((s) => s && Array.isArray(s.points) && s.points.length > 0), completedStroke]);
+      const updated = [...strokesRef.current, completedStroke];
+      strokesRef.current = updated;
+      setStrokes(updated);
+      currentStrokeRef.current = null;
+      drawCanvas(updated);
+    } else {
+      currentStrokeRef.current = null;
+      drawCanvas();
     }
-    currentStrokeRef.current = null;
-    renderCanvas();
-  };
-
-  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    if (e.touches.length !== 1) return;
-    e.preventDefault();
-    const touch = e.touches[0];
-    const pt = getCanvasCoords(touch.clientX, touch.clientY);
-    if (!pt) return;
-    isDrawingRef.current = true;
-    currentStrokeRef.current = {
-      points: [pt],
-      color: penColor,
-      width: penWidth,
-    };
-    renderCanvas();
-  };
-
-  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    if (!isDrawingRef.current || !currentStrokeRef.current || e.touches.length !== 1) return;
-    e.preventDefault();
-    const touch = e.touches[0];
-    const pt = getCanvasCoords(touch.clientX, touch.clientY);
-    if (!pt) return;
-    if (!Array.isArray(currentStrokeRef.current.points)) {
-      currentStrokeRef.current.points = [];
-    }
-    currentStrokeRef.current.points.push(pt);
-    renderCanvas();
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
-    handleMouseUpOrLeave();
   };
 
   const handleClearPad = () => {
     currentStrokeRef.current = null;
     isDrawingRef.current = false;
+    strokesRef.current = [];
     setStrokes([]);
+    drawCanvas([]);
   };
 
   const handleUndoStroke = () => {
     currentStrokeRef.current = null;
     isDrawingRef.current = false;
-    setStrokes((prev) => (prev || []).filter(Boolean).slice(0, -1));
+    const updated = strokesRef.current.slice(0, -1);
+    strokesRef.current = updated;
+    setStrokes(updated);
+    drawCanvas(updated);
   };
 
   const saveSignatureToStorage = (dataUrl: string, mode: "draw" | "upload") => {
@@ -1998,6 +1998,7 @@ function DoctorDigitalSignatureSection({
       setUploadedImage(null);
       setUploadFileName("");
       setUploadFileSize("");
+      strokesRef.current = [];
       setStrokes([]);
 
       if (typeof window !== "undefined") {
@@ -2011,7 +2012,8 @@ function DoctorDigitalSignatureSection({
   };
 
   const handleSaveDrawn = () => {
-    if (strokes.length === 0) {
+    const strokeList = strokes.length > 0 ? strokes : strokesRef.current;
+    if (strokeList.length === 0) {
       onToast("error", "Please write or draw your signature before saving.");
       return;
     }
@@ -2026,7 +2028,7 @@ function DoctorDigitalSignatureSection({
     // Render crisp transparent background with only the signature ink
     oCtx.clearRect(0, 0, offscreen.width, offscreen.height);
 
-    for (const stroke of strokes) {
+    for (const stroke of strokeList) {
       if (!stroke || !Array.isArray(stroke.points) || stroke.points.length < 1) continue;
       oCtx.save();
       oCtx.strokeStyle = stroke.color;
@@ -2122,6 +2124,7 @@ function DoctorDigitalSignatureSection({
   };
 
   return (
+    <>
     <SettingsCard
       title="Doctor Digital Signature & Clinical E-Sign"
       body="Upload or handwrite your clinical signature to digitally authenticate prescriptions, medical certificates, and official health records."
@@ -2277,133 +2280,41 @@ function DoctorDigitalSignatureSection({
             )}
           </div>
 
-          {/* TAB 1: DRAW PAD */}
+          {/* TAB 1: DRAW PAD — trigger opens modal */}
           {activeTab === "draw" ? (
             <div className="mt-4 space-y-4">
-              {/* Draw Pad Controls Bar */}
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                {/* Ink Color Selector */}
-                <div className="flex items-center gap-2">
-                  <span className={`text-[10px] font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                    Ink Color:
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    {SIGNATURE_INK_COLORS.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => setPenColor(c.value)}
-                        className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-black transition border ${
-                          penColor === c.value
-                            ? "border-brand-teal bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal"
-                            : isDark
-                              ? "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
-                              : "border-slate-200 bg-white text-slate-600 hover:text-slate-900"
-                        }`}
-                      >
-                        <span className={`h-2.5 w-2.5 rounded-full ${c.dotClass}`} />
-                        {c.label}
-                      </button>
-                    ))}
-                  </div>
+              {/* Preview of existing strokes (if any) */}
+              {strokes.length > 0 && (
+                <div className={`flex h-20 w-full items-center justify-center rounded-xl border-2 border-dashed ${
+                  isDark ? "border-teal-500/30 bg-slate-900/50" : "border-teal-300 bg-teal-50/30"
+                }`}>
+                  <p className={`text-xs font-black ${isDark ? "text-teal-400" : "text-teal-700"}`}>
+                    ✍️ Signature drawn — {strokes.length} stroke{strokes.length !== 1 ? "s" : ""} recorded
+                  </p>
                 </div>
+              )}
 
-                {/* Stroke Width Selector */}
-                <div className="flex items-center gap-2">
-                  <span className={`text-[10px] font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                    Pen:
-                  </span>
-                  <div className="flex items-center gap-1">
-                    {SIGNATURE_STROKE_WIDTHS.map((w) => (
-                      <button
-                        key={w.id}
-                        type="button"
-                        onClick={() => setPenWidth(w.value)}
-                        className={`rounded-lg px-2.5 py-1 text-[11px] font-black transition border ${
-                          penWidth === w.value
-                            ? "border-brand-teal bg-brand-teal text-white shadow-2xs"
-                            : isDark
-                              ? "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
-                              : "border-slate-200 bg-white text-slate-600 hover:text-slate-900"
-                        }`}
-                      >
-                        {w.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+              {/* Open Pad Button */}
+              <button
+                type="button"
+                id="open-signature-draw-pad"
+                onClick={() => setShowDrawPadModal(true)}
+                className={`flex w-full items-center justify-center gap-2.5 rounded-xl border-2 border-dashed py-6 text-sm font-black transition ${
+                  isDark
+                    ? "border-slate-700 bg-slate-900/50 text-slate-300 hover:border-brand-teal hover:bg-brand-teal/10 hover:text-brand-teal"
+                    : "border-slate-300 bg-slate-50/70 text-slate-600 hover:border-brand-teal hover:bg-teal-50 hover:text-brand-teal"
+                }`}
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+                  <path d="M5.433 13.917l1.262-3.155A4 4 0 017.58 9.42l6.92-6.918a2.121 2.121 0 013 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 01-.65-.65z" />
+                  <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0010 3H4.75A2.75 2.75 0 002 5.75v9.5A2.75 2.75 0 004.75 18h9.5A2.75 2.75 0 0017 15.25V10a.75.75 0 00-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5z" />
+                </svg>
+                {strokes.length > 0 ? "Re-open Signature Pad to Edit" : "Open Signature Pad"}
+              </button>
 
-                {/* Action Buttons: Undo & Clear */}
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleUndoStroke}
-                    disabled={strokes.length === 0}
-                    className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-black transition disabled:opacity-40 ${
-                      isDark
-                        ? "border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white"
-                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
-                    }`}
-                    title="Undo last stroke"
-                  >
-                    <svg viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3">
-                      <path fillRule="evenodd" d="M7.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L5.414 9H14a3 3 0 013 3v2a1 1 0 11-2 0v-2a1 1 0 00-1-1H5.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
-                    </svg>
-                    Undo
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleClearPad}
-                    disabled={strokes.length === 0}
-                    className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-black transition disabled:opacity-40 ${
-                      isDark
-                        ? "border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white"
-                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
-                    }`}
-                  >
-                    Clear Pad
-                  </button>
-                </div>
-              </div>
-
-              {/* Canvas Write Pad Area */}
-              <div className="relative overflow-hidden rounded-xl border border-slate-300 bg-white shadow-xs">
-                <canvas
-                  ref={canvasRef}
-                  width={560}
-                  height={180}
-                  onMouseDown={handleMouseDown}
-                  onMouseMove={handleMouseMove}
-                  onMouseUp={handleMouseUpOrLeave}
-                  onMouseLeave={handleMouseUpOrLeave}
-                  onTouchStart={handleTouchStart}
-                  onTouchMove={handleTouchMove}
-                  onTouchEnd={handleTouchEnd}
-                  style={{ touchAction: "none" }}
-                  className="h-44 w-full cursor-crosshair select-none"
-                  aria-label="Doctor signature write pad"
-                />
-              </div>
-
-              {/* Bottom Instructions and Save Button */}
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                <p className={`text-[11px] font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                  ✍️ Use mouse, stylus, or fingertip to sign your name. Strokes are rendered in high fidelity.
-                </p>
-
-                <button
-                  type="button"
-                  onClick={handleSaveDrawn}
-                  disabled={strokes.length === 0}
-                  className="inline-flex items-center gap-2 rounded-xl bg-brand-teal px-5 py-2.5 text-xs font-black text-white shadow-xs transition hover:bg-teal-600 disabled:opacity-40"
-                >
-                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-                    <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
-                  </svg>
-                  Save Drawn Signature
-                </button>
-              </div>
+              <p className={`text-center text-[11px] font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                ✍️ A full-screen pad will open — use mouse, stylus, or fingertip to sign.
+              </p>
             </div>
           ) : (
             /* TAB 2: UPLOAD IMAGE */
@@ -2499,6 +2410,174 @@ function DoctorDigitalSignatureSection({
         </div>
       )}
     </SettingsCard>
+
+    {/* ── Draw Pad Modal ── */}
+    {showDrawPadModal && (
+      <div
+        className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm"
+        onClick={(e) => { if (e.target === e.currentTarget) setShowDrawPadModal(false); }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Signature draw pad"
+      >
+        <div className={`relative mx-4 flex w-full max-w-2xl flex-col gap-4 rounded-2xl border p-6 shadow-2xl ${
+          isDark ? "border-slate-700 bg-slate-950" : "border-slate-200 bg-white"
+        }`}>
+
+          {/* Modal Header */}
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className={`text-[10px] font-black uppercase tracking-widest ${isDark ? "text-brand-teal" : "text-teal-600"}`}>Clinical E-Signature</p>
+              <h2 className={`text-lg font-black ${isDark ? "text-white" : "text-slate-900"}`}>Write Your Signature</h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowDrawPadModal(false)}
+              className={`grid h-8 w-8 place-items-center rounded-full transition ${
+                isDark ? "bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+              aria-label="Close signature pad"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Controls Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {/* Ink Color */}
+            <div className="flex items-center gap-2">
+              <span className={`text-[10px] font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Ink:</span>
+              <div className="flex items-center gap-1.5">
+                {SIGNATURE_INK_COLORS.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setPenColor(c.value)}
+                    className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-black transition border ${
+                      penColor === c.value
+                        ? "border-brand-teal bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal"
+                        : isDark
+                          ? "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
+                          : "border-slate-200 bg-white text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <span className={`h-2.5 w-2.5 rounded-full ${c.dotClass}`} />
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Pen Width */}
+            <div className="flex items-center gap-2">
+              <span className={`text-[10px] font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Pen:</span>
+              <div className="flex items-center gap-1">
+                {SIGNATURE_STROKE_WIDTHS.map((w) => (
+                  <button
+                    key={w.id}
+                    type="button"
+                    onClick={() => setPenWidth(w.value)}
+                    className={`rounded-lg px-2.5 py-1 text-[11px] font-black transition border ${
+                      penWidth === w.value
+                        ? "border-brand-teal bg-brand-teal text-white shadow-2xs"
+                        : isDark
+                          ? "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
+                          : "border-slate-200 bg-white text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    {w.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Undo & Clear */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleUndoStroke}
+                disabled={strokes.length === 0}
+                className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-black transition disabled:opacity-40 ${
+                  isDark
+                    ? "border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                }`}
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3">
+                  <path fillRule="evenodd" d="M7.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L5.414 9H14a3 3 0 013 3v2a1 1 0 11-2 0v-2a1 1 0 00-1-1H5.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
+                </svg>
+                Undo
+              </button>
+              <button
+                type="button"
+                onClick={handleClearPad}
+                disabled={strokes.length === 0}
+                className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-black transition disabled:opacity-40 ${
+                  isDark
+                    ? "border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                }`}
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+
+          {/* Canvas */}
+          <div className="relative overflow-hidden rounded-xl border border-slate-300 bg-white shadow-xs">
+            <canvas
+              ref={canvasRef}
+              width={560}
+              height={200}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
+              style={{ touchAction: "none" }}
+              className="h-48 w-full cursor-crosshair select-none"
+              aria-label="Doctor signature write pad"
+            />
+          </div>
+
+          {/* Instructions + Save/Cancel */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className={`text-[11px] font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+              ✍️ Sign above the baseline. Your signature will be applied to all official clinical documents.
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowDrawPadModal(false)}
+                className={`rounded-xl border px-4 py-2 text-xs font-black transition ${
+                  isDark
+                    ? "border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleSaveDrawn();
+                  setShowDrawPadModal(false);
+                }}
+                disabled={strokes.length === 0}
+                className="inline-flex items-center gap-2 rounded-xl bg-brand-teal px-5 py-2.5 text-xs font-black text-white shadow-xs transition hover:bg-teal-600 disabled:opacity-40"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                  <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                </svg>
+                Save Signature
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 

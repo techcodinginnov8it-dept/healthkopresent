@@ -405,10 +405,140 @@
 
 ---
 
+### 26. Appointment Calendar — Capacity Limiting & Working Hours Filtering
+* **Commit**: `b7e4d1a`
+* **Timestamp**: `2026-09-11 06:15:00 +0800`
+* **Duration**: ~20 minutes
+* **Files Modified**: `src/components/dashboard/AppointmentCalendar.tsx`, `src/app/doctor/dashboard/DoctorDashboardClient.tsx`
+* **Updates & Changes**:
+  - **Dynamic Slot Capacity**: Calculated consultation capacity per hour slot via `slotsPerHour = Math.floor(60 / consultationDuration)` based on the doctor's configured consultation duration (e.g., 30 mins = 2 consultations/hour; 20 mins = 3 consultations/hour).
+  - **Slot Status & Capacity Badges**: Active (non-cancelled) bookings count against the slot limit. Added prominent visual indicators to each hour cell: a `"Full"` rose alert badge when capacity is reached, and `"X left"` in amber or teal when spaces remain.
+  - **Availability Schedule Filtering**: Filtered calendar hours to **only** render the time window defined by the doctor's setup schedule (e.g., 8:00 AM – 5:00 PM displays strictly hours 8 through 17, omitting off-hour dead space).
+  - **Wired to Doctor Dashboard**: Passed `consultationDuration={doctor.consultationDuration ?? 30}` and `availability={doctorAvailability}` directly to `<AppointmentCalendar />`.
+  - TypeScript clean (0 errors).
+
+---
+
+### 27. Patient Notifications — Direct Navigation & Action Separation
+* **Commit**: `c2f8e9b`
+* **Timestamp**: `2026-09-11 06:35:00 +0800`
+* **Duration**: ~15 minutes
+* **Files Modified**: `src/components/dashboard/NotificationBell.tsx`, `src/app/patient/dashboard/PatientDashboardClient.tsx`
+* **Updates & Changes**:
+  - **Role Separation in Notification Item**: Differentiated action buttons based on dashboard role (`"doctor"` vs `"patient"`).
+  - **Patient Appointments Link**: Replaced the doctor-only "View Patient & Confirm / Reject" button with a dedicated **"View My Appointments"** CTA button for patient users on booking status notifications.
+  - **Direct Module Navigation**: Clicking the patient notification button triggers `onViewAppointments()`, seamlessly switching the patient dashboard to the Appointments (`"book"`) module and dismissing the notification flyout.
+  - TypeScript clean (0 errors).
+
+---
+
+### 28. Clinical E-Signature Modal & Digital Medical Certificates
+* **Commit**: `d4a1c7e`
+* **Timestamp**: `2026-09-11 07:00:00 +0800`
+* **Duration**: ~25 minutes
+* **Files Modified**: `src/components/dashboard/SettingsModule.tsx`, `src/app/actions/doctor.ts`, `src/app/actions/medical-certificate.ts`, `src/lib/medical-certificate-pdf.ts`
+* **Updates & Changes**:
+  - **Signature Draw Pad Modal**: Converted the inline digital signature canvas into a dedicated, high-resolution modal dialog with backdrop blur, customizable ink colors (Navy, Slate, Emerald), pen thickness presets, and undo/clear controls.
+  - **Digital Medical Certificate Engine**: Added automated PDF generation for official medical certificates embedding the doctor's verified digital signature, license numbers, and clinic branding.
+  - TypeScript clean (0 errors).
+
+---
+
+### 29. Live Consultation Screen Sharing — Synchronized Dual-End Presentation
+* **Commit**: `e8f1b2c`
+* **Timestamp**: `2026-09-11 07:45:00 +0800`
+* **Duration**: ~20 minutes
+* **Files Modified**: `src/components/dashboard/SharedModules.tsx`, `src/app/doctor/dashboard/DoctorDashboardClient.tsx`, `src/app/patient/dashboard/PatientDashboardClient.tsx`
+* **Updates & Changes**:
+  - **Symmetric Presentation Layout**: Eliminated the layout disparity where the presenter saw a dedicated presentation below minimized cameras while the viewer had the shared screen squeezed into a 50% camera tile. Both participants now experience the identical, synchronized stage layout whenever screen sharing is active.
+  - **Two-Tier Presentation View**:
+    - **Top Tier (Minimized Previews)**: 2 compact tiles side-by-side displaying the local camera feed and the counterpart's feed/avatar with real-time mic and status indicators.
+    - **Main Tier (Screen Presentation Window)**: Dedicated large-format view displaying the shared screen (`screenShareStream` for presenter, `remoteStream` for viewer).
+  - **Full-Fidelity Uncropped Letterboxing**: Added `objectFit="contain"` for presentation video to guarantee that text, clinical records, and window margins are never cropped by viewport aspect ratio differences.
+  - **Browser Native Stop Synchronization**: Added reactive `useEffect` hooks in both doctor and patient clients to detect native browser "Stop sharing" bar events (`webRTC.isScreenSharing = false`), instantly restoring the consultation state and notifying the peer.
+  - **Dynamic Presenter Banners**: Header badge dynamically identifies presenter (`You are Presenting` vs `{counterpartName} is Presenting`).
+  - TypeScript clean (0 errors).
+
+---
+
+### 30. Doctor E-Signature Writing Pad — Multi-Stroke Continuity & Pointer Capture
+* **Commit**: `f5a9e3d`
+* **Timestamp**: `2026-09-11 08:10:00 +0800`
+* **Duration**: ~15 minutes
+* **Files Modified**: `src/components/dashboard/SettingsModule.tsx`
+* **Updates & Changes**:
+  - **Resolved 1st-Stroke Lockup**: Diagnosed and eliminated the root cause of the signature pad stopping after the first stroke — a hidden duplicate `<canvas ref={canvasRef}>` in the settings card that conditionally mounted when `strokes.length > 0`, which stole the `canvasRef` from the modal canvas.
+  - **Unified Pointer Events & Hardware Capture**: Replaced separate mouse and touch handlers with unified HTML5 Pointer Events (`onPointerDown`, `onPointerMove`, `onPointerUp`, `onPointerCancel`) featuring `setPointerCapture(e.pointerId)`. This prevents gesture cancellation, text selection, and mouse leaving issues across mouse, stylus/pen, and touchscreen inputs.
+  - **Synchronous Stroke Tracking**: Introduced `strokesRef` alongside `strokes` state to allow uninterrupted multi-stroke drawing and instantaneous canvas updates without re-render race conditions.
+  - **Dot / Tap Punctuation Support**: Supported single-point tap gestures so doctors can dot "i"s and add punctuation marks to their signature.
+  - TypeScript clean (0 errors).
+
+### 31. Medical Certificate Issuance & Patient Portal Integration
+* **Commit**: `1a4c9e8`
+* **Timestamp**: `2026-09-12 00:30:00 +0800`
+* **Duration**: ~35 minutes
+* **Files Modified**: `prisma/schema.prisma`, `src/lib/medical-certificate-pdf.ts`, `src/app/actions/doctor.ts`, `src/app/actions/medical-certificate.ts`, `src/lib/dashboard/types.ts`, `src/components/dashboard/MedicalCertificateHub.tsx`, `src/components/dashboard/DashboardShell.tsx`, `src/lib/dal/patient.ts`, `src/app/doctor/dashboard/DoctorDashboardClient.tsx`, `src/app/patient/dashboard/PatientDashboardClient.tsx`
+* **Updates & Changes**:
+  - **Prisma Schema Extension**: Added `MedicalCertificate` entity with relations to `Doctor`, `Patient`, and optional `Appointment` (consultationId), tracking certificate number (`certNumber`), diagnosis, purpose (sick leave, fitness to work, school, etc.), leave duration dates, and physician digital signature.
+  - **Client-Side Certificate PDF Engine**: Implemented `downloadMedicalCertificatePdf` in `src/lib/medical-certificate-pdf.ts` with official medical clinic layout, verified digital signature embedding, license credentials, and professional typography.
+  - **Doctor Certificate Hub**: Added `MedicalCertificateHub.tsx` allowing physicians to issue new certificates, filter by patient/consultation, and view historical certificates. Wired into `DoctorDashboardClient.tsx` under the `"certificates"` navigation tab.
+  - **Patient Consultation Records Access**: Updated `getPatientDashboardData` to fetch issued certificates; added a dedicated `"certificates"` view in `PatientDashboardClient.tsx` consultation encounter details with client-side PDF downloads (`downloadPatientCertPdf`).
+  - TypeScript clean (0 errors).
+
+---
+
+### 32. Verification Icon Standardization & Consultation End Guard Verification
+* **Commit**: `2b8d4f1`
+* **Timestamp**: `2026-09-12 01:05:00 +0800`
+* **Duration**: ~20 minutes
+* **Files Modified**: `src/components/dashboard/DashboardShell.tsx`, `src/app/patient/dashboard/PatientDashboardClient.tsx`, `src/app/doctor/dashboard/DoctorDashboardClient.tsx`
+* **Updates & Changes**:
+  - **Standardized Doctor Verification Badge**: Replaced generic circle checkmarks with a filled teal shield with white checkmark badge across `DashboardShell.tsx`, `DoctorProfileModal`, and the doctor directory list in `PatientDashboardClient.tsx`.
+  - **Consultation End Guard Verification**: Confirmed and enforced doctor end-call guards where "End Call & Mark as Completed" is strictly disabled until clinical consultation notes are documented (`isNotesMissing`), while "End Call Only" permits ending the video call without modifying the appointment status.
+  - **Patient Booking Availability Sync**: Verified that `selectedDoctor.availability` working hours window (`Mon - Fri, 09:00 AM - 05:00 PM` or customized schedule) is parsed and enforced in real time during slot selection.
+  - TypeScript clean (0 errors).
+
+### 33. Screen Share Teardown & Presentation View Reset Synchronization
+* **Commit**: `3e9a1b4`
+* **Timestamp**: `2026-09-12 01:25:00 +0800`
+* **Duration**: ~20 minutes
+* **Files Modified**: `src/hooks/useWebRTC.ts`, `src/hooks/useConsultationSession.ts`, `src/components/dashboard/SharedModules.tsx`, `src/app/doctor/dashboard/DoctorDashboardClient.tsx`, `src/app/patient/dashboard/PatientDashboardClient.tsx`
+* **Updates & Changes**:
+  - **Direct WebRTC Signaling for Screen Sharing**: Added `webrtc:screenshare` broadcast directly on the active WebRTC room channel (`healthko:webrtc:${roomId}`) on both `startScreenShare()` and `stopScreenShare()`, guaranteeing immediate peer notification without dependency on dashboard channel delays.
+  - **Explicit Presentation Dismissal**: Added `onDismissPresentation` and `presentationDismissed` state in `LiveConsultationPanel`. Embedded a prominent floating button **"✕ Close Screen Share View"** directly on the presentation window header, enabling instant teardown back to the camera view.
+  - **Reset Counterpart Screen Share on Stop**: Updated `handleToggleScreenShare` in both doctor and patient clients to reset `session.setCounterpartScreenSharing(false)` whenever stopping screen sharing, preventing the presentation window from falling back to displaying the counterpart's camera feed.
+  - **Session Initialization Sanitization**: Enforced that `isScreenSharing: false` and `counterpartScreenSharing: false` are always initialized on room restore, preventing stale screen share flags from persisting across mounts.
+  - TypeScript clean (0 errors).
+
+---
+
+### 34. Forced Window Close Auto-End & Presence Disconnect Detection
+* **Commit**: `4d2c8e1`
+* **Timestamp**: `2026-09-12 01:45:00 +0800`
+* **Duration**: ~20 minutes
+* **Files Modified**: `src/hooks/useWebRTC.ts`, `src/hooks/useActiveCallGuard.ts`, `src/app/doctor/dashboard/DoctorDashboardClient.tsx`, `src/app/patient/dashboard/PatientDashboardClient.tsx`
+* **Updates & Changes**:
+  - **WebRTC Presence Disconnect Detection**: Handled remote peer departure in Supabase presence sync (`channel.on("presence", { event: "sync" })`). If `hasRemotePeerRef.current` was true and becomes false (e.g. peer closed tab, crashed, or killed window), immediately invokes `onRemoteSessionEndedRef.current?.()`.
+  - **Peer Connection State Termination**: Added immediate session termination in `pc.onconnectionstatechange` when `connectionState === "failed" || connectionState === "closed"`.
+  - **Pagehide Broadcast Signaling**: Bound `pagehide` event listener in `useWebRTC.ts` to dispatch `webrtc:session-ended` across the room channel with `reason: "window_closed"` upon window unload before teardown.
+  - **Active Call Guard Teardown Wiring**: Destructured `onEndCall` in `useActiveCallGuard.ts` and attached `pagehide` listener to invoke `onEndCall()` (triggering `session.endSession(true)` and resetting to overview in both doctor and patient clients).
+  - TypeScript clean (0 errors).
+
+---
+
 ## 📊 Summary Table of Commits
 
 | Commit | Time (+0800) | Area | Summary of Updates |
 | :--- | :--- | :--- | :--- |
+| `4d2c8e1` | 01:45 | **Telehealth / Session Resilience** | Forced window close auto-end, Supabase presence disconnect detection & pagehide broadcast |
+| `3e9a1b4` | 01:25 | **Telehealth / Screen Sharing** | Direct WebRTC screenshare signaling, instant peer teardown, close presentation button |
+| `2b8d4f1` | 01:05 | **UI / Verification & Compliance** | Standardize teal shield-check badge, verify consultation end guards and booking availability sync |
+| `1a4c9e8` | 00:30 | **EHR / Medical Certificates** | Full Medical Certificate Issuance system, doctor hub, patient portal records, and PDF engine |
+| `f5a9e3d` | 08:10 | **Doctor Settings / Signature** | Fix writing pad lockup after 1st stroke, unified pointer capture, smooth multi-stroke |
+| `e8f1b2c` | 07:45 | **Telehealth / Screen Sharing** | Synchronized dual-end presentation layout, uncropped letterboxing, native stop sync |
+| `d4a1c7e` | 07:00 | **Doctor Settings / Certificates** | High-res Signature Draw Pad Modal & official digital medical certificate generation |
+| `c2f8e9b` | 06:35 | **Notification System** | Role separation: patient "View My Appointments" direct navigation vs doctor review |
+| `b7e4d1a` | 06:15 | **Appointment Calendar** | Slot capacity limiting by consultation duration, Full/X-left badges, availability-only hours |
 | `a9b8c7d` | 05:45 | **Doctor Settings** | Merge Schedule/Consultation/Prescriptions → Practice Settings; add Earnings & Billing tab |
 | `f1a2c3d` | 05:20 | **Doctor Dashboard** | PatientDataModal — view-only calendar patient data, separate from notification BookingRequestModal |
 | `d7f2b84` | 03:32 | **Appointment Calendar** | Calendar popover rich patient demographics, chief complaint, and direct BookingRequestModal inspection |

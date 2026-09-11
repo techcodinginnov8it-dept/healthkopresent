@@ -55,6 +55,7 @@ export function useWebRTC({
   isMicOn,
   isActive,
   onRemoteSessionEnded,
+  onCounterpartScreenShareChange,
 }: {
   roomId: string;
   role: "doctor" | "patient";
@@ -62,6 +63,7 @@ export function useWebRTC({
   isMicOn: boolean;
   isActive: boolean;
   onRemoteSessionEnded?: () => void;
+  onCounterpartScreenShareChange?: (isSharing: boolean) => void;
 }) {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -83,7 +85,12 @@ export function useWebRTC({
   const offerTimerRef = useRef<number | null>(null);
   const mediaStateRef = useRef({ isCameraOn, isMicOn });
   const onRemoteSessionEndedRef = useRef(onRemoteSessionEnded);
+  const onCounterpartScreenShareChangeRef = useRef(onCounterpartScreenShareChange);
   const pendingIceCandidatesRef = useRef<PendingIceCandidate[]>([]);
+
+  useEffect(() => {
+    onCounterpartScreenShareChangeRef.current = onCounterpartScreenShareChange;
+  }, [onCounterpartScreenShareChange]);
   const roomChannelRef = useRef<RealtimeChannel | null>(null);
   const hasRemotePeerRef = useRef(false);
   const hasOfferBeenSentRef = useRef(false);
@@ -240,8 +247,16 @@ export function useWebRTC({
       track.onended = null;
     }
 
+    try {
+      void roomChannelRef.current?.send({
+        type: "broadcast",
+        event: "webrtc:screenshare",
+        payload: { isScreenSharing: false, senderRole: role },
+      });
+    } catch {}
+
     return true;
-  }, [replaceOutgoingVideoTrack]);
+  }, [replaceOutgoingVideoTrack, role]);
 
   const startScreenShare = useCallback(async () => {
     if (isScreenSharing) {
@@ -289,6 +304,14 @@ export function useWebRTC({
         setError(message);
         return false;
       }
+
+      try {
+        void roomChannelRef.current?.send({
+          type: "broadcast",
+          event: "webrtc:screenshare",
+          payload: { isScreenSharing: true, senderRole: role },
+        });
+      } catch {}
 
       return true;
     } catch (err: unknown) {
@@ -505,6 +528,10 @@ export function useWebRTC({
         pc.onconnectionstatechange = () => {
           console.log("[WebRTC] Connection state:", pc.connectionState);
           setConnectionState(pc.connectionState);
+          if (pc.connectionState === "failed" || pc.connectionState === "closed") {
+            console.warn("[WebRTC] Peer connection terminated, ending consultation session");
+            onRemoteSessionEndedRef.current?.();
+          }
         };
 
         const makeOffer = async () => {
@@ -536,9 +563,16 @@ export function useWebRTC({
 
         channel.on("presence", { event: "sync" }, () => {
           const presenceState = channel.presenceState<RoomPresence>();
-          hasRemotePeerRef.current = Object.values(presenceState).some((entries) =>
+          const remotePeerPresent = Object.values(presenceState).some((entries) =>
             entries.some((entry) => entry.role && entry.role !== role)
           );
+
+          if (hasRemotePeerRef.current && !remotePeerPresent) {
+            console.log("[WebRTC] Remote peer left room (forced window close or disconnect)");
+            onRemoteSessionEndedRef.current?.();
+          }
+
+          hasRemotePeerRef.current = remotePeerPresent;
 
           if (role === "doctor" && hasRemotePeerRef.current) {
             void makeOffer().catch((err) => console.error("[WebRTC] makeOffer error:", err));
@@ -614,6 +648,12 @@ export function useWebRTC({
           onRemoteSessionEndedRef.current?.();
         });
 
+        channel.on("broadcast", { event: "webrtc:screenshare" }, ({ payload }: { payload: { isScreenSharing: boolean; senderRole: string } }) => {
+          if (payload.senderRole !== role) {
+            onCounterpartScreenShareChangeRef.current?.(payload.isScreenSharing);
+          }
+        });
+
         channel.subscribe(async (status) => {
           if (status !== "SUBSCRIBED") {
             return;
@@ -643,6 +683,17 @@ export function useWebRTC({
             payload: { roomId, candidate },
           });
         };
+
+        const handlePageHide = () => {
+          try {
+            void channel.send({
+              type: "broadcast",
+              event: "webrtc:session-ended",
+              payload: { roomId, senderRole: role, reason: "window_closed" },
+            });
+          } catch {}
+        };
+        window.addEventListener("pagehide", handlePageHide);
       } catch (err: unknown) {
         console.warn("[WebRTC] Init failed:", err);
         setError(getMediaErrorMessage(err));

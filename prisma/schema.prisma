@@ -80,6 +80,7 @@ model Patient {
   lastLoginDevice          String?        @map("last_login_device")
   lastLoginAt              DateTime?      @map("last_login_at")
   bookings                 Consultation[]
+  medicalCertificates      MedicalCertificate[]
   createdBy                Admin?         @relation("AdminPatients", fields: [createdById], references: [id])
   user                     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -126,6 +127,7 @@ model Doctor {
   lastLoginAt              DateTime?      @map("last_login_at")
   bookings                 Consultation[]
   audits                   DoctorAudit[]
+  medicalCertificates      MedicalCertificate[]
   createdBy                Admin?         @relation("AdminDoctors", fields: [createdById], references: [id])
   user                     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -150,9 +152,10 @@ model Consultation {
   bloodPressure   String?
   heartRate       String?
   bodyTemperature String?
-  doctor          Doctor             @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  patient         Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  videoSession    VideoSession?
+  doctor              Doctor               @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient             Patient              @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  videoSession        VideoSession?
+  medicalCertificates MedicalCertificate[]
 
   @@index([patientId])
   @@index([doctorId])
@@ -201,6 +204,27 @@ model DoctorAudit {
   @@index([npi])
   @@index([status])
   @@map("doctor_audits")
+}
+
+model MedicalCertificate {
+  id             String        @id @default(uuid())
+  consultationId String?       @map("consultation_id")
+  doctorId       String        @map("doctor_id")
+  patientId      String        @map("patient_id")
+  purpose        String        // sick_leave | fitness_to_work | school | other
+  diagnosis      String?
+  remarks        String?
+  restDaysFrom   DateTime?     @map("rest_days_from")
+  restDaysTo     DateTime?     @map("rest_days_to")
+  issuedAt       DateTime      @default(now()) @map("issued_at")
+  certNumber     String        @unique @map("cert_number")
+  doctor         Doctor        @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient        Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  consultation   Consultation? @relation(fields: [consultationId], references: [id])
+
+  @@index([doctorId])
+  @@index([patientId])
+  @@map("medical_certificates")
 }
 
 model PasswordResetToken {

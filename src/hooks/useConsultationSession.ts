@@ -63,6 +63,8 @@ function getInitialState<TAppointment>(persistKey?: string): SessionState<TAppoi
     return {
       ...(idleState as SessionState<TAppointment>),
       ...parsed,
+      isScreenSharing: false,
+      counterpartScreenSharing: false,
       status: parsed.status,
     };
   } catch {
@@ -253,6 +255,16 @@ export function useConsultationSession<TAppointment extends { id: string; notes?
     },
     [publish, role, state.activeAppointment, state.isCameraOn, state.isMicOn]
   );
+
+  const setCounterpartScreenSharing = useCallback((counterpartScreenSharing: boolean) => {
+    setState((current) => {
+      if (current.counterpartScreenSharing === counterpartScreenSharing) {
+        return current;
+      }
+
+      return { ...current, counterpartScreenSharing };
+    });
+  }, []);
 
   const toggleSpeaker = useCallback(() => {
     setState((current) => ({ ...current, isSpeakerReady: !current.isSpeakerReady }));
@@ -502,6 +514,7 @@ export function useConsultationSession<TAppointment extends { id: string; notes?
     toggleMic,
     toggleSpeaker,
     setScreenSharing,
+    setCounterpartScreenSharing,
     sendMessage,
     addTranscriptTurn,
     receiveMessage: receiveRealtimeEvent,

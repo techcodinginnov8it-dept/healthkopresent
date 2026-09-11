@@ -30,6 +30,7 @@ import { useWebRTC } from "@/hooks/useWebRTC";
 import { formatDateTime, formatDate, formatTime, toLocalDateKey, toLocalTimeKey, toUtcIsoFromLocal } from "@/lib/dashboard/format";
 import { downloadPrescriptionPdf } from "@/lib/prescription-pdf";
 import { downloadConsultationTranscriptPdf, parseNotesAndTranscript } from "@/lib/consultation-transcript-pdf";
+import { downloadMedicalCertificatePdf } from "@/lib/medical-certificate-pdf";
 import { createDashboardNotification } from "@/lib/dashboard/notifications";
 import { DEFAULT_DURATION_MINUTES, getScheduleConflict, parseAvailability, isWithinDoctorAvailability, getOutsideAvailabilityMessage } from "@/lib/scheduling";
 import type {
@@ -41,9 +42,29 @@ import type {
   RealtimeEvent,
 } from "@/lib/dashboard/types";
 
+export type PatientMedicalCertificate = {
+  id: string;
+  certNumber: string;
+  purpose: string;
+  diagnosis: string | null;
+  remarks: string | null;
+  restDaysFrom: Date | string | null;
+  restDaysTo: Date | string | null;
+  issuedAt: Date | string;
+  consultationId?: string | null;
+  doctor: {
+    id?: string;
+    name: string;
+    specialty: string;
+    licenseNumber?: string | null;
+    npi?: string | null;
+  };
+};
+
 type Patient = DashboardPatient & {
   createdAt: Date;
   bookings: PatientAppointment[];
+  medicalCertificates?: PatientMedicalCertificate[];
 };
 
 type PatientDashboardClientProps = {
@@ -55,9 +76,9 @@ type PatientDashboardClientProps = {
 };
 
 type AppointmentFeedFilter = "all" | "pending" | "confirmed" | "completed" | "cancelled";
-type MedicalAccessTab = "summary" | "assessment" | "prescriptions" | "transcript";
+type MedicalAccessTab = "summary" | "assessment" | "prescriptions" | "certificates" | "transcript";
 type ConsultationTimelineFilter = "all" | "upcoming" | "past";
-type ConsultationHubTab = "prescriptions" | "notes" | "documents" | "requirements";
+type ConsultationHubTab = "prescriptions" | "certificates" | "notes" | "documents" | "requirements";
 
 const PATIENT_MODULES = [
   "overview",
@@ -84,6 +105,7 @@ const MEDICAL_ACCESS_TABS: { id: MedicalAccessTab; label: string }[] = [
   { id: "summary", label: "Summary" },
   { id: "assessment", label: "Assessment" },
   { id: "prescriptions", label: "Prescriptions" },
+  { id: "certificates", label: "Medical Certificate" },
   { id: "transcript", label: "Transcript" },
 ];
 
@@ -95,6 +117,7 @@ const CONSULTATION_TIMELINE_FILTERS: { id: ConsultationTimelineFilter; label: st
 
 const CONSULTATION_HUB_TABS: { id: ConsultationHubTab; label: string }[] = [
   { id: "prescriptions", label: "Prescriptions" },
+  { id: "certificates", label: "Medical Certificate" },
   { id: "notes", label: "Doctor's Notes" },
   { id: "documents", label: "Medical Documents" },
   { id: "requirements", label: "Requirements" },
@@ -300,6 +323,34 @@ function downloadTranscriptReport(appointment: PatientAppointment, patient?: Das
       ? `Electronic prescription issued:\n${appointment.prescription}`
       : "Follow doctor advice and schedule follow-up as instructed.",
     transcript: customTranscript,
+  });
+}
+
+function downloadPatientCertPdf(
+  cert: PatientMedicalCertificate,
+  patient?: DashboardPatient
+) {
+  const patientName = patient ? `${patient.firstName} ${patient.lastName}`.trim() : "Patient";
+  const patientAge = patient?.dob
+    ? Math.floor((Date.now() - new Date(patient.dob).getTime()) / (365.25 * 24 * 3600 * 1000))
+    : "Adult";
+
+  downloadMedicalCertificatePdf({
+    certNumber: cert.certNumber,
+    doctorName: cert.doctor.name,
+    doctorSpecialty: cert.doctor.specialty,
+    doctorLicense: cert.doctor.licenseNumber,
+    doctorNpi: cert.doctor.npi,
+    patientName,
+    patientAge,
+    patientGender: patient?.gender,
+    patientAddress: patient?.address ? `${patient.address}, ${patient.city || ""}` : undefined,
+    purpose: cert.purpose as "sick_leave" | "fitness_to_work" | "school" | "other",
+    diagnosis: cert.diagnosis,
+    remarks: cert.remarks,
+    restDaysFrom: cert.restDaysFrom,
+    restDaysTo: cert.restDaysTo,
+    issuedAt: cert.issuedAt,
   });
 }
 
@@ -537,7 +588,17 @@ function DoctorProfileModal({
             )}
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Doctor Profile</p>
-              <h2 id="doctor-profile-title" className="mt-1 text-2xl font-black text-slate-950">{doctor.name}</h2>
+              <div className="mt-1 flex items-center gap-2 min-w-0">
+                <h2 id="doctor-profile-title" className="text-2xl font-black text-slate-950 truncate">{doctor.name}</h2>
+                {doctor.isVerified && (
+                  <span title="Verified Doctor" className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-brand-teal">
+                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M12 2 3 7v6c0 5 4 9 9 9s9-4 9-9V7z" />
+                      <path d="m9 12 2 2 4-4" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                )}
+              </div>
               <p className="mt-1 text-sm font-bold text-slate-500">{doctor.specialty}</p>
             </div>
           </div>
@@ -548,7 +609,11 @@ function DoctorProfileModal({
 
         <div className="grid gap-4 p-5 md:grid-cols-3">
           {[
-            { label: "Verification", value: doctor.isVerified ? "Verified" : "Pending verification" },
+            {
+              label: "Verification",
+              value: doctor.isVerified ? "Verified Practitioner" : "Pending verification",
+              isVerified: doctor.isVerified,
+            },
             { label: "License", value: doctor.licenseNumber ? `${doctor.licenseNumber}${doctor.licenseState ? ` / ${doctor.licenseState}` : ""}` : "Not provided" },
             { label: "Experience", value: doctor.yearsExp ? `${doctor.yearsExp} years` : "Not provided" },
             { label: "Availability", value: doctor.availability || "Available by appointment" },
@@ -557,7 +622,17 @@ function DoctorProfileModal({
           ].map((item) => (
             <div key={item.label} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
               <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{item.label}</p>
-              <p className="mt-1 text-sm font-black text-slate-800">{item.value}</p>
+              <div className="mt-1 flex items-center gap-1.5">
+                {item.isVerified && (
+                  <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center text-brand-teal">
+                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M12 2 3 7v6c0 5 4 9 9 9s9-4 9-9V7z" />
+                      <path d="m9 12 2 2 4-4" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                )}
+                <p className="text-sm font-black text-slate-800">{item.value}</p>
+              </div>
             </div>
           ))}
         </div>
@@ -642,6 +717,7 @@ export default function PatientDashboardClient({
   const [profileDoctor, setProfileDoctor] = useState<DashboardDoctor | null>(null);
   const [selectedMedicalAppointmentId, setSelectedMedicalAppointmentId] = useState("");
   const [medicalAccessTab, setMedicalAccessTab] = useState<MedicalAccessTab>("summary");
+  const [rxSectionTab, setRxSectionTab] = useState<"prescriptions" | "certificates">("prescriptions");
   const [followUpActionId, setFollowUpActionId] = useState("");
   const [rescheduleAppointment, setRescheduleAppointment] = useState<PatientAppointment | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState("");
@@ -882,12 +958,18 @@ export default function PatientDashboardClient({
       setBlockedAppointment(null);
       setActiveModule("overview");
     },
+    onCounterpartScreenShareChange: (isSharing: boolean) => {
+      session.setCounterpartScreenSharing(isSharing);
+    },
   });
   const receiveRealtimeEvent = session.receiveRealtimeEvent;
   const handleToggleScreenShare = useCallback(async () => {
-    if (webRTC.isScreenSharing) {
-      await webRTC.stopScreenShare();
+    if (webRTC.isScreenSharing || session.isScreenSharing || session.counterpartScreenSharing) {
+      if (webRTC.isScreenSharing) {
+        await webRTC.stopScreenShare();
+      }
       session.setScreenSharing(false);
+      session.setCounterpartScreenSharing(false);
       return;
     }
 
@@ -896,6 +978,21 @@ export default function PatientDashboardClient({
       session.setScreenSharing(true);
     }
   }, [session, webRTC.isScreenSharing, webRTC.startScreenShare, webRTC.stopScreenShare]);
+
+  const handleDismissPresentation = useCallback(async () => {
+    if (webRTC.isScreenSharing) {
+      await webRTC.stopScreenShare();
+    }
+    session.setScreenSharing(false);
+    session.setCounterpartScreenSharing(false);
+  }, [session, webRTC]);
+
+  // Synchronize consultation session state when screen sharing is stopped via browser UI controls
+  useEffect(() => {
+    if (!webRTC.isScreenSharing && session.isScreenSharing) {
+      session.setScreenSharing(false);
+    }
+  }, [webRTC.isScreenSharing, session.isScreenSharing, session.setScreenSharing]);
 
   const handleCopyMedicalIdLink = useCallback(async () => {
     try {
@@ -1530,6 +1627,7 @@ export default function PatientDashboardClient({
           unreadCount={dashboardNotifications.unreadCount}
           onMarkAllRead={dashboardNotifications.markAllRead}
           onOpenNotifications={() => setActiveModule("notifications")}
+          onViewAppointments={() => setActiveModule("book")}
         />
       }
       collapsed={collapsed}
@@ -2407,6 +2505,7 @@ export default function PatientDashboardClient({
             onToggleCamera={session.toggleCamera}
             onToggleMic={session.toggleMic}
             onToggleScreenShare={handleToggleScreenShare}
+            onDismissPresentation={handleDismissPresentation}
             onEnd={handleRequestEndSession}
             localStream={webRTC.localStream}
             screenShareStream={webRTC.screenShareStream}
@@ -2799,6 +2898,57 @@ export default function PatientDashboardClient({
                             <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-700">{selectedAppointment.notes || "Doctor notes will appear here after clinical documentation is completed."}</p>
                           </div>
                         )}
+                        {consultationHubTab === "certificates" && (
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs font-black uppercase tracking-wider text-slate-500">Medical Certificate</p>
+                            </div>
+                            {(() => {
+                              const cert = (patient.medicalCertificates || []).find(
+                                (c) => c.consultationId === selectedAppointment.id || c.doctor?.id === selectedAppointment.doctor.id
+                              );
+                              if (!cert) {
+                                return (
+                                  <p className="text-sm font-semibold text-slate-600 leading-relaxed">
+                                    No medical certificate has been issued for this consultation yet. You may request one from your doctor during or following your consultation.
+                                  </p>
+                                );
+                              }
+                              return (
+                                <div className="space-y-3 rounded-lg border border-teal-200/80 bg-white p-4">
+                                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                    <div>
+                                      <span className="rounded-md bg-teal-50 px-2 py-0.5 text-[10px] font-black text-brand-teal border border-teal-200 mr-2">
+                                        {cert.certNumber}
+                                      </span>
+                                      <span className="text-xs font-bold text-slate-800">
+                                        {cert.purpose === "sick_leave" ? "Sick Leave / Medical Rest" : cert.purpose === "fitness_to_work" ? "Fitness to Return to Work" : cert.purpose === "school" ? "Academic Clearance" : "Medical Certificate"}
+                                      </span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => downloadPatientCertPdf(cert, patient)}
+                                      className="inline-flex items-center gap-1.5 rounded-lg bg-brand-teal px-3 py-1.5 text-xs font-black text-white hover:bg-teal-600 transition"
+                                    >
+                                      <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                        <polyline points="7 10 12 15 17 10" />
+                                        <line x1="12" y1="15" x2="12" y2="3" />
+                                      </svg>
+                                      Download PDF
+                                    </button>
+                                  </div>
+                                  {cert.diagnosis && (
+                                    <p className="text-xs text-slate-700"><strong>Diagnosis:</strong> {cert.diagnosis}</p>
+                                  )}
+                                  {(cert.restDaysFrom || cert.restDaysTo) && (
+                                    <p className="text-xs text-teal-800"><strong>Leave Period:</strong> {cert.restDaysFrom ? formatDate(cert.restDaysFrom) : "Start"} to {cert.restDaysTo ? formatDate(cert.restDaysTo) : "End"}</p>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
                         {consultationHubTab === "documents" && (
                           <div className="grid gap-3 md:grid-cols-2">
                             <button
@@ -2838,7 +2988,32 @@ export default function PatientDashboardClient({
                                   <p className="mt-0.5 text-[10px] font-semibold text-teal-700">E-Signed · DOH / FDA compliant</p>
                                 </div>
                               </button>
-                            ) : (
+                            ) : null}
+                            {(() => {
+                              const cert = (patient.medicalCertificates || []).find(
+                                (c) => c.consultationId === selectedAppointment.id || c.doctor?.id === selectedAppointment.doctor.id
+                              );
+                              if (!cert) return null;
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => downloadPatientCertPdf(cert, patient)}
+                                  className="flex items-center gap-3 rounded-xl border border-teal-200 bg-teal-50 p-4 text-left transition hover:border-teal-300 hover:bg-teal-100/60"
+                                >
+                                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-teal text-white">
+                                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                                      <path d="m9 12 2 2 4-4" />
+                                    </svg>
+                                  </span>
+                                  <div>
+                                    <p className="text-sm font-black text-teal-900">Official Medical Certificate PDF</p>
+                                    <p className="mt-0.5 text-[10px] font-semibold text-teal-700">{cert.certNumber} · {cert.purpose === "sick_leave" ? "Sick Leave" : "Medical Cert"}</p>
+                                  </div>
+                                </button>
+                              );
+                            })()}
+                            {!selectedAppointment.prescription && !(patient.medicalCertificates || []).some((c) => c.consultationId === selectedAppointment.id || c.doctor?.id === selectedAppointment.doctor.id) && (
                               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                                 <p className="text-sm font-black text-slate-950">Medical Documents</p>
                                 <p className="mt-2 text-xs font-semibold text-slate-500">Doctor-uploaded files and lab attachments will appear here when available.</p>
@@ -3065,6 +3240,86 @@ export default function PatientDashboardClient({
                     </section>
                   )}
 
+                  {medicalAccessTab === "certificates" && (
+                    <section className="space-y-4">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 space-y-4">
+                        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Official Medical Certificate</p>
+                            <h3 className="text-sm font-black text-slate-950">Doctor-Issued Certificate</h3>
+                          </div>
+                        </div>
+                        {(() => {
+                          const certsForAppt = (patient.medicalCertificates || []).filter(
+                            (c) => c.consultationId === selectedMedicalAppointment.id || c.doctor?.id === selectedMedicalAppointment.doctor.id
+                          );
+                          if (certsForAppt.length === 0) {
+                            return (
+                              <div className="rounded-lg bg-white border border-slate-200 p-5 text-center">
+                                <p className="text-sm font-black text-slate-500">No medical certificate issued</p>
+                                <p className="mt-1 text-xs font-semibold text-slate-400">
+                                  No medical certificate has been issued for this encounter. Ask your doctor if you need one.
+                                </p>
+                              </div>
+                            );
+                          }
+                          return certsForAppt.map((cert) => (
+                            <div key={cert.id} className="rounded-lg border border-teal-200/80 bg-white p-4 space-y-3">
+                              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="rounded-md bg-teal-50 px-2 py-0.5 text-[10px] font-black text-brand-teal border border-teal-200">
+                                      {cert.certNumber}
+                                    </span>
+                                    <span className="text-xs font-black text-slate-800">
+                                      {cert.purpose === "sick_leave" ? "Sick Leave / Medical Rest"
+                                        : cert.purpose === "fitness_to_work" ? "Fitness to Return to Work"
+                                        : cert.purpose === "school" ? "Academic / School Purpose"
+                                        : "Medical Certificate"}
+                                    </span>
+                                  </div>
+                                  <p className="mt-1 text-[11px] text-slate-500">Issued: {formatDate(cert.issuedAt)} · Dr. {cert.doctor.name}</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => downloadPatientCertPdf(cert, patient)}
+                                  className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-brand-teal px-3 py-2 text-xs font-black text-white hover:bg-teal-600 transition"
+                                >
+                                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="7 10 12 15 17 10" />
+                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                  </svg>
+                                  Download PDF
+                                </button>
+                              </div>
+                              {cert.diagnosis && (
+                                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Diagnosis / Condition</p>
+                                  <p className="mt-1 text-xs font-semibold text-slate-700">{cert.diagnosis}</p>
+                                </div>
+                              )}
+                              {(cert.restDaysFrom || cert.restDaysTo) && (
+                                <div className="rounded-lg border border-teal-100 bg-teal-50 p-3">
+                                  <p className="text-[10px] font-black uppercase tracking-wider text-brand-teal">Leave Period</p>
+                                  <p className="mt-1 text-xs font-black text-teal-900">
+                                    {cert.restDaysFrom ? formatDate(cert.restDaysFrom) : "—"} &ndash; {cert.restDaysTo ? formatDate(cert.restDaysTo) : "—"}
+                                  </p>
+                                </div>
+                              )}
+                              {cert.remarks && (
+                                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Remarks</p>
+                                  <p className="mt-1 text-xs font-semibold text-slate-700">{cert.remarks}</p>
+                                </div>
+                              )}
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </section>
+                  )}
+
                   {medicalAccessTab === "transcript" && (
                     <section className="space-y-4">
                       <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 space-y-4">
@@ -3204,11 +3459,25 @@ export default function PatientDashboardClient({
             <article key={doctor.id} className="rounded-xl border border-slate-200 bg-white p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-black text-slate-950">{doctor.name}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-black text-slate-950">{doctor.name}</p>
+                    {doctor.isVerified && (
+                      <span title="Verified Doctor" className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-brand-teal">
+                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                          <path d="M12 2 3 7v6c0 5 4 9 9 9s9-4 9-9V7z" />
+                          <path d="m9 12 2 2 4-4" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </span>
+                    )}
+                  </div>
                   <p className="mt-1 text-xs font-bold text-brand-teal">{doctor.specialty}</p>
                 </div>
                 {doctor.isVerified && (
-                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-700">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-teal-200 bg-teal-50 px-2 py-0.5 text-[10px] font-black uppercase text-teal-800">
+                    <svg className="h-3 w-3 text-brand-teal" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M12 2 3 7v6c0 5 4 9 9 9s9-4 9-9V7z" />
+                      <path d="m9 12 2 2 4-4" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                     Verified
                   </span>
                 )}

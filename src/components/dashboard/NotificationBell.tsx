@@ -58,11 +58,15 @@ function getKindMeta(kind?: string) {
 function NotificationItem({
   item,
   isDark,
+  role,
   onNotificationClick,
+  onViewAppointments,
 }: {
   item: DashboardNotification;
   isDark: boolean;
+  role: DashboardRole;
   onNotificationClick?: (n: DashboardNotification) => void;
+  onViewAppointments?: () => void;
 }) {
   const meta = getKindMeta(item.kind);
   const isBookingRequest =
@@ -104,25 +108,49 @@ function NotificationItem({
         {formatDateTime(item.createdAt)}
       </p>
 
-      {/* Clickable CTA for pending booking requests */}
-      {isBookingRequest && onNotificationClick && (
-        <button
-          type="button"
-          onClick={() => onNotificationClick(item)}
-          className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-black uppercase tracking-wider transition active:scale-[0.97] ${
-            isDark
-              ? "border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
-              : "border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100"
-          }`}
-        >
-          <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-            <circle cx="9" cy="7" r="4" />
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-          </svg>
-          View Patient &amp; Confirm / Reject
-        </button>
+      {/* Clickable CTA for booking notifications */}
+      {isBookingRequest && (
+        role === "doctor" ? (
+          /* Doctor: view patient data & confirm/reject */
+          onNotificationClick && (
+            <button
+              type="button"
+              onClick={() => onNotificationClick(item)}
+              className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-black uppercase tracking-wider transition active:scale-[0.97] ${
+                isDark
+                  ? "border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+                  : "border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100"
+              }`}
+            >
+              <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+              View Patient &amp; Confirm / Reject
+            </button>
+          )
+        ) : (
+          /* Patient: link to appointments section */
+          <button
+            type="button"
+            onClick={() => onViewAppointments?.()}
+            className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-black uppercase tracking-wider transition active:scale-[0.97] ${
+              isDark
+                ? "border-sky-500/40 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20"
+                : "border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100"
+            }`}
+          >
+            <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            View My Appointments
+          </button>
+        )
       )}
     </article>
   );
@@ -135,6 +163,7 @@ export function NotificationBell({
   onMarkAllRead,
   onOpenNotifications,
   onNotificationClick,
+  onViewAppointments,
   tone = "light",
 }: {
   role: DashboardRole;
@@ -143,6 +172,7 @@ export function NotificationBell({
   onMarkAllRead: () => void;
   onOpenNotifications: () => void;
   onNotificationClick?: (notification: DashboardNotification) => void;
+  onViewAppointments?: () => void;
   tone?: "light" | "dark";
 }) {
   const [open, setOpen] = useState(false);
@@ -255,9 +285,14 @@ export function NotificationBell({
                   key={item.id}
                   item={item}
                   isDark={isDark}
+                  role={role}
                   onNotificationClick={(n) => {
                     setOpen(false);
                     onNotificationClick?.(n);
+                  }}
+                  onViewAppointments={() => {
+                    setOpen(false);
+                    onViewAppointments?.();
                   }}
                 />
               ))
