@@ -118,6 +118,7 @@ export function DoctorNotesHub({
 
     downloadConsultationTranscriptPdf({
       appointmentId: appointment.id,
+      doctorId: doctor.id,
       doctorName: docName,
       doctorSpecialty: docSpecialty,
       doctorLicense: docLicense,
@@ -150,6 +151,7 @@ export function DoctorNotesHub({
 
     downloadPrescriptionPdf({
       appointmentId: appointment.id,
+      doctorId: doctor.id,
       doctorName: docName,
       doctorSpecialty: doctor.specialty || "General Medicine",
       doctorLicense: doctor.licenseNumber || "MD-ACTIVE",

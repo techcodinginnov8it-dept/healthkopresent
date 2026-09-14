@@ -82,10 +82,24 @@ export default async function DoctorDashboardPage({
       submittedAt: new Date(audit.submittedAt),
       updatedAt: new Date(audit.updatedAt),
     })),
+    medicalCertificates: (((doctor as any)?.medicalCertificates ?? []) as any[]).map((cert: any) => ({
+      ...cert,
+      issuedAt: cert.issuedAt instanceof Date ? cert.issuedAt.toISOString() : String(cert.issuedAt),
+      restDaysFrom: cert.restDaysFrom instanceof Date ? cert.restDaysFrom.toISOString() : cert.restDaysFrom ? String(cert.restDaysFrom) : null,
+      restDaysTo: cert.restDaysTo instanceof Date ? cert.restDaysTo.toISOString() : cert.restDaysTo ? String(cert.restDaysTo) : null,
+    })),
     createdAt: new Date((doctor as any)?.createdAt ?? Date.now()),
     consultFee: (doctor as any)?.consultFee !== null && (doctor as any)?.consultFee !== undefined ? Number((doctor as any).consultFee) : null,
     yearsExp: (doctor as any)?.yearsExp !== null && (doctor as any)?.yearsExp !== undefined ? Number((doctor as any).yearsExp) : null,
-    consultationDuration: (doctor as any)?.consultationDuration !== null && (doctor as any)?.consultationDuration !== undefined ? Number((doctor as any).consultationDuration) : 30,
+    consultationDuration: (() => {
+      const rawNum = (doctor as any)?.consultationDuration !== null && (doctor as any)?.consultationDuration !== undefined ? Number((doctor as any).consultationDuration) : 30;
+      const rawUnit = (doctor as any)?.consultationDurationUnit;
+      if (rawUnit === "hours" && rawNum <= 12) {
+        return Math.round(rawNum * 60);
+      }
+      return rawNum || 30;
+    })(),
+    consultationDurationUnit: "minutes",
   };
 
   const doctors = (doctorsRes.success ? doctorsRes.doctors || [] : [])

@@ -5,6 +5,12 @@
  * Supports multi-page output: content flows cleanly across pages with no cut-off medicines.
  */
 
+import {
+  getStoredDoctorSignature,
+  prepareSignatureForPdf,
+  type PdfSignatureImage,
+} from "./signature-pdf-helper";
+
 export interface PrescriptionPdfData {
   appointmentId?: string;
   doctorName: string;
@@ -21,6 +27,9 @@ export interface PrescriptionPdfData {
   diagnosis?: string | null;
   prescription: string;
   hasVerifiedSignature?: boolean;
+  doctorId?: string;
+  signatureDataUrl?: string | null;
+  signatureImage?: PdfSignatureImage | null;
 }
 
 function escapePdfText(value?: string | number | null): string {
@@ -156,7 +165,8 @@ function buildPageFooter(
   doctorNpi: string,
   pageNum: number,
   totalPages: number,
-  hasVerifiedSignature = false
+  hasVerifiedSignature = false,
+  signatureImage?: PdfSignatureImage | null
 ): string[] {
   const cmds: string[] = [];
 
@@ -177,15 +187,22 @@ function buildPageFooter(
 
   // E-Sign pill badge
   cmds.push("0.05 0.58 0.53 rg 355 144 140 14 re f");
-  if (hasVerifiedSignature) {
+  if (hasVerifiedSignature || signatureImage) {
     cmds.push("BT /F2 7 Tf 1 1 1 rg 358 148 Td (DIGITALLY SIGNED - VERIFIED ON FILE) Tj ET");
   } else {
     cmds.push("BT /F2 7 Tf 1 1 1 rg 360 148 Td (DIGITALLY E-SIGNED - AUTHENTIC) Tj ET");
   }
 
-  // Stylized cursive electronic signature
-  const displayDocName = doctorName.startsWith("Dr.") ? doctorName : `Dr. ${doctorName}`;
-  cmds.push(`BT /F3 18 Tf 0.08 0.22 0.48 rg 355 124 Td (${escapePdfText(displayDocName)}) Tj ET`);
+  // Signature (Clinical E-Signature image or stylized cursive fallback)
+  if (signatureImage) {
+    cmds.push("q");
+    cmds.push("170 0 0 25 355 118 cm");
+    cmds.push("/SigImg Do");
+    cmds.push("Q");
+  } else {
+    const displayDocName = doctorName.startsWith("Dr.") ? doctorName : `Dr. ${doctorName}`;
+    cmds.push(`BT /F3 18 Tf 0.08 0.22 0.48 rg 355 124 Td (${escapePdfText(displayDocName)}) Tj ET`);
+  }
 
   // Signature line
   cmds.push("0.2 0.3 0.4 RG 0.75 w");
@@ -448,7 +465,9 @@ export function generatePrescriptionPdf(data: PrescriptionPdfData): string {
       finalLicense,
       finalNpi,
       pageNum,
-      totalPages
+      totalPages,
+      Boolean(data.hasVerifiedSignature || data.signatureImage),
+      data.signatureImage
     );
     const stream = [...header, ...pageCommandsList[i], ...footer].join("\n");
     pageStreams.push(stream);
@@ -466,12 +485,18 @@ export function generatePrescriptionPdf(data: PrescriptionPdfData): string {
   const F4_ID = 6; // Times-Bold
   const FIRST_PAGE_OBJ = 7; // page objects 7..7+N-1
   const FIRST_CONTENT_OBJ = 7 + N; // content streams 7+N..7+2N-1
+  const SIG_IMAGE_ID = 7 + 2 * N;
+  const SIG_MASK_ID = 7 + 2 * N + 1;
 
   const pageObjIds = Array.from({ length: N }, (_, i) => FIRST_PAGE_OBJ + i);
   const contentObjIds = Array.from({ length: N }, (_, i) => FIRST_CONTENT_OBJ + i);
 
   const kidsList = pageObjIds.map((id) => `${id} 0 R`).join(" ");
   const fontResources = `/Font << /F1 ${F1_ID} 0 R /F2 ${F2_ID} 0 R /F3 ${F3_ID} 0 R /F4 ${F4_ID} 0 R >>`;
+  const xObjectResources = data.signatureImage
+    ? `/XObject << /SigImg ${SIG_IMAGE_ID} 0 R >>`
+    : "";
+  const pageResources = `<< ${fontResources} ${xObjectResources} >>`;
 
   const objects: { id: number; body: string }[] = [];
 
@@ -493,7 +518,7 @@ export function generatePrescriptionPdf(data: PrescriptionPdfData): string {
   for (let i = 0; i < N; i++) {
     objects.push({
       id: pageObjIds[i],
-      body: `<< /Type /Page /Parent ${PAGES_ID} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << ${fontResources} >> /Contents ${contentObjIds[i]} 0 R >>`,
+      body: `<< /Type /Page /Parent ${PAGES_ID} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources ${pageResources} /Contents ${contentObjIds[i]} 0 R >>`,
     });
   }
 
@@ -503,6 +528,21 @@ export function generatePrescriptionPdf(data: PrescriptionPdfData): string {
       id: contentObjIds[i],
       body: `<< /Length ${streamText.length} >>\nstream\n${streamText}\nendstream`,
     });
+  }
+
+  if (data.signatureImage) {
+    const hasMask = !!(data.signatureImage.maskHexStream && data.signatureImage.maskLength);
+    const smaskRef = hasMask ? ` /SMask ${SIG_MASK_ID} 0 R` : "";
+    objects.push({
+      id: SIG_IMAGE_ID,
+      body: `<< /Type /XObject /Subtype /Image /Width ${data.signatureImage.width} /Height ${data.signatureImage.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter [/ASCIIHexDecode /DCTDecode] /Length ${data.signatureImage.length}${smaskRef} >>\nstream\n${data.signatureImage.hexStream}endstream`,
+    });
+    if (hasMask) {
+      objects.push({
+        id: SIG_MASK_ID,
+        body: `<< /Type /XObject /Subtype /Image /Width ${data.signatureImage.width} /Height ${data.signatureImage.height} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length ${data.signatureImage.maskLength} >>\nstream\n${data.signatureImage.maskHexStream}endstream`,
+      });
+    }
   }
 
   // Sort by object id and serialize
@@ -532,10 +572,23 @@ export function generatePrescriptionPdf(data: PrescriptionPdfData): string {
   return pdf;
 }
 
-export function downloadPrescriptionPdf(data: PrescriptionPdfData, customFilename?: string): void {
+export async function downloadPrescriptionPdf(data: PrescriptionPdfData, customFilename?: string): Promise<void> {
   if (typeof window === "undefined") return;
 
-  const pdfString = generatePrescriptionPdf(data);
+  // Automatically attach active doctor signature from Settings if not already provided
+  let preparedSig = data.signatureImage;
+  if (!preparedSig) {
+    const rawSig = data.signatureDataUrl || getStoredDoctorSignature(data.doctorId);
+    if (rawSig) {
+      preparedSig = (await prepareSignatureForPdf(rawSig)) || undefined;
+    }
+  }
+
+  const pdfString = generatePrescriptionPdf({
+    ...data,
+    signatureImage: preparedSig,
+    hasVerifiedSignature: Boolean(data.hasVerifiedSignature || preparedSig),
+  });
   const blob = new Blob([pdfString], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");

@@ -24,6 +24,7 @@ interface Doctor {
   specialty: string;
   licenseNumber?: string | null;
   npi?: string | null;
+  medicalCertificates?: IssuedCert[];
   bookings: {
     patient: Patient;
     status: string;
@@ -89,19 +90,34 @@ const PURPOSE_LABELS: Record<string, string> = {
 export function MedicalCertificateHub({ doctor, tone }: { doctor: Doctor; tone: Tone }) {
   const isDark = tone === "dark";
 
-  // ── Issued certificates ─────────────────────────────────────────────────
-  const [certificates, setCertificates] = useState<IssuedCert[]>([]);
-  const [loadingCerts, setLoadingCerts] = useState(true);
+  // ── Issued certificates (use server-preloaded certificates if available) ──
+  const initialCerts = (doctor.medicalCertificates ?? []) as IssuedCert[];
+  const [certificates, setCertificates] = useState<IssuedCert[]>(initialCerts);
+  const [loadingCerts, setLoadingCerts] = useState(initialCerts.length === 0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [tab, setTab] = useState<"issue" | "history">("issue");
 
+  const refreshCertificates = (showSpinner = false) => {
+    if (showSpinner) setIsRefreshing(true);
+    getDoctorMedicalCertificates(doctor.id)
+      .then((res) => {
+        if (res.success && res.certificates) {
+          setCertificates(res.certificates as IssuedCert[]);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load medical certificates:", err);
+      })
+      .finally(() => {
+        setLoadingCerts(false);
+        setIsRefreshing(false);
+      });
+  };
+
   useEffect(() => {
-    getDoctorMedicalCertificates().then((res) => {
-      if (res.success && res.certificates) {
-        setCertificates(res.certificates as IssuedCert[]);
-      }
-      setLoadingCerts(false);
-    });
-  }, []);
+    // If no initial certs provided from server, or to sync background updates:
+    refreshCertificates(initialCerts.length === 0);
+  }, [doctor.id]);
 
   // ── Patient list from bookings ───────────────────────────────────────────
   const uniquePatients = (() => {
@@ -160,6 +176,7 @@ export function MedicalCertificateHub({ doctor, tone }: { doctor: Doctor; tone: 
       const pat = cert.patient;
       downloadMedicalCertificatePdf({
         certNumber: cert.certNumber,
+        doctorId: doctor.id,
         doctorName: doctor.name,
         doctorSpecialty: doctor.specialty,
         doctorLicense: doctor.licenseNumber,
@@ -370,10 +387,45 @@ export function MedicalCertificateHub({ doctor, tone }: { doctor: Doctor; tone: 
 
       {/* ── History ── */}
       {tab === "history" && (
-        <div className="space-y-3">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3 px-1">
+            <div className="flex items-center gap-2">
+              <h3 className={`text-sm font-black ${isDark ? "text-white" : "text-slate-900"}`}>
+                Certificate Archive
+              </h3>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${isDark ? "bg-brand-teal/15 text-brand-teal" : "bg-teal-100 text-teal-700"}`}>
+                {certificates.length} Total
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => refreshCertificates(true)}
+              disabled={isRefreshing}
+              className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition ${
+                isDark
+                  ? "border-slate-800 bg-slate-800/80 text-slate-300 hover:bg-slate-700 disabled:opacity-50"
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              }`}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin text-brand-teal" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                aria-hidden="true"
+              >
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+              </svg>
+              {isRefreshing ? "Syncing…" : "Refresh"}
+            </button>
+          </div>
+
           {loadingCerts ? (
             <div className={`rounded-2xl border p-12 text-center text-xs font-semibold ${card} ${isDark ? "text-slate-500" : "text-slate-400"}`}>
-              Loading certificates…
+              <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-brand-teal border-t-transparent mb-3" />
+              <p>Loading certificates…</p>
             </div>
           ) : certificates.length === 0 ? (
             <div className={`rounded-2xl border p-12 text-center ${card}`}>
@@ -427,6 +479,7 @@ export function MedicalCertificateHub({ doctor, tone }: { doctor: Doctor; tone: 
                       const pat = cert.patient;
                       downloadMedicalCertificatePdf({
                         certNumber: cert.certNumber,
+                        doctorId: doctor.id,
                         doctorName: cert.doctor.name,
                         doctorSpecialty: cert.doctor.specialty,
                         doctorLicense: cert.doctor.licenseNumber,

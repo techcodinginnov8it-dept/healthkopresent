@@ -239,6 +239,18 @@ export type ChatAttachment = {
   dataUrl?: string;
 };
 
+export type ArticleComment = {
+  id: string;
+  articleId: string;
+  authorId: string;
+  authorName: string;
+  authorSpecialty: string;
+  authorImage?: string | null;
+  content: string;
+  createdAt: string;
+  likesCount?: number;
+};
+
 export type DoctorArticleCategory = "guide" | "tip" | "research" | "update";
 
 export type DoctorArticle = {
@@ -265,4 +277,6 @@ export type DoctorArticle = {
   viewsCount: number;
   likesCount: number;
   isPeerArticle?: boolean;
+  commentsCount?: number;
+  comments?: ArticleComment[];
 };

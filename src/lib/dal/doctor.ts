@@ -32,6 +32,40 @@ export const getDoctorDashboardData = cache(async () => {
       status: true,
       isVerified: true,
       createdAt: true,
+      medicalCertificates: {
+        orderBy: { issuedAt: "desc" },
+        select: {
+          id: true,
+          certNumber: true,
+          purpose: true,
+          diagnosis: true,
+          remarks: true,
+          restDaysFrom: true,
+          restDaysTo: true,
+          issuedAt: true,
+          patient: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              dob: true,
+              gender: true,
+              address: true,
+              city: true,
+              state: true,
+            },
+          },
+          doctor: {
+            select: {
+              id: true,
+              name: true,
+              specialty: true,
+              licenseNumber: true,
+              npi: true,
+            },
+          },
+        },
+      },
       bookings: {
         orderBy: { scheduledAt: "asc" },
         select: {

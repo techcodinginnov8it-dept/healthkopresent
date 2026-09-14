@@ -510,6 +510,7 @@ function PatientOperationsHub({
 
     downloadPrescriptionPdf({
       appointmentId: appointment.id,
+      doctorId: doctor?.id,
       doctorName: docName,
       doctorSpecialty: docSpecialty,
       doctorLicense: docLicense,
@@ -1574,6 +1575,7 @@ export default function DoctorDashboardClient({
   });
   const [doctorAvailability, setDoctorAvailability] = useState(doctor.availability);
   const [doctorStatus, setDoctorStatus] = useState<DoctorStatusValue>(normalizeDoctorStatus(doctor.status));
+  const [doctorDuration, setDoctorDuration] = useState<number>(doctor.consultationDuration ?? 30);
   const [isUpdatingStatus, startStatusTransition] = useTransition();
   const [isSavingVitals, setIsSavingVitals] = useState(false);
   const [toasts, setToasts] = useState<{ id: string; tone: "success" | "error"; message: string }[]>([]);
@@ -2588,116 +2590,467 @@ export default function DoctorDashboardClient({
         />
       )}
 
-      {activeModule === "overview" && (
-        <div className="space-y-5">
-          {/* Doctor overview stats - compact 3-col on mobile */}
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { label: "Pending", value: pendingAppointments.length, helper: "Awaiting response", color: "text-amber-500", border: "border-amber-500/20", bg: "bg-amber-500/10" },
-              { label: "Confirmed", value: confirmedAppointments.length, helper: "Scheduled visits", color: "text-emerald-500", border: "border-emerald-500/20", bg: "bg-emerald-500/10" },
-              { label: "Patients", value: patients.length, helper: "Total active", color: "text-brand-teal", border: "border-brand-teal/20", bg: "bg-brand-teal/10" },
-            ].map((stat) => (
-              <div
-                key={stat.label}
-                className={`rounded-2xl border p-4 transition-colors ${
-                  isDark ? `${stat.border} ${stat.bg}` : "border-slate-200 bg-white shadow-xs"
-                }`}
-              >
-                <p className={`text-2xl font-black ${stat.color}`}>{stat.value}</p>
-                <p className={`mt-0.5 text-[10px] font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>{stat.label}</p>
-                <p className={`mt-0.5 hidden text-[10px] font-medium sm:block ${isDark ? "text-slate-500" : "text-slate-400"}`}>{stat.helper}</p>
-              </div>
-            ))}
-          </div>
+      {activeModule === "overview" && (() => {
+        const totalCertificatesCount = ((doctor as any).medicalCertificates ?? []).length;
+        const totalPrescriptionsCount = prescriptions.length;
+        const estimatedRevenue = ((doctor.consultFee ?? 1500) * completedConsultations.length);
 
-          <section className={`overflow-hidden rounded-2xl border transition-colors ${
-            isDark ? "border-slate-800 bg-slate-900/80" : "border-slate-200 bg-white shadow-xs"
-          }`}>
-            <div className={`flex items-center justify-between gap-3 border-b px-5 py-4 ${
-              isDark ? "border-slate-800/80" : "border-slate-100"
+        return (
+          <div className="space-y-6">
+            {/* ── Welcome & Practice Status Header ── */}
+            <div className={`overflow-hidden rounded-2xl border p-5 transition-colors ${
+              isDark ? "border-slate-800 bg-slate-900/90" : "border-slate-200 bg-white shadow-xs"
             }`}>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-brand-teal">Today&apos;s Queue</p>
-                <h2 className={`mt-0.5 text-lg font-black ${isDark ? "text-white" : "text-slate-900"}`}>Clinical Queue</h2>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3.5">
+                  <div className="grid h-13 w-13 shrink-0 place-items-center rounded-2xl bg-brand-teal/15 text-lg font-black text-brand-teal">
+                    {doctor.image ? (
+                      <img src={doctor.image} alt={doctor.name} className="h-full w-full rounded-2xl object-cover" />
+                    ) : (
+                      doctor.name.split(" ").map((n) => n[0]).slice(0, 2).join("")
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h1 className={`text-lg font-black ${isDark ? "text-white" : "text-slate-900"}`}>
+                        Welcome back, Dr. {doctor.name}
+                      </h1>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-brand-teal/30 bg-brand-teal/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-brand-teal">
+                        <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                          <path d="m9 12 2 2 4-4" />
+                        </svg>
+                        Verified MD
+                      </span>
+                    </div>
+                    <p className={`mt-0.5 text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                      {doctor.specialty.replace(/_/g, " ")} · PRC: {doctor.licenseNumber || "Verified"} · NPI: {doctor.npi}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Right controls: today's clinical date indicator */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className={`flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-bold ${
+                    isDark ? "border-slate-800 bg-slate-800/60 text-slate-300" : "border-slate-200 bg-slate-50 text-slate-700"
+                  }`}>
+                    <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+                    <span>
+                      {new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <span className={`rounded-xl border px-3 py-1.5 text-xs font-black ${
-                isDark ? "border-slate-700 bg-slate-800 text-slate-300" : "border-slate-200 bg-slate-50 text-slate-600"
-              }`}>
-                {confirmedAppointments.length} visits
-              </span>
             </div>
-            <div className={`divide-y ${isDark ? "divide-slate-800/60" : "divide-slate-100"}`}>
-              {confirmedAppointments.length ? (
-                confirmedAppointments.map((booking) => {
-                  const patientAgeText = getPatientAge(booking.patient.dob);
-                  const patientGenderText = booking.patient.gender
-                    ? booking.patient.gender.charAt(0).toUpperCase() + booking.patient.gender.slice(1).toLowerCase()
-                    : "Unspecified";
-                  const patientInfo =
-                    patientAgeText === "Age unavailable" ? patientAgeText : `${patientAgeText} old`;
 
-                  return (
-                    <article
-                      key={booking.id}
-                      className={`group p-4 transition-colors ${isDark ? "hover:bg-slate-800/40" : "hover:bg-slate-50/70"}`}
-                    >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-start gap-3 min-w-0 flex-1">
-                          {/* Patient avatar */}
-                          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-teal/15 text-sm font-black text-brand-teal">
-                            {booking.patient.firstName?.[0]}{booking.patient.lastName?.[0]}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h3 className={`text-sm font-black ${isDark ? "text-white" : "text-slate-900"}`}>
-                                {booking.patient.firstName} {booking.patient.lastName}
-                              </h3>
-                              <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${getStatusClasses(booking.status)}`}>
-                                {booking.status}
-                              </span>
+            {/* ── Executive 6-Pillar KPI Stat Grid ── */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              {[
+                {
+                  label: "Confirmed Queue",
+                  value: confirmedAppointments.length,
+                  helper: "Scheduled visits",
+                  icon: "calendar",
+                  color: "text-emerald-500",
+                  bg: "bg-emerald-500/10",
+                  border: "border-emerald-500/20",
+                  module: "schedule" as DoctorModuleId,
+                },
+                {
+                  label: "Pending Intake",
+                  value: pendingAppointments.length,
+                  helper: pendingAppointments.length > 0 ? "Action required" : "All cleared",
+                  icon: "clock",
+                  color: pendingAppointments.length > 0 ? "text-amber-500" : "text-slate-400",
+                  bg: pendingAppointments.length > 0 ? "bg-amber-500/10" : isDark ? "bg-slate-800/50" : "bg-slate-50",
+                  border: pendingAppointments.length > 0 ? "border-amber-500/30" : "border-slate-200",
+                  module: "schedule" as DoctorModuleId,
+                },
+                {
+                  label: "Total Patients",
+                  value: patients.length,
+                  helper: "Active directory",
+                  icon: "users",
+                  color: "text-brand-teal",
+                  bg: "bg-brand-teal/10",
+                  border: "border-brand-teal/20",
+                  module: "patients" as DoctorModuleId,
+                },
+                {
+                  label: "Completed Visits",
+                  value: completedConsultations.length,
+                  helper: "Past encounters",
+                  icon: "check",
+                  color: "text-blue-500",
+                  bg: "bg-blue-500/10",
+                  border: "border-blue-500/20",
+                  module: "notes" as DoctorModuleId,
+                },
+                {
+                  label: "Prescriptions",
+                  value: totalPrescriptionsCount,
+                  helper: "Digital Rx issued",
+                  icon: "pill",
+                  color: "text-purple-500",
+                  bg: "bg-purple-500/10",
+                  border: "border-purple-500/20",
+                  module: "prescriptions" as DoctorModuleId,
+                },
+                {
+                  label: "Medical Certs",
+                  value: totalCertificatesCount,
+                  helper: "Archived records",
+                  icon: "file",
+                  color: "text-amber-600",
+                  bg: "bg-amber-600/10",
+                  border: "border-amber-600/20",
+                  module: "certificates" as DoctorModuleId,
+                },
+              ].map((stat) => (
+                <button
+                  key={stat.label}
+                  type="button"
+                  onClick={() => setActiveModule(stat.module)}
+                  className={`group relative flex flex-col justify-between rounded-2xl border p-4 text-left transition-all hover:scale-[1.02] active:scale-[0.98] ${
+                    isDark ? `${stat.border} ${stat.bg}` : "border-slate-200 bg-white shadow-xs hover:border-slate-300"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <p className={`text-2xl font-black ${stat.color}`}>{stat.value}</p>
+                      <span className={`text-xs opacity-60 transition group-hover:translate-x-0.5 ${stat.color}`}>→</span>
+                    </div>
+                    <p className={`mt-1 text-[10px] font-black uppercase tracking-wider ${isDark ? "text-slate-300" : "text-slate-600"}`}>
+                      {stat.label}
+                    </p>
+                  </div>
+                  <p className={`mt-2 text-[10px] font-semibold ${isDark ? "text-slate-400" : "text-slate-400"}`}>
+                    {stat.helper}
+                  </p>
+                </button>
+              ))}
+            </div>
+
+            {/* ── Pending Requests Alert Banner (if any) ── */}
+            {pendingAppointments.length > 0 && (
+              <div className={`overflow-hidden rounded-2xl border p-4 transition-colors ${
+                isDark ? "border-amber-500/30 bg-amber-500/10" : "border-amber-200 bg-amber-50/80"
+              }`}>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-500/20 text-amber-500">
+                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-wider text-amber-600">Action Required</p>
+                      <p className={`text-sm font-black ${isDark ? "text-amber-200" : "text-amber-900"}`}>
+                        {pendingAppointments.length} pending appointment {pendingAppointments.length === 1 ? "request" : "requests"} awaiting approval
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveModule("schedule")}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:bg-amber-600"
+                  >
+                    Review Schedule Requests
+                    <span>→</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Two-Column Clinical Master Grid ── */}
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+              {/* Left 2 Columns: Queue & Encounters */}
+              <div className="space-y-6 lg:col-span-2">
+                {/* Section: Confirmed Clinical Queue */}
+                <section className={`overflow-hidden rounded-2xl border transition-colors ${
+                  isDark ? "border-slate-800 bg-slate-900/80" : "border-slate-200 bg-white shadow-xs"
+                }`}>
+                  <div className={`flex items-center justify-between gap-3 border-b px-5 py-4 ${
+                    isDark ? "border-slate-800/80" : "border-slate-100"
+                  }`}>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.22em] text-brand-teal">Clinical Schedule</p>
+                      <h2 className={`mt-0.5 text-base font-black ${isDark ? "text-white" : "text-slate-900"}`}>Upcoming Queue</h2>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`rounded-xl border px-3 py-1 text-xs font-black ${
+                        isDark ? "border-slate-700 bg-slate-800 text-slate-300" : "border-slate-200 bg-slate-50 text-slate-600"
+                      }`}>
+                        {confirmedAppointments.length} confirmed
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setActiveModule("schedule")}
+                        className="text-xs font-bold text-brand-teal hover:underline"
+                      >
+                        View Full Calendar →
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className={`divide-y ${isDark ? "divide-slate-800/60" : "divide-slate-100"}`}>
+                    {confirmedAppointments.length ? (
+                      confirmedAppointments.slice(0, 4).map((booking) => {
+                        const patientAgeText = getPatientAge(booking.patient.dob);
+                        const patientGenderText = booking.patient.gender
+                          ? booking.patient.gender.charAt(0).toUpperCase() + booking.patient.gender.slice(1).toLowerCase()
+                          : "Unspecified";
+
+                        return (
+                          <article
+                            key={booking.id}
+                            className={`p-4 transition-colors ${isDark ? "hover:bg-slate-800/40" : "hover:bg-slate-50/70"}`}
+                          >
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="flex items-start gap-3 min-w-0 flex-1">
+                                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-teal/15 text-xs font-black text-brand-teal">
+                                  {booking.patient.firstName?.[0]}{booking.patient.lastName?.[0]}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <h3 className={`text-sm font-black ${isDark ? "text-white" : "text-slate-900"}`}>
+                                      {booking.patient.firstName} {booking.patient.lastName}
+                                    </h3>
+                                    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase ${getStatusClasses(booking.status)}`}>
+                                      {booking.status}
+                                    </span>
+                                  </div>
+                                  <p className={`mt-0.5 text-xs font-medium ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                                    {patientAgeText} · {patientGenderText}
+                                  </p>
+                                  {booking.reason && (
+                                    <p className={`mt-1 line-clamp-1 text-xs font-medium ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                                      {booking.reason}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex shrink-0 items-center justify-between gap-3 sm:flex-col sm:items-end">
+                                <div className={`rounded-xl border px-2.5 py-1 text-right ${
+                                  isDark ? "border-slate-700/80 bg-slate-800/60" : "border-slate-200 bg-slate-50"
+                                }`}>
+                                  <p className={`text-[11px] font-black ${isDark ? "text-white" : "text-slate-900"}`}>
+                                    {formatDateTime(booking.scheduledAt)}
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => startLiveSession(booking)}
+                                  className="rounded-xl bg-brand-red px-3.5 py-1.5 text-xs font-black text-white shadow-xs transition hover:bg-brand-red/90"
+                                >
+                                  Start Call
+                                </button>
+                              </div>
                             </div>
-                            <p className={`mt-0.5 text-xs font-medium ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                              {patientInfo} · {patientGenderText}
-                            </p>
-                            {booking.reason && (
-                              <p className={`mt-1 line-clamp-2 text-xs font-medium leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>
-                                {booking.reason}
-                              </p>
-                            )}
-                          </div>
-                        </div>
+                          </article>
+                        );
+                      })
+                    ) : (
+                      <div className="p-6 text-center">
+                        <EmptyState tone={tone} title="No confirmed visits" body="Accepted appointments will appear in your clinical queue." />
+                      </div>
+                    )}
+                  </div>
+                </section>
 
-                        {/* Time + CTA row */}
-                        <div className={`flex shrink-0 items-center justify-between gap-3 border-t pt-3 sm:border-t-0 sm:pt-0 sm:flex-col sm:items-end ${
-                          isDark ? "border-slate-800/80" : "border-slate-100"
-                        }`}>
-                          <div className={`rounded-xl border px-3 py-1.5 text-left sm:text-right ${
-                            isDark ? "border-slate-700/80 bg-slate-800/60" : "border-slate-200 bg-slate-50"
-                          }`}>
-                            <p className="text-[9px] font-black uppercase tracking-wide text-brand-teal">Scheduled</p>
-                            <p className={`mt-0.5 text-xs font-black ${isDark ? "text-white" : "text-slate-900"}`}>{formatDateTime(booking.scheduledAt)}</p>
+                {/* Section: Recent Completed Encounters */}
+                <section className={`overflow-hidden rounded-2xl border transition-colors ${
+                  isDark ? "border-slate-800 bg-slate-900/80" : "border-slate-200 bg-white shadow-xs"
+                }`}>
+                  <div className={`flex items-center justify-between gap-3 border-b px-5 py-4 ${
+                    isDark ? "border-slate-800/80" : "border-slate-100"
+                  }`}>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.22em] text-brand-teal">EHR History</p>
+                      <h2 className={`mt-0.5 text-base font-black ${isDark ? "text-white" : "text-slate-900"}`}>Recent Consultations</h2>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveModule("notes")}
+                      className="text-xs font-bold text-brand-teal hover:underline"
+                    >
+                      View All Records ({completedConsultations.length}) →
+                    </button>
+                  </div>
+
+                  <div className={`divide-y ${isDark ? "divide-slate-800/60" : "divide-slate-100"}`}>
+                    {completedConsultations.length ? (
+                      completedConsultations.slice(0, 3).map((booking) => (
+                        <div key={booking.id} className="p-4 flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-3 min-w-0 flex-1">
+                            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-500/15 text-xs font-black text-blue-500">
+                              ✓
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className={`text-sm font-black ${isDark ? "text-white" : "text-slate-900"}`}>
+                                {booking.patient.firstName} {booking.patient.lastName}
+                              </p>
+                              <p className={`text-xs font-medium ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                                Concluded on {formatDateTime(booking.scheduledAt)}
+                              </p>
+                              {booking.notes && (
+                                <p className={`mt-1 line-clamp-1 text-xs italic ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                                  &quot;{booking.notes.split("\n")[0]}&quot;
+                                </p>
+                              )}
+                              {(booking.bloodPressure || booking.heartRate || booking.bodyTemperature) && (
+                                <div className="mt-1.5 flex flex-wrap gap-2 text-[10px] font-semibold text-slate-500">
+                                  {booking.bloodPressure && <span>BP: {booking.bloodPressure}</span>}
+                                  {booking.heartRate && <span>HR: {booking.heartRate} bpm</span>}
+                                  {booking.bodyTemperature && <span>Temp: {booking.bodyTemperature}°C</span>}
+                                </div>
+                              )}
+                            </div>
                           </div>
                           <button
                             type="button"
-                            onClick={() => startLiveSession(booking)}
-                            className="rounded-xl bg-brand-red px-4 py-2 text-xs font-black text-white shadow-sm shadow-brand-red/30 transition hover:opacity-90 active:scale-[0.98]"
+                            onClick={() => setActiveModule("notes")}
+                            className={`rounded-xl border px-3 py-1.5 text-xs font-bold transition ${
+                              isDark ? "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700" : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+                            }`}
                           >
-                            Start Consultation
+                            View Notes
                           </button>
                         </div>
+                      ))
+                    ) : (
+                      <div className="p-6 text-center text-xs font-medium text-slate-400">
+                        No completed consultations yet.
                       </div>
-                    </article>
-                  );
-                })
-              ) : (
-                <div className="p-5">
-                  <EmptyState tone={tone} title="No confirmed visits" body="Accepted appointments appear in the clinical queue." />
+                    )}
+                  </div>
+                </section>
+              </div>
+
+              {/* Right Column: Practice Hub & Quick Navigation */}
+              <div className="space-y-6">
+                {/* Practice Metrics Snapshot */}
+                <div className={`overflow-hidden rounded-2xl border p-5 transition-colors ${
+                  isDark ? "border-slate-800 bg-slate-900/80" : "border-slate-200 bg-white shadow-xs"
+                }`}>
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-brand-teal">Practice Summary</p>
+                  <h3 className={`mt-0.5 text-sm font-black ${isDark ? "text-white" : "text-slate-900"}`}>
+                    Clinical &amp; Billing Metrics
+                  </h3>
+
+                  <div className="mt-4 space-y-3">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className={isDark ? "text-slate-400" : "text-slate-500"}>Consultation Fee</span>
+                      <span className={`font-black ${isDark ? "text-white" : "text-slate-900"}`}>
+                        ₱{(doctor.consultFee ?? 1500).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className={isDark ? "text-slate-400" : "text-slate-500"}>Est. Completed Gross</span>
+                      <span className="font-black text-emerald-500">
+                        ₱{estimatedRevenue.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className={isDark ? "text-slate-400" : "text-slate-500"}>Appointment Duration</span>
+                      <span className={`font-black ${isDark ? "text-white" : "text-slate-900"}`}>
+                        {doctorDuration} minutes
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className={isDark ? "text-slate-400" : "text-slate-500"}>Physician Rating</span>
+                      <span className="font-black text-amber-500">
+                        ★ {doctor.rating && doctor.rating > 0 ? doctor.rating.toFixed(1) : "5.0"} ({doctor.reviewCount ?? 0} reviews)
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className={isDark ? "text-slate-400" : "text-slate-500"}>Schedule Hours</span>
+                      <span className={`font-semibold ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                        {doctorAvailability || "Mon - Sat, 9:00 AM - 5:00 PM"}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              )}
+
+                {/* Recent Patients Snapshot */}
+                <div className={`overflow-hidden rounded-2xl border p-5 transition-colors ${
+                  isDark ? "border-slate-800 bg-slate-900/80" : "border-slate-200 bg-white shadow-xs"
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.22em] text-brand-teal">Patient Directory</p>
+                      <h3 className={`mt-0.5 text-sm font-black ${isDark ? "text-white" : "text-slate-900"}`}>
+                        Recent Patients
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveModule("patients")}
+                      className="text-xs font-bold text-brand-teal hover:underline"
+                    >
+                      View All ({patients.length}) →
+                    </button>
+                  </div>
+
+                  <div className={`mt-4 divide-y ${isDark ? "divide-slate-800/60" : "divide-slate-100"}`}>
+                    {patients.length ? (
+                      patients.slice(0, 4).map((p) => {
+                        const ageText = getPatientAge(p.dob);
+                        const genderText = p.gender
+                          ? p.gender.charAt(0).toUpperCase() + p.gender.slice(1).toLowerCase()
+                          : "Patient";
+
+                        return (
+                          <div
+                            key={p.id}
+                            className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-teal/10 text-xs font-black text-brand-teal">
+                                {p.firstName?.[0]}{p.lastName?.[0]}
+                              </div>
+                              <div className="min-w-0">
+                                <p className={`truncate text-xs font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
+                                  {p.firstName} {p.lastName}
+                                </p>
+                                <p className={`text-[11px] font-medium ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                                  {ageText} · {genderText}
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedPatientId(p.id);
+                                setActiveModule("patients");
+                              }}
+                              className={`shrink-0 rounded-lg border px-2.5 py-1 text-[11px] font-bold transition ${
+                                isDark
+                                  ? "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
+                                  : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                              }`}
+                            >
+                              Profile
+                            </button>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <p className="py-4 text-center text-xs font-medium text-slate-400">
+                        No registered patients yet.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
-          </section>
-        </div>
-      )}
+          </div>
+        );
+      })()}
+
 
       {activeModule === "live" && (
         session.activeAppointment ? (
@@ -2759,7 +3112,7 @@ export default function DoctorDashboardClient({
             connectionState={webRTC.connectionState}
             mediaError={webRTC.error}
             screenShareSupported={webRTC.screenShareSupported}
-            scheduledDurationMinutes={session.activeAppointment.duration || doctor.consultationDuration || 30}
+            scheduledDurationMinutes={session.activeAppointment.duration || doctorDuration || 30}
             onExtendCall={handleExtendCall}
             externalExtendedMinutes={callExtendedMinutes}
             appointmentId={session.activeAppointment.id}
@@ -3136,6 +3489,7 @@ export default function DoctorDashboardClient({
                             : "Patient";
                           downloadPrescriptionPdf({
                             appointmentId: apt?.id,
+                            doctorId: doctor?.id,
                             doctorName: doctor.name,
                             doctorSpecialty: doctor.specialty,
                             doctorLicense: doctor.licenseNumber,
@@ -3570,7 +3924,7 @@ export default function DoctorDashboardClient({
             anchorDate={calendarAnchorDate}
             onAnchorDateChange={setCalendarAnchorDate}
             availability={doctorAvailability}
-            consultationDuration={doctor.consultationDuration ?? 30}
+            consultationDuration={doctorDuration}
             onConfirmAppointment={(appointment) => handleAccept(appointment.id)}
             onCancelAppointment={(appointment) => handleCancel(appointment.id)}
             onCompleteConsultation={(appointment) => handleCompleteConsultationDirect(appointment.id)}
@@ -3709,12 +4063,15 @@ export default function DoctorDashboardClient({
       {activeModule === "settings" && (
         <DoctorSettingsModule
           tone={tone}
-          doctor={{ ...doctor, availability: doctorAvailability, status: doctorStatus }}
+          doctor={{ ...doctor, availability: doctorAvailability, status: doctorStatus, consultationDuration: doctorDuration }}
           onProfileImageChange={(image) => setSidebarImage(image || null)}
           onToast={showToast}
-          onProfileUpdated={({ availability, status }) => {
+          onProfileUpdated={({ availability, status, consultationDuration }) => {
             setDoctorAvailability(availability);
             setDoctorStatus(normalizeDoctorStatus(status));
+            if (consultationDuration) {
+              setDoctorDuration(consultationDuration);
+            }
             showToast("success", "Availability updated and schedule calendar synchronized.");
             realtime.publish({
               type: "doctor:availability-updated",

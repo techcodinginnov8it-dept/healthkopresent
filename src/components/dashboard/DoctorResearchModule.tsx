@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef } from "react";
-import type { DashboardDoctor, DoctorArticle, DoctorArticleCategory } from "@/lib/dashboard/types";
+import type { DashboardDoctor, DoctorArticle, DoctorArticleCategory, ArticleComment } from "@/lib/dashboard/types";
 
 type ViewTab = "my_publications" | "peer_network";
 
@@ -313,6 +313,109 @@ Atopic eczema is fundamentally characterized by epidermal barrier dysfunction, o
   ];
 }
 
+function formatRelativeCommentTime(isoDate: string): string {
+  try {
+    const diffMs = Date.now() - new Date(isoDate).getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return formatPublishDate(isoDate);
+  } catch {
+    return "";
+  }
+}
+
+function getInitialArticleComments(): Record<string, ArticleComment[]> {
+  return {
+    "art-my-1": [
+      {
+        id: "c-my1-1",
+        articleId: "art-my-1",
+        authorId: "peer-doc-1",
+        authorName: "Dr. Marcus Vance, MD, FACC",
+        authorSpecialty: "Cardiology",
+        content: "Outstanding guide! We have observed that having patients log both morning and evening blood pressures into the portal reduces white-coat hypertension false positives by over 40%.",
+        createdAt: "2026-09-06T10:30:00.000Z",
+        likesCount: 5,
+      },
+      {
+        id: "c-my1-2",
+        articleId: "art-my-1",
+        authorId: "peer-doc-3",
+        authorName: "Dr. Elena Rodriguez, MD",
+        authorSpecialty: "Endocrinology",
+        content: "Crucial point on sodium restriction. In our diabetic nephropathy cohort, pairing the DASH framework with potassium monitoring gave the best long-term eGFR stability.",
+        createdAt: "2026-09-07T14:15:00.000Z",
+        likesCount: 3,
+      },
+    ],
+    "art-my-2": [
+      {
+        id: "c-my2-1",
+        articleId: "art-my-2",
+        authorId: "peer-doc-2",
+        authorName: "Dr. Sarah Jenkins, MD",
+        authorSpecialty: "Family Medicine",
+        content: "Post-meal ambulation is so underappreciated. Just a brief 10-minute walk noticeably dampens the 1-hour postprandial glucose spike.",
+        createdAt: "2026-09-02T11:20:00.000Z",
+        likesCount: 4,
+      },
+    ],
+    "art-my-3": [
+      {
+        id: "c-my3-1",
+        articleId: "art-my-3",
+        authorId: "peer-doc-4",
+        authorName: "Dr. David Kim, MD",
+        authorSpecialty: "Pulmonology",
+        content: "These adherence statistics mirror what we found in our asthmatic follow-up cohort. Electronic prescription integration in the live room removes the friction of pharmacy delays.",
+        createdAt: "2026-08-27T16:45:00.000Z",
+        likesCount: 7,
+      },
+    ],
+    "art-peer-1": [
+      {
+        id: "c-peer1-1",
+        articleId: "art-peer-1",
+        authorId: "peer-doc-2",
+        authorName: "Dr. Sarah Jenkins, MD",
+        authorSpecialty: "Family Medicine",
+        content: "Single-lead smartwatch ECGs have alerted at least three of our asymptomatic elderly patients to paroxysmal AFib this quarter. Very timely publication, Dr. Vance.",
+        createdAt: "2026-09-04T09:10:00.000Z",
+        likesCount: 6,
+      },
+    ],
+    "art-peer-2": [
+      {
+        id: "c-peer2-1",
+        articleId: "art-peer-2",
+        authorId: "peer-doc-1",
+        authorName: "Dr. Marcus Vance, MD, FACC",
+        authorSpecialty: "Cardiology",
+        content: "Strongly agree with prioritizing protein timing in geriatric populations to prevent sarcopenia, especially when reducing carbohydrate intake.",
+        createdAt: "2026-09-01T13:40:00.000Z",
+        likesCount: 4,
+      },
+    ],
+    "art-peer-3": [
+      {
+        id: "c-peer3-1",
+        articleId: "art-peer-3",
+        authorId: "peer-doc-3",
+        authorName: "Dr. Elena Rodriguez, MD",
+        authorSpecialty: "Endocrinology",
+        content: "TIR (Time in Range) has truly supplanted isolated A1c tests in our clinical consultations. Patients feel much more empowered seeing real-time trend arrows.",
+        createdAt: "2026-08-29T15:00:00.000Z",
+        likesCount: 8,
+      },
+    ],
+  };
+}
+
 export function DoctorResearchModule({
   doctor,
   tone = "light",
@@ -322,13 +425,19 @@ export function DoctorResearchModule({
 }) {
   const isDark = tone === "dark";
 
-  // Persistent storage key
+  // Persistent storage keys
   const storageKey = `healthko:doctor:articles:${doctor.id || "default"}`;
+  const commentsStorageKey = `healthko:doctor:article-comments:${doctor.id || "default"}`;
 
   const isLoadedFromStorageRef = useRef(false);
 
   // Initialize deterministically so SSR and initial client render match exactly
   const [articles, setArticles] = useState<DoctorArticle[]>(() => getInitialCuratedArticles(doctor));
+  const [commentsByArticle, setCommentsByArticle] = useState<Record<string, ArticleComment[]>>(() => getInitialArticleComments());
+  const [commentInputText, setCommentInputText] = useState("");
+  const [commentUpvotes, setCommentUpvotes] = useState<Record<string, boolean>>({});
+  const [expandedCommentsArticleId, setExpandedCommentsArticleId] = useState<string | null>(null);
+  const [inlineCommentInputs, setInlineCommentInputs] = useState<Record<string, string>>({});
 
   // Sync from localStorage after client mount to prevent SSR hydration mismatches
   useEffect(() => {
@@ -347,12 +456,19 @@ export function DoctorResearchModule({
         });
         setArticles(merged);
       }
+
+      const savedComments = localStorage.getItem(commentsStorageKey);
+      if (savedComments) {
+        const parsedComments: Record<string, ArticleComment[]> = JSON.parse(savedComments);
+        const initialComments = getInitialArticleComments();
+        setCommentsByArticle({ ...initialComments, ...parsedComments });
+      }
     } catch {
       // Fallback
     } finally {
       isLoadedFromStorageRef.current = true;
     }
-  }, [storageKey, doctor]);
+  }, [storageKey, commentsStorageKey, doctor]);
 
   // Save to localStorage only after client mount load is complete
   useEffect(() => {
@@ -363,6 +479,15 @@ export function DoctorResearchModule({
       // Ignore storage errors
     }
   }, [articles, storageKey]);
+
+  useEffect(() => {
+    if (!isLoadedFromStorageRef.current) return;
+    try {
+      localStorage.setItem(commentsStorageKey, JSON.stringify(commentsByArticle));
+    } catch {
+      // Ignore storage errors
+    }
+  }, [commentsByArticle, commentsStorageKey]);
 
   const [activeTab, setActiveTab] = useState<ViewTab>("my_publications");
   const [searchQuery, setSearchQuery] = useState("");
@@ -431,6 +556,9 @@ export function DoctorResearchModule({
   const peerArticlesCount = articles.filter((a) => a.isPeerArticle).length;
   const totalLikes = articles.filter((a) => !a.isPeerArticle).reduce((acc, a) => acc + a.likesCount, 0);
   const totalViews = articles.filter((a) => !a.isPeerArticle).reduce((acc, a) => acc + a.viewsCount, 0);
+  const totalComments = articles
+    .filter((a) => !a.isPeerArticle)
+    .reduce((acc, a) => acc + (commentsByArticle[a.id]?.length || 0), 0);
 
   // Toggle Like
   const handleToggleLike = (articleId: string) => {
@@ -452,6 +580,70 @@ export function DoctorResearchModule({
   // Toggle Bookmark
   const handleToggleBookmark = (articleId: string) => {
     setBookmarkedArticles((prev) => ({ ...prev, [articleId]: !prev[articleId] }));
+  };
+
+  // Post a new comment to an article (supports reader modal or inline card)
+  const handlePostComment = (articleId: string, customText?: string) => {
+    const textToPost = (customText !== undefined ? customText : commentInputText).trim();
+    if (!textToPost) return;
+    const authorDisplayName = doctor.name
+      ? doctor.name.startsWith("Dr.")
+        ? doctor.name
+        : `Dr. ${doctor.name}`
+      : "Dr. Medical Practitioner";
+
+    const newComment: ArticleComment = {
+      id: `cmt-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      articleId,
+      authorId: doctor.id || "doctor-current",
+      authorName: authorDisplayName,
+      authorSpecialty: doctor.specialty || "Physician",
+      authorImage: doctor.image || null,
+      content: textToPost,
+      createdAt: new Date().toISOString(),
+      likesCount: 0,
+    };
+
+    setCommentsByArticle((prev) => {
+      const currentList = prev[articleId] || [];
+      return {
+        ...prev,
+        [articleId]: [newComment, ...currentList],
+      };
+    });
+    if (customText !== undefined) {
+      setInlineCommentInputs((prev) => ({ ...prev, [articleId]: "" }));
+    } else {
+      setCommentInputText("");
+    }
+  };
+
+  // Upvote / Like a comment
+  const handleToggleCommentUpvote = (commentId: string, articleId: string) => {
+    const isUpvoted = Boolean(commentUpvotes[commentId]);
+    setCommentUpvotes((prev) => ({ ...prev, [commentId]: !isUpvoted }));
+    setCommentsByArticle((prev) => {
+      const list = prev[articleId] || [];
+      return {
+        ...prev,
+        [articleId]: list.map((c) =>
+          c.id === commentId
+            ? { ...c, likesCount: isUpvoted ? Math.max(0, (c.likesCount || 0) - 1) : (c.likesCount || 0) + 1 }
+            : c
+        ),
+      };
+    });
+  };
+
+  // Delete comment authored by current doctor
+  const handleDeleteComment = (commentId: string, articleId: string) => {
+    setCommentsByArticle((prev) => {
+      const list = prev[articleId] || [];
+      return {
+        ...prev,
+        [articleId]: list.filter((c) => c.id !== commentId),
+      };
+    });
   };
 
   // Handle Thumbnail File Upload
@@ -601,7 +793,7 @@ export function DoctorResearchModule({
         </div>
 
         {/* ── STATS BAR ────────────────────────────────────────── */}
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
           <div className={`rounded-xl border p-3.5 transition-colors ${isDark ? "border-slate-800 bg-slate-950" : "border-slate-100 bg-slate-50/70"}`}>
             <p className={`text-[10px] font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Your Publications</p>
             <p className="mt-1 text-2xl font-black text-brand-teal">{myArticlesCount}</p>
@@ -617,6 +809,10 @@ export function DoctorResearchModule({
           <div className={`rounded-xl border p-3.5 transition-colors ${isDark ? "border-slate-800 bg-slate-950" : "border-slate-100 bg-slate-50/70"}`}>
             <p className={`text-[10px] font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Physician Applauds</p>
             <p className="mt-1 text-2xl font-black text-amber-500">{totalLikes}</p>
+          </div>
+          <div className={`rounded-xl border p-3.5 transition-colors ${isDark ? "border-slate-800 bg-slate-950" : "border-slate-100 bg-slate-50/70"}`}>
+            <p className={`text-[10px] font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>Peer Discussions</p>
+            <p className="mt-1 text-2xl font-black text-indigo-400">{totalComments}</p>
           </div>
         </div>
 
@@ -807,6 +1003,8 @@ export function DoctorResearchModule({
             const audInfo = AUDIENCE_META[article.targetAudience] || AUDIENCE_META.patients;
             const isLiked = Boolean(likedArticles[article.id]);
             const isBookmarked = Boolean(bookmarkedArticles[article.id]);
+            const articleComments = commentsByArticle[article.id] || [];
+            const isCommentsExpanded = expandedCommentsArticleId === article.id;
 
             return (
               <article
@@ -972,6 +1170,28 @@ export function DoctorResearchModule({
                       <span className="text-[11px]">{article.likesCount}</span>
                     </button>
 
+                    {/* Comments / Discussion Toggle Button */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedCommentsArticleId((prev) => (prev === article.id ? null : article.id))
+                      }
+                      className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                        isCommentsExpanded
+                          ? "bg-brand-teal/20 text-brand-teal ring-1 ring-brand-teal/40"
+                          : isDark
+                          ? "text-slate-400 hover:text-brand-teal hover:bg-slate-800"
+                          : "text-slate-600 hover:text-brand-teal hover:bg-teal-50/70"
+                      }`}
+                      title="Toggle Peer Discussion & Comments"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                      </svg>
+                      <span className="text-[11px] font-extrabold">{articleComments.length}</span>
+                      <span className="text-[10px] font-medium hidden sm:inline">Comments</span>
+                    </button>
+
                     {/* Bookmark Button */}
                     <button
                       type="button"
@@ -1015,6 +1235,173 @@ export function DoctorResearchModule({
                     )}
                   </div>
                 </div>
+
+                {/* Inline Peer Comments Section */}
+                {isCommentsExpanded && (
+                  <div
+                    className={`border-t p-4 transition-all animate-fadeIn ${
+                      isDark ? "border-slate-800/80 bg-slate-950/80" : "border-slate-100 bg-slate-50/90"
+                    }`}
+                  >
+                    {/* Discussion Header */}
+                    <div className="flex items-center justify-between pb-3">
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-brand-teal animate-pulse" />
+                        <p className="text-[11px] font-black uppercase tracking-wider text-brand-teal">
+                          Peer Discussion ({articleComments.length})
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedCommentsArticleId(null)}
+                        className={`rounded-md p-1 text-[11px] font-bold hover:text-rose-500 transition ${
+                          isDark ? "text-slate-400" : "text-slate-500"
+                        }`}
+                        title="Close comments"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    {/* Comment Input Form */}
+                    <div className="mb-3 space-y-2">
+                      <div className="flex gap-2">
+                        <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand-teal/15 text-brand-teal text-[11px] font-black border border-teal-500/30">
+                          {doctor.name ? doctor.name.replace(/^Dr\.\s*/i, "").charAt(0) || "D" : "D"}
+                        </div>
+                        <div className="flex-1">
+                          <textarea
+                            rows={2}
+                            value={inlineCommentInputs[article.id] || ""}
+                            onChange={(e) =>
+                              setInlineCommentInputs((prev) => ({
+                                ...prev,
+                                [article.id]: e.target.value,
+                              }))
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                                e.preventDefault();
+                                handlePostComment(article.id, inlineCommentInputs[article.id] || "");
+                              }
+                            }}
+                            placeholder="Share clinical perspective, inquiry, or peer insight..."
+                            className={`w-full rounded-xl border p-2.5 text-xs focus:outline-hidden focus:ring-1 focus:ring-brand-teal transition ${
+                              isDark
+                                ? "border-slate-800 bg-slate-900 text-white placeholder-slate-500"
+                                : "border-slate-200 bg-white text-slate-900 placeholder-slate-400"
+                            }`}
+                          />
+                          <div className="mt-1.5 flex items-center justify-between">
+                            <span className={`text-[10px] ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                              Ctrl + Enter to post
+                            </span>
+                            <button
+                              type="button"
+                              disabled={!(inlineCommentInputs[article.id] || "").trim()}
+                              onClick={() => handlePostComment(article.id, inlineCommentInputs[article.id] || "")}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-teal px-3 py-1 text-[11px] font-bold text-white shadow-xs hover:bg-brand-teal/90 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                            >
+                              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <line x1="22" y1="2" x2="11" y2="13" />
+                                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                              </svg>
+                              Post Comment
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Comments List */}
+                    <div className="max-h-60 overflow-y-auto space-y-2.5 pr-1">
+                      {articleComments.length === 0 ? (
+                        <div className={`rounded-xl border border-dashed py-4 text-center ${
+                          isDark ? "border-slate-800 text-slate-500" : "border-slate-200 text-slate-400"
+                        }`}>
+                          <p className="text-xs font-semibold">No comments yet.</p>
+                          <p className="text-[10px] mt-0.5">Be the first to share clinical perspective!</p>
+                        </div>
+                      ) : (
+                        articleComments.map((comment) => {
+                          const isUpvoted = Boolean(commentUpvotes[comment.id]);
+                          const isAuthor = comment.authorId === doctor.id;
+                          return (
+                            <div
+                              key={comment.id}
+                              className={`rounded-xl border p-2.5 transition-all ${
+                                isDark ? "border-slate-800/90 bg-slate-900/90" : "border-slate-200/80 bg-white shadow-2xs"
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-teal/15 text-[10px] font-bold text-brand-teal">
+                                    {comment.authorName.replace(/^Dr\.\s*/i, "").charAt(0) || "D"}
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className={`text-[11px] font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
+                                        {comment.authorName}
+                                      </span>
+                                      <span className={`rounded-md px-1 py-0.2 text-[8px] font-bold border ${
+                                        isDark ? "border-slate-700 bg-slate-800 text-slate-300" : "border-slate-200 bg-slate-100 text-slate-600"
+                                      }`}>
+                                        {comment.authorSpecialty}
+                                      </span>
+                                    </div>
+                                    <span className={`text-[9px] ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                                      {formatRelativeCommentTime(comment.createdAt)}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleCommentUpvote(comment.id, article.id)}
+                                    className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold transition border ${
+                                      isUpvoted
+                                        ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-400"
+                                        : isDark
+                                        ? "border-slate-800 bg-slate-950 text-slate-400 hover:text-white"
+                                        : "border-slate-200 bg-slate-50 text-slate-600 hover:text-slate-900"
+                                    }`}
+                                    title="Helpful insight"
+                                  >
+                                    <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill={isUpvoted ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+                                      <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+                                    </svg>
+                                    <span>{comment.likesCount || 0}</span>
+                                  </button>
+
+                                  {isAuthor && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteComment(comment.id, article.id)}
+                                      className="rounded-md p-1 text-slate-400 hover:text-rose-500 transition"
+                                      title="Delete comment"
+                                    >
+                                      <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <polyline points="3 6 5 6 21 6" />
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              <p className={`mt-1.5 text-[11px] leading-relaxed whitespace-pre-line pl-8 ${
+                                isDark ? "text-slate-300" : "text-slate-700"
+                              }`}>
+                                {comment.content}
+                              </p>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
               </article>
             );
           })}
@@ -1575,6 +1962,190 @@ export function DoctorResearchModule({
                   ))}
                 </div>
               )}
+
+              {/* ── PEER DISCUSSION & COMMENTS SECTION ────────────────── */}
+              {(() => {
+                const activeComments = commentsByArticle[activeReaderArticle.id] || [];
+                return (
+                  <section id="article-discussion-section" className={`mt-8 pt-6 border-t ${isDark ? "border-slate-800" : "border-slate-200"}`}>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2.5">
+                        <span className="grid h-8 w-8 place-items-center rounded-xl bg-brand-teal/15 text-brand-teal text-sm">
+                          💬
+                        </span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-black uppercase tracking-wider">
+                              Peer Discussion & Clinical Q&A
+                            </h3>
+                            <span className="rounded-full bg-brand-teal px-2 py-0.5 text-[10px] font-black text-white">
+                              {activeComments.length}
+                            </span>
+                          </div>
+                          <p className={`text-[11px] font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                            Ask clinical questions, share treatment observations, or provide peer feedback on this protocol.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* New Comment Input Box */}
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handlePostComment(activeReaderArticle.id);
+                      }}
+                      className={`rounded-2xl border p-4 mb-5 transition-all ${
+                        isDark ? "border-slate-800 bg-slate-950/70" : "border-slate-200 bg-slate-50/80 shadow-2xs"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 mb-3">
+                        <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand-teal/20 text-brand-teal font-black text-xs border border-brand-teal/30">
+                          {doctor.name ? doctor.name.replace(/^Dr\.\s*/i, "").charAt(0) : "D"}
+                        </div>
+                        <div className="min-w-0 flex-1 flex flex-wrap items-center gap-2">
+                          <span className={`text-xs font-black truncate ${isDark ? "text-white" : "text-slate-900"}`}>
+                            {doctor.name?.startsWith("Dr.") ? doctor.name : `Dr. ${doctor.name || "Practitioner"}`}
+                          </span>
+                          <span className={`text-[10px] font-bold rounded-md px-1.5 py-0.5 border ${
+                            isDark ? "border-brand-teal/30 bg-brand-teal/10 text-brand-teal" : "border-teal-200 bg-white text-teal-800"
+                          }`}>
+                            {doctor.specialty || "Physician"}
+                          </span>
+                          <span className="text-[10px] font-bold text-emerald-500 flex items-center gap-1">
+                            ✓ Verified Physician
+                          </span>
+                        </div>
+                      </div>
+
+                      <textarea
+                        rows={3}
+                        value={commentInputText}
+                        onChange={(e) => setCommentInputText(e.target.value)}
+                        placeholder="Share clinical observations, question protocol dosage, or discuss practical patient experiences..."
+                        className={`w-full rounded-xl border p-3 text-xs font-medium outline-none transition resize-y leading-relaxed ${
+                          isDark
+                            ? "border-slate-800 bg-slate-900 text-white placeholder-slate-500 focus:border-brand-teal"
+                            : "border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:border-brand-teal shadow-xs"
+                        }`}
+                      />
+
+                      <div className="mt-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <span className={`text-[10px] font-medium ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                          Visible to fellow healthcare practitioners across the HealthKo medical network.
+                        </span>
+                        <button
+                          type="submit"
+                          disabled={!commentInputText.trim()}
+                          className="flex items-center justify-center gap-1.5 rounded-xl bg-brand-teal px-4 py-2 text-xs font-black text-white hover:bg-teal-600 disabled:opacity-40 transition shadow-xs cursor-pointer"
+                        >
+                          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <line x1="22" y1="2" x2="11" y2="13" />
+                            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                          </svg>
+                          Post Comment
+                        </button>
+                      </div>
+                    </form>
+
+                    {/* Comments List */}
+                    <div className="space-y-3">
+                      {activeComments.length === 0 ? (
+                        <div
+                          className={`rounded-2xl border border-dashed p-6 text-center ${
+                            isDark ? "border-slate-800 bg-slate-950/40" : "border-slate-200 bg-white"
+                          }`}
+                        >
+                          <span className="text-2xl">💬</span>
+                          <p className={`mt-2 text-xs font-bold ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                            No comments yet
+                          </p>
+                          <p className={`text-[11px] mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                            Be the first peer to start the clinical discussion on this publication!
+                          </p>
+                        </div>
+                      ) : (
+                        activeComments.map((comment) => {
+                          const isUpvoted = Boolean(commentUpvotes[comment.id]);
+                          const isAuthor = comment.authorId === doctor.id;
+                          return (
+                            <div
+                              key={comment.id}
+                              className={`rounded-2xl border p-4 transition-all ${
+                                isDark ? "border-slate-800/80 bg-slate-950/60" : "border-slate-200/90 bg-white shadow-2xs"
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-black text-brand-teal border border-teal-500/20">
+                                    {comment.authorName.replace(/^Dr\.\s*/i, "").charAt(0) || "D"}
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className={`text-xs font-black ${isDark ? "text-white" : "text-slate-900"}`}>
+                                        {comment.authorName}
+                                      </span>
+                                      <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold border ${
+                                        isDark ? "border-slate-700 bg-slate-800 text-slate-300" : "border-slate-200 bg-slate-100 text-slate-700"
+                                      }`}>
+                                        {comment.authorSpecialty}
+                                      </span>
+                                    </div>
+                                    <span className={`text-[10px] font-medium ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                                      {formatRelativeCommentTime(comment.createdAt)}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Upvote & Delete Actions */}
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleCommentUpvote(comment.id, activeReaderArticle.id)}
+                                    className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold transition border ${
+                                      isUpvoted
+                                        ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-400"
+                                        : isDark
+                                        ? "border-slate-800 bg-slate-900 text-slate-400 hover:text-white hover:border-slate-700"
+                                        : "border-slate-200 bg-slate-50 text-slate-600 hover:text-slate-900"
+                                    }`}
+                                    title="Helpful clinical insight"
+                                  >
+                                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill={isUpvoted ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+                                      <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+                                    </svg>
+                                    <span>{comment.likesCount || 0}</span>
+                                  </button>
+
+                                  {isAuthor && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteComment(comment.id, activeReaderArticle.id)}
+                                      className="rounded-lg p-1 text-slate-400 hover:text-rose-500 transition"
+                                      title="Delete your comment"
+                                    >
+                                      <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <polyline points="3 6 5 6 21 6" />
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              <p className={`mt-2.5 text-xs font-normal leading-relaxed whitespace-pre-line pl-10 ${
+                                isDark ? "text-slate-200" : "text-slate-800"
+                              }`}>
+                                {comment.content}
+                              </p>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </section>
+                );
+              })()}
             </div>
 
             {/* Reader Footer Actions */}
@@ -1597,6 +2168,25 @@ export function DoctorResearchModule({
                     <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                   </svg>
                   Applaud ({activeReaderArticle.likesCount})
+                </button>
+
+                {/* Discussion shortcut button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById("article-discussion-section");
+                    el?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                  className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition ${
+                    isDark
+                      ? "bg-slate-800 text-slate-300 hover:text-white"
+                      : "bg-white text-slate-700 hover:text-slate-900 border"
+                  }`}
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                  </svg>
+                  Comments ({(commentsByArticle[activeReaderArticle.id] || []).length})
                 </button>
 
                 <button

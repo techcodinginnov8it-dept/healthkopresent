@@ -721,7 +721,7 @@ export function AppointmentCalendar({
   const availabilityWindow = getEffectiveAvailabilityWindow(availability);
 
   // Capacity: how many consultations fit in one hour slot
-  const slotsPerHour = consultationDuration > 0 ? Math.floor(60 / consultationDuration) : 2;
+  const slotsPerHour = consultationDuration >= 60 ? 1 : Math.max(1, Math.floor(60 / (consultationDuration || 30)));
 
   // Only show hours within the doctor's availability window
   const availStartHour = Math.floor(availabilityWindow.startMinutes / 60);

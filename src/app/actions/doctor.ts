@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireDoctorSession } from "@/lib/auth/doctor-session";
+import { getDoctorSession, requireDoctorSession } from "@/lib/auth/doctor-session";
 import {
   DEFAULT_DURATION_MINUTES,
   getFullyBookedMessage,
@@ -300,9 +300,16 @@ export async function scheduleFollowUpAppointment(data: ScheduleFollowUpPayload)
       return { success: false, error: "Follow-up scheduling is only available for existing patients." };
     }
 
+    const doctorRecord = await prisma.doctor.findUnique({
+      where: { id: session.userId },
+      select: { consultationDuration: true },
+    });
+    const followUpDuration = doctorRecord?.consultationDuration || DEFAULT_DURATION_MINUTES;
+
     const scheduleError = await validatePrismaDoctorSchedule({
       doctorId: session.userId,
       scheduledAt,
+      durationMinutes: followUpDuration,
     });
 
     if (scheduleError) {
@@ -317,7 +324,7 @@ export async function scheduleFollowUpAppointment(data: ScheduleFollowUpPayload)
         reason,
         status: "PENDING",
         notes: "Follow-up requested by doctor. Awaiting patient confirmation.",
-        duration: DEFAULT_DURATION_MINUTES,
+        duration: followUpDuration,
       },
     });
 
@@ -460,21 +467,36 @@ export async function issueMedicalCertificate(data: IssueMedicalCertificatePaylo
       },
     });
 
+    const serializedCert = {
+      ...cert,
+      issuedAt: cert.issuedAt instanceof Date ? cert.issuedAt.toISOString() : String(cert.issuedAt),
+      restDaysFrom: cert.restDaysFrom instanceof Date ? cert.restDaysFrom.toISOString() : cert.restDaysFrom ? String(cert.restDaysFrom) : null,
+      restDaysTo: cert.restDaysTo instanceof Date ? cert.restDaysTo.toISOString() : cert.restDaysTo ? String(cert.restDaysTo) : null,
+    };
+
     revalidatePath("/doctor/dashboard");
     revalidatePath("/patient/dashboard");
-    return { success: true, certificate: cert };
+    return { success: true, certificate: serializedCert };
   } catch (error: unknown) {
     console.error("issueMedicalCertificate failed:", error);
     return { success: false, error: "Failed to issue medical certificate." };
   }
 }
 
-export async function getDoctorMedicalCertificates() {
+export async function getDoctorMedicalCertificates(doctorId?: string) {
   try {
-    const session = await requireDoctorSession();
+    let targetDoctorId = doctorId;
+    if (!targetDoctorId) {
+      const session = await getDoctorSession();
+      targetDoctorId = session?.userId;
+    }
 
-    const certificates = await prisma.medicalCertificate.findMany({
-      where: { doctorId: session.userId },
+    if (!targetDoctorId) {
+      return { success: false, error: "Doctor session not found." };
+    }
+
+    const rawCertificates = await prisma.medicalCertificate.findMany({
+      where: { doctorId: targetDoctorId },
       include: {
         patient: {
           select: {
@@ -500,6 +522,13 @@ export async function getDoctorMedicalCertificates() {
       },
       orderBy: { issuedAt: "desc" },
     });
+
+    const certificates = rawCertificates.map((cert) => ({
+      ...cert,
+      issuedAt: cert.issuedAt instanceof Date ? cert.issuedAt.toISOString() : String(cert.issuedAt),
+      restDaysFrom: cert.restDaysFrom instanceof Date ? cert.restDaysFrom.toISOString() : cert.restDaysFrom ? String(cert.restDaysFrom) : null,
+      restDaysTo: cert.restDaysTo instanceof Date ? cert.restDaysTo.toISOString() : cert.restDaysTo ? String(cert.restDaysTo) : null,
+    }));
 
     return { success: true, certificates };
   } catch (error: unknown) {

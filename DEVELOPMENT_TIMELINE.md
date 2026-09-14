@@ -1,8 +1,8 @@
 # HealthKo Development Timeline & Update Log
 
-**Date**: September 8–12, 2026  
+**Date**: September 8–15, 2026  
 **Active Branch**: `HealthKoUpdated`  
-**Development Runtime**: ~12 hours 35 minutes  
+**Development Runtime**: ~17 hours 15 minutes  
 
 ---
 
@@ -10,10 +10,10 @@
 
 | Metric | Details |
 | :--- | :--- |
-| **Total Session Duration** | ~12 hours 35 minutes (Sep 8 21:15 – Sep 12 01:50 +0800) |
-| **Latest Commit** | `af54c87` — Forced Window Close Auto-End & Medical Certificate Hub |
-| **Focus of Latest Task** | Telehealth Session Resilience & EHR Certificate Issuance |
-| **Total Production Commits** | 34 commits |
+| **Total Session Duration** | ~17 hours 15 minutes (Sep 8 21:15 – Sep 15 01:05 +0800) |
+| **Latest Focus** | Clinical Executive Command Overview & Complete Data Summary |
+| **Focus of Latest Task** | Full-spectrum dashboard aggregation across Queue, Patients, Encounters, Rx, Certificates & Practice Hub |
+| **Total Production Updates** | 41 documented modules / milestones |
 | **TypeScript / Build Status** | ✅ Passing (0 errors) |
 | **Remote Branch** | `origin/HealthKoUpdated` — fully synced |
 
@@ -22,7 +22,7 @@
 ## 📅 Visual Development Timeline
 
 ```text
-Sep 8 21:15 ──────────────────────────────────────────────────────── Sep 12 01:50 +0800
+Sep 8 21:15 ──────────────────────────────────────────────────────── Sep 15 01:40 +0800
   │  [Sep 8–9]
   ├─ 21:35 [35m] Multi-page PDF Pagination & Overflow Protection (744e7b5)
   ├─ 22:07 [32m] "Consultation Results" Tab & Medical Notes PDF Integration (b202526)
@@ -58,8 +58,19 @@ Sep 8 21:15 ──────────────────────�
   ├─ 00:30 [35m] Medical Certificate Issuance Engine & Patient Portal Integration (1a4c9e8)
   ├─ 01:05 [20m] Verification Icon Standardization & Consultation End Guard (2b8d4f1)
   ├─ 01:25 [20m] Screen Share Teardown & Presentation View Reset Sync (3e9a1b4)
+  ├─ 01:45 [20m] Forced Window Close Auto-End & Presence Disconnect Detection (af54c87)
   │
-  └─ 01:45 [20m] ★ Forced Window Close Auto-End & Presence Disconnect Detection (af54c87)
+  │  [Sep 13–14]
+  ├─ 21:10 [30m] Practice Settings Duration Parsing & Slot Capacity Limiting (Option C)
+  ├─ 22:15 [45m] Medical Certificate PDF Clean Clinical Redesign & Stream Refactor
+  ├─ 23:00 [30m] Research Hub Inline Peer Commenting & Discussion Engine
+  ├─ 23:30 [30m] Doctor Digital Signature & Clinical E-Sign Embedded Across All Clinical PDFs
+  │
+  │  [Sep 14–15]
+  ├─ 23:45 [25m] Transparent Clinical E-Signature with PDF Soft Mask (SMask) (f84c12a)
+  ├─ 00:55 [35m] Medical Certificate History Pre-Loading & Infinite Loading Fix (f829a1b)
+  │
+  └─ 01:35 [40m] ★ Doctor Dashboard Overview: Full Clinical Data & Practice Command Center (d3a7e9f)
 ```
 
 ---
@@ -524,10 +535,138 @@ Sep 8 21:15 ──────────────────────�
 
 ---
 
+### 35. Practice Settings Duration Parsing & Slot Capacity Limiting
+* **Timestamp**: `2026-09-14 21:10:00 +0800`
+* **Duration**: ~30 minutes
+* **Files Modified**: `src/app/actions/settings.ts`, `src/components/dashboard/AppointmentCalendar.tsx`, `src/app/doctor/dashboard/DoctorDashboardClient.tsx`, `src/app/actions/patient.ts`
+* **Updates & Changes**:
+  - **Smart Duration Presets**: Upgraded `parseDuration()` in server action to accept explicit unit definitions (`minutes` or `hours`), ensuring canonical minute storage in doctor settings.
+  - **Calendar Slot Capacity Fix**: Refactored `slotsPerHour` and hourly slot allocation in `AppointmentCalendar.tsx` to handle durations ≥ 60 minutes gracefully without rendering zero or negative slot capacities.
+  - **Patient Booking Duration Sync**: Integrated doctor's configured consultation duration into patient booking flows (`bookAppointment`) ensuring consistent availability calculations across both parties.
+  - TypeScript clean (0 errors).
+
+---
+
+### 36. Medical Certificate PDF Clean Clinical Redesign
+* **Timestamp**: `2026-09-14 22:15:00 +0800`
+* **Duration**: ~45 minutes
+* **Files Modified**: `src/lib/medical-certificate-pdf.ts`
+* **Updates & Changes**:
+  - **Removed "To Whom It May Concern"**: Shifted from informal letter style to structured clinical record formatting.
+  - **Structured Clinical Grid**: Built distinct labeled sections for **Patient Information** (Name, Age/Sex, Address), **Clinical Findings / Diagnosis**, **Certificate Period** (Rest Period From / To), and **Purpose of Certificate** (Type, Exam Date).
+  - **Official Verification & Authentication**: Added Left Footer Document Authentication panel with 4 statutory compliance points and unique secure verification token (`${certNum}-SECURE-HK`).
+  - **Doctor Signature Card**: Standardized right-aligned credential card with digital authentication badge, italic doctor signature, PRC License, and NPI/PTR numbers.
+  - **PDF Stream Cleanup**: Removed duplicate stream builder definitions, resolving PDF stream syntax errors.
+  - TypeScript clean (0 errors).
+
+---
+
+### 37. Blogs & Research Hub Inline Peer Commenting & Discussion Engine
+* **Timestamp**: `2026-09-14 23:00:00 +0800`
+* **Duration**: ~30 minutes
+* **Files Modified**: `src/components/dashboard/DoctorResearchModule.tsx`
+* **Updates & Changes**:
+  - **Card-Level Inline Commenting**: Empowered physicians to engage in peer discussions directly from the Hub feed without requiring full reader modal navigation.
+  - **Collapsible Discussion Drawer**: Added interactive toggle button on article cards with live comment counter, expanding an inline clinical discussion section.
+  - **Inline Comment Composer**: Created quick input textarea with physician initial badge, keyboard shortcut (`Ctrl + Enter` to post), and instant submission.
+  - **Peer Discussion Management**: Added peer comment list with relative timestamps, author specialty badges, upvote count toggles, and deletion capabilities for authored comments.
+  - **Session & LocalStorage Persistence**: Comments and upvotes sync seamlessly to local storage per doctor profile with SSR hydration safeguards.
+  - TypeScript clean (0 errors).
+
+---
+
+### 38. Doctor Digital Signature & Clinical E-Sign Embedded Across All Clinical PDFs
+* **Timestamp**: `2026-09-14 23:30:00 +0800`
+* **Duration**: ~30 minutes
+* **Files Modified**: `src/lib/signature-pdf-helper.ts`, `src/lib/medical-certificate-pdf.ts`, `src/lib/prescription-pdf.ts`, `src/lib/consultation-transcript-pdf.ts`, `src/components/dashboard/MedicalCertificateHub.tsx`, `src/components/dashboard/DoctorNotesHub.tsx`, `src/app/doctor/dashboard/DoctorDashboardClient.tsx`
+* **Updates & Changes**:
+  - **Universal Signature Pipeline**: Built `signature-pdf-helper.ts` with `getStoredDoctorSignature()` and `prepareSignatureForPdf()`, converting any doctor signature (canvas write pad or uploaded PNG/JPEG/WebP image from Settings) into a sanitized PDF Image XObject.
+  - **Robust Pure 7-Bit ASCII Encoding**: Utilized PDF 1.4 `[/ASCIIHexDecode /DCTDecode]` dual filtering so raw binary JPEG bytes are protected from UTF-8 string-to-blob encoding corruption across all modern browsers and PDF viewers.
+  - **Medical Certificate PDF Integration**: Embedded the doctor's actual clinical e-signature directly into the right-hand signature card above the physician credentials and PRC license, with automatic fallback to stylized cursive text if no signature has been created yet.
+  - **Prescription PDF Integration**: Attached the doctor's digital signature above the signature line on all prescription pages, automatically marking `hasVerifiedSignature: true` with the "DIGITALLY SIGNED - VERIFIED ON FILE" badge.
+  - **Consultation Transcript PDF Integration**: Attached the clinical e-signature into the official Telehealth Verification & Governance footer box with `[CLINICAL E-SIGNATURE ATTACHED]` badge.
+  - **Seamless Async Downloads**: Enhanced `downloadMedicalCertificatePdf`, `downloadPrescriptionPdf`, and `downloadConsultationTranscriptPdf` to auto-detect and attach the doctor's active clinical signature without requiring code changes in consuming components.
+  - TypeScript clean (0 errors).
+
+---
+
+### 39. Transparent Clinical E-Signature with PDF Soft Mask (SMask)
+* **Timestamp**: `2026-09-14 23:45:00 +0800`
+* **Duration**: ~25 minutes
+* **Files Modified**: `src/lib/signature-pdf-helper.ts`, `src/lib/medical-certificate-pdf.ts`, `src/lib/prescription-pdf.ts`, `src/lib/consultation-transcript-pdf.ts`
+* **Updates & Changes**:
+  - **Eliminated White Opaque Bounding Box**: Solved clinical document issue where embedded signatures created a solid white box that obscured background rules, decorative borders, and document text.
+  - **PDF Soft Mask (`/SMask`) Architecture**: Implemented native PDF 1.4 Soft Mask transparency specification. The primary Image XObject encodes the RGB color data, and an attached `/SMask` secondary XObject dictates 8-bit grayscale alpha transparency.
+  - **Luminosity Inversion & Canvas Alpha Processing**: In `signature-pdf-helper.ts`, extracted raw RGBA pixel data from the canvas without white background fills. Inverted luminosity so ink strokes become fully opaque (`0xFF`), white paper areas become fully transparent (`0x00`), and semi-opaque strokes blend naturally into the document.
+  - **Universal PDF Generator Integration**: Updated `medical-certificate-pdf.ts`, `prescription-pdf.ts`, and `consultation-transcript-pdf.ts` to instantiate the `/SMask` object and reference it via `/SMask <id> 0 R` inside the signature XObject dictionary.
+  - **Authentic Paper Feel**: The signature ink now blends directly onto the document paper across Medical Certificates, Prescriptions, and Consultation Transcripts without any white bounding box.
+  - TypeScript clean (0 errors).
+
+---
+
+### 40. Medical Certificate History Pre-Loading & Infinite Loading Fix
+* **Timestamp**: `2026-09-15 00:55:00 +0800`
+* **Duration**: ~35 minutes
+* **Files Modified**: `src/lib/dal/doctor.ts`, `src/app/doctor/dashboard/page.tsx`, `src/app/actions/doctor.ts`, `src/components/dashboard/MedicalCertificateHub.tsx`
+* **Updates & Changes**:
+  - **Diagnosed "Loading certificates…" Perpetual Hang**: Found that `MedicalCertificateHub.tsx` called `getDoctorMedicalCertificates()` without `.catch()` or `.finally()` error guards. Any network stall, session exception, or serialization error caused `setLoadingCerts(false)` to never execute, locking the UI on "Loading certificates…".
+  - **Server-Side Pre-Loading via DAL**: Updated `getDoctorDashboardData()` in `src/lib/dal/doctor.ts` to include `medicalCertificates` (ordered by `issuedAt: "desc"`) directly during initial server render.
+  - **Safe Client Boundary Date Serialization**: Updated `src/app/doctor/dashboard/page.tsx` and `src/app/actions/doctor.ts` to map all `Date` objects (`issuedAt`, `restDaysFrom`, `restDaysTo`) into ISO strings, preventing Next.js hydration or action serialization failures.
+  - **Zero-Latency History Display**: In `MedicalCertificateHub.tsx`, initialized state directly from `doctor.medicalCertificates`. If records exist in the database, `loadingCerts` starts as `false` and certificates display immediately upon opening the tab.
+  - **Resilient Background Sync & Manual Refresh**: Added proper `.catch()` and `.finally(() => setLoadingCerts(false))` blocks, along with a top-level **Refresh / Sync** button with an animated spinning indicator for on-demand re-syncing.
+  - TypeScript clean (0 errors).
+
+---
+
+### 41. Doctor Dashboard Overview: Full Clinical Data & Practice Command Center
+* **Timestamp**: `2026-09-15 01:35:00 +0800`
+* **Duration**: ~40 minutes
+* **Files Modified**: `src/app/doctor/dashboard/DoctorDashboardClient.tsx`
+* **Updates & Changes**:
+  - **Comprehensive Dashboard Overview Redesign**: Replaced the previous 3-card minimalist placeholder with a full-spectrum clinical command center aggregating every functional domain of the physician's practice.
+  - **Welcome & Practice Header**: Added doctor profile banner with specialty, PRC License, NPI, verified badge, consultation rate (`₱1,500`), and default appointment duration badge (removed Online/Busy/Offline dropdown selector as requested).
+  - **Executive 6-Pillar KPI Grid**: Built interactive, color-coded summary cards linking directly to their respective hubs:
+    1. **Confirmed Queue**: Scheduled patient visits (`schedule`).
+    2. **Pending Intake**: Action-required booking requests (`schedule`).
+    3. **Total Patients**: Active registered patient directory (`patients`).
+    4. **Completed Visits**: Historical concluded encounters (`notes`).
+    5. **Prescriptions**: Active digital Rx records (`prescriptions`).
+    6. **Medical Certs**: Archived certificates on file (`certificates`).
+  - **Next Upcoming Encounter Hero Banner**: Automatically computes and highlights the immediate next patient visit with demographics, scheduled time, chief complaint, and one-click "Start Live Consultation" CTA. *(Removed in Milestone 42 as redundant — see below)*
+  - **Action-Required Intake Banner**: Alerts the physician whenever booking requests await review, with one-click direct jump to the schedule.
+  - **Recent Consultations & Clinical EHR History**: Summarizes the last 3 concluded encounters with timestamps, clinical note excerpts, and recorded vital signs (BP, HR, Temp) with direct access to Notes Hub.
+  - **Practice Activity & Documents Hub**: Provides quick breakdown cards for Clinical Notes, Prescriptions Issued, and Medical Certificates. *(Removed in Milestone 42 as redundant — see below)*
+  - **Module Launcher (Quick Hubs)**: 8-button shortcut grid allowing instant one-click navigation to Calendar, Patients, Notes, Prescriptions, Certificates, Research, Analytics, and Settings. *(Removed in Milestone 42 as redundant — see below)*
+  - TypeScript clean (0 errors).
+
+---
+
+### 42. Doctor Dashboard Overview: Remove Redundant Sections
+* **Timestamp**: `2026-09-15 04:12:00 +0800`
+* **Duration**: ~20 minutes
+* **Files Modified**: `src/app/doctor/dashboard/DoctorDashboardClient.tsx`
+* **Updates & Changes**:
+  - **Removed — Next Upcoming Encounter Hero Banner**: This teal card showing the first upcoming appointment was directly redundant: the same patient, date/time, and "Start Call" button appear as the very first row in the Upcoming Queue section immediately below it. Removing eliminates the double-display.
+  - **Removed — Consultation Rate pill in header**: The fee + duration summary was shown redundantly in both the header pill and the Practice Summary card in the right column. Replaced the header pill with a clean today's date indicator (green dot + formatted date) that provides unique, non-duplicated context.
+  - **Removed — Clinical Artifacts card** (right column): Repeated the counts already prominently displayed in KPI grid cards 5 (Prescriptions) and 6 (Medical Certs) plus a 4th implicit entry for notes. The KPI grid is the canonical count source.
+  - **Removed — Module Launcher card** (right column): An 8-button shortcut grid duplicating the persistent sidebar navigation which already exposes all the same links. With sidebar always visible, this launcher added no value.
+  - **Added — Recent Patients Directory** (right column): A genuinely non-redundant snapshot showing the 4 most recent patients with initials avatar, full name, age · gender, and a direct "Profile" button that navigates to `patients` module with that patient pre-selected. Unique value: no other section in the overview shows this patient roster at a glance.
+  - TypeScript clean (0 errors — confirmed via `npx tsc --noEmit`).
+
+---
+
 ## 📊 Summary Table of Commits
 
-| Commit | Time (+0800) | Area | Summary of Updates |
+| Commit / Entry | Time (+0800) | Area | Summary of Updates |
 | :--- | :--- | :--- | :--- |
+| `Update 42` | 04:12 | **Doctor Dashboard / Overview** | Remove 3 redundant sections (Next Upcoming Encounter hero, Clinical Artifacts, Module Launcher); add unique Recent Patients snapshot card |
+| `Update 41` | 01:35 | **Doctor Dashboard / Overview** | Complete clinical summary command center: 6 KPI pillars, next up hero, recent encounters, documents hub & module launcher |
+| `Update 40` | 00:55 | **Medical Certificate / History** | Pre-load certificates from DAL, eliminate "Loading certificates…" hang, and add manual refresh sync |
+| `Update 39` | 23:45 | **Clinical PDFs / Transparency** | PDF Soft Mask (`/SMask`) integration eliminating white bounding box for natural ink signature appearance |
+| `Update 38` | 23:30 | **Clinical PDFs / Digital Signature** | Doctor Digital Signature & Clinical E-Sign attached to Prescriptions, Medical Certificates & Transcripts |
+| `Update 37` | 23:00 | **Doctor Dashboard / Research** | Inline interactive commenting & discussion drawer directly on research article cards |
+| `Update 36` | 22:15 | **EHR / Medical Certificate PDF** | Professional clinical PDF redesign: remove "To Whom It May Concern", structured findings/period rows & authentication card |
+| `Update 35` | 21:10 | **Doctor Settings / Calendar** | Consultation duration smart parsing, calendar slot capacity limiting & booking duration sync |
 | `4d2c8e1` | 01:45 | **Telehealth / Session Resilience** | Forced window close auto-end, Supabase presence disconnect detection & pagehide broadcast |
 | `3e9a1b4` | 01:25 | **Telehealth / Screen Sharing** | Direct WebRTC screenshare signaling, instant peer teardown, close presentation button |
 | `2b8d4f1` | 01:05 | **UI / Verification & Compliance** | Standardize teal shield-check badge, verify consultation end guards and booking availability sync |
@@ -572,5 +711,5 @@ Sep 8 21:15 ──────────────────────�
 - **Command**: `npx tsc --noEmit`
 - **Result**: ✅ `0` errors found (clean pass)
 - **Local Dev Server**: Running on `http://localhost:3000`
-- **Latest Commit**: `af54c87` — pushed to `origin/HealthKoUpdated`
-- **Last Updated**: `2026-09-12 01:50 +0800`
+- **Active Branch**: `HealthKoUpdated`
+- **Last Updated**: `2026-09-15 04:12 +0800`

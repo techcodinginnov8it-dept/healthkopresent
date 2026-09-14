@@ -5,6 +5,12 @@
  * Designed for both physicians and patients to download and archive.
  */
 
+import {
+  getStoredDoctorSignature,
+  prepareSignatureForPdf,
+  type PdfSignatureImage,
+} from "./signature-pdf-helper";
+
 export interface TranscriptTurn {
   id?: string;
   speaker: string;
@@ -30,6 +36,9 @@ export interface ConsultationTranscriptData {
   clinicalAssessment?: string;
   clinicalPlan?: string;
   transcript?: TranscriptTurn[] | string;
+  doctorId?: string;
+  signatureDataUrl?: string | null;
+  signatureImage?: PdfSignatureImage | null;
 }
 
 function escapePdfText(value?: string | number | null): string {
@@ -307,7 +316,8 @@ function buildFooter(
   formattedDate: string,
   sessionRef: string,
   pageNum: number,
-  totalPages: number
+  totalPages: number,
+  signatureImage?: PdfSignatureImage | null
 ): string[] {
   const cmds: string[] = [];
 
@@ -330,13 +340,21 @@ function buildFooter(
   cmds.push("0.8 0.88 0.85 RG 0.75 w 360 85 206 69 re S");
 
   // Digital Signature Indicator
-  cmds.push("0.05 0.58 0.53 RG 1.2 w 375 125 m 440 128 l 460 122 l 510 126 l 535 124 l S");
-  cmds.push("BT /F2 6.5 Tf 0.05 0.58 0.53 rg 375 131 Td ([DIGITALLY AUTHENTICATED & VERIFIED]) Tj ET");
+  if (signatureImage) {
+    cmds.push("BT /F2 6.5 Tf 0.05 0.58 0.53 rg 375 138 Td ([CLINICAL E-SIGNATURE ATTACHED]) Tj ET");
+    cmds.push("q");
+    cmds.push("150 0 0 20 375 116 cm");
+    cmds.push("/SigImg Do");
+    cmds.push("Q");
+  } else {
+    cmds.push("0.05 0.58 0.53 RG 1.2 w 375 125 m 440 128 l 460 122 l 510 126 l 535 124 l S");
+    cmds.push("BT /F2 6.5 Tf 0.05 0.58 0.53 rg 375 131 Td ([DIGITALLY AUTHENTICATED & VERIFIED]) Tj ET");
+  }
 
-  cmds.push(`BT /F2 8.5 Tf 0.1 0.15 0.2 rg 375 112 Td (${escapePdfText(doctorName)}) Tj ET`);
-  cmds.push(`BT /F1 7.5 Tf 0.35 0.4 0.45 rg 375 102 Td (${escapePdfText(doctorSpecialty)}) Tj ET`);
+  cmds.push(`BT /F2 8.5 Tf 0.1 0.15 0.2 rg 375 106 Td (${escapePdfText(doctorName)}) Tj ET`);
+  cmds.push(`BT /F1 7.5 Tf 0.35 0.4 0.45 rg 375 96 Td (${escapePdfText(doctorSpecialty)}) Tj ET`);
   cmds.push(
-    `BT /F1 7 Tf 0.4 0.45 0.5 rg 375 92 Td (Lic: ${escapePdfText(doctorLicense)}   NPI: ${escapePdfText(
+    `BT /F1 7 Tf 0.4 0.45 0.5 rg 375 87 Td (Lic: ${escapePdfText(doctorLicense)}   NPI: ${escapePdfText(
       doctorNpi
     )}) Tj ET`
   );
@@ -559,7 +577,8 @@ export function generateConsultationTranscriptPdf(data: ConsultationTranscriptDa
       formattedDate,
       sessionRef,
       pageNum,
-      totalPages
+      totalPages,
+      data.signatureImage
     );
 
     const allCmds = [...headerCmds, ...pageStreamChunks[i], ...footerCmds];
@@ -575,6 +594,8 @@ export function generateConsultationTranscriptPdf(data: ConsultationTranscriptDa
   const PAGES_ID = 2;
   const FONT_HELVETICA_ID = 3;
   const FONT_HELVETICA_BOLD_ID = 4;
+  const SIG_IMAGE_ID = data.signatureImage ? nextObjId++ : 0;
+  const SIG_MASK_ID = (data.signatureImage && data.signatureImage.maskHexStream) ? nextObjId++ : 0;
 
   const pageNodeIds: number[] = [];
   for (let i = 0; i < totalPages; i++) {
@@ -605,6 +626,11 @@ export function generateConsultationTranscriptPdf(data: ConsultationTranscriptDa
     body: `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>`,
   });
 
+  const xObjectResources = data.signatureImage
+    ? `/XObject << /SigImg ${SIG_IMAGE_ID} 0 R >>`
+    : "";
+  const pageResources = `<< /Font << /F1 ${FONT_HELVETICA_ID} 0 R /F2 ${FONT_HELVETICA_BOLD_ID} 0 R >> ${xObjectResources} >>`;
+
   // Page Nodes & Streams
   for (let i = 0; i < totalPages; i++) {
     const pageNodeId = pageNodeIds[i];
@@ -612,7 +638,7 @@ export function generateConsultationTranscriptPdf(data: ConsultationTranscriptDa
 
     objects.push({
       id: pageNodeId,
-      body: `<< /Type /Page /Parent ${PAGES_ID} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << /F1 ${FONT_HELVETICA_ID} 0 R /F2 ${FONT_HELVETICA_BOLD_ID} 0 R >> >> /Contents ${pageObj.contentObjId} 0 R >>`,
+      body: `<< /Type /Page /Parent ${PAGES_ID} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources ${pageResources} /Contents ${pageObj.contentObjId} 0 R >>`,
     });
 
     const streamBytes = pageObj.streamContent;
@@ -620,6 +646,21 @@ export function generateConsultationTranscriptPdf(data: ConsultationTranscriptDa
       id: pageObj.contentObjId,
       body: `<< /Length ${streamBytes.length} >>\nstream\n${streamBytes}\nendstream`,
     });
+  }
+
+  if (data.signatureImage) {
+    const hasMask = !!(data.signatureImage.maskHexStream && data.signatureImage.maskLength && SIG_MASK_ID > 0);
+    const smaskRef = hasMask ? ` /SMask ${SIG_MASK_ID} 0 R` : "";
+    objects.push({
+      id: SIG_IMAGE_ID,
+      body: `<< /Type /XObject /Subtype /Image /Width ${data.signatureImage.width} /Height ${data.signatureImage.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter [/ASCIIHexDecode /DCTDecode] /Length ${data.signatureImage.length}${smaskRef} >>\nstream\n${data.signatureImage.hexStream}endstream`,
+    });
+    if (hasMask) {
+      objects.push({
+        id: SIG_MASK_ID,
+        body: `<< /Type /XObject /Subtype /Image /Width ${data.signatureImage.width} /Height ${data.signatureImage.height} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length ${data.signatureImage.maskLength} >>\nstream\n${data.signatureImage.maskHexStream}endstream`,
+      });
+    }
   }
 
   objects.sort((a, b) => a.id - b.id);
@@ -648,13 +689,25 @@ export function generateConsultationTranscriptPdf(data: ConsultationTranscriptDa
   return pdf;
 }
 
-export function downloadConsultationTranscriptPdf(
+export async function downloadConsultationTranscriptPdf(
   data: ConsultationTranscriptData,
   customFilename?: string
-): void {
+): Promise<void> {
   if (typeof window === "undefined") return;
 
-  const pdfString = generateConsultationTranscriptPdf(data);
+  // Automatically attach active doctor signature from Settings if not already provided
+  let preparedSig = data.signatureImage;
+  if (!preparedSig) {
+    const rawSig = data.signatureDataUrl || getStoredDoctorSignature(data.doctorId);
+    if (rawSig) {
+      preparedSig = (await prepareSignatureForPdf(rawSig)) || undefined;
+    }
+  }
+
+  const pdfString = generateConsultationTranscriptPdf({
+    ...data,
+    signatureImage: preparedSig,
+  });
   const blob = new Blob([pdfString], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");

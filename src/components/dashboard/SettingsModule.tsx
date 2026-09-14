@@ -1722,6 +1722,258 @@ function WorkingHoursTimeSelector({
   );
 }
 
+const DURATION_PRESETS = [
+  { label: "15 mins", minutes: 15, hint: "4 slots / hr" },
+  { label: "20 mins", minutes: 20, hint: "3 slots / hr" },
+  { label: "30 mins (Standard)", minutes: 30, hint: "2 slots / hr" },
+  { label: "45 mins", minutes: 45, hint: "1 slot / hr" },
+  { label: "1 hr (60 mins)", minutes: 60, hint: "1 slot / hr" },
+  { label: "1.5 hrs (90 mins)", minutes: 90, hint: "1 patient / 90 min" },
+  { label: "2 hrs (120 mins)", minutes: 120, hint: "1 patient / 2 hr" },
+];
+
+function formatMinutesDescription(minutes: number) {
+  if (minutes < 60) {
+    const slots = Math.max(1, Math.floor(60 / minutes));
+    return {
+      title: `${minutes} Minutes`,
+      subtitle: `${slots} appointment slot${slots > 1 ? "s" : ""} per hour in your calendar`,
+      timerNote: `${minutes}-minute video consultation room timer`,
+    };
+  }
+  const hours = minutes / 60;
+  const isWhole = Number.isInteger(hours);
+  const formattedHours = isWhole ? `${hours} hour${hours > 1 ? "s" : ""}` : `${hours} hours`;
+  const hrPart = Math.floor(minutes / 60);
+  const minPart = minutes % 60;
+  const detailed = minPart > 0 ? `${hrPart} hr ${minPart} mins (${minutes} mins)` : `${formattedHours} (${minutes} mins)`;
+  return {
+    title: detailed,
+    subtitle: `Each patient reserves a ${formattedHours} block in your calendar`,
+    timerNote: `${minutes}-minute countdown in the live consultation room`,
+  };
+}
+
+function ConsultationDurationSelector({
+  valueMinutes,
+  onChange,
+}: {
+  valueMinutes: number;
+  onChange: (minutes: number) => void;
+}) {
+  const tone = useSettingsTheme();
+  const isDark = tone === "dark";
+
+  const matchingPreset = DURATION_PRESETS.find((p) => p.minutes === valueMinutes);
+  const [isCustom, setIsCustom] = useState(!matchingPreset);
+  const [customUnit, setCustomUnit] = useState<"minutes" | "hours">(
+    valueMinutes >= 60 && valueMinutes % 30 === 0 ? "hours" : "minutes"
+  );
+  const [customValue, setCustomValue] = useState<string>(
+    valueMinutes >= 60 && valueMinutes % 30 === 0
+      ? (valueMinutes / 60).toString()
+      : valueMinutes.toString()
+  );
+
+  useEffect(() => {
+    const matched = DURATION_PRESETS.find((p) => p.minutes === valueMinutes);
+    if (!matched) {
+      setIsCustom(true);
+      if (valueMinutes >= 60 && valueMinutes % 30 === 0) {
+        setCustomUnit("hours");
+        setCustomValue((valueMinutes / 60).toString());
+      } else {
+        setCustomUnit("minutes");
+        setCustomValue(valueMinutes.toString());
+      }
+    }
+  }, [valueMinutes]);
+
+  const handleSelectPreset = (minutes: number) => {
+    setIsCustom(false);
+    onChange(minutes);
+  };
+
+  const handleCustomUnitChange = (unit: "minutes" | "hours") => {
+    setCustomUnit(unit);
+    if (unit === "hours") {
+      const h = Math.round((valueMinutes / 60) * 10) / 10;
+      setCustomValue(h.toString());
+    } else {
+      setCustomValue(valueMinutes.toString());
+    }
+  };
+
+  const handleCustomInputChange = (raw: string) => {
+    setCustomValue(raw);
+    const num = parseFloat(raw);
+    if (!Number.isFinite(num) || num <= 0) return;
+
+    if (customUnit === "hours") {
+      const calculatedMins = Math.max(15, Math.min(480, Math.round(num * 60)));
+      onChange(calculatedMins);
+    } else {
+      const calculatedMins = Math.max(10, Math.min(480, Math.round(num)));
+      onChange(calculatedMins);
+    }
+  };
+
+  const summary = useMemo(() => formatMinutesDescription(valueMinutes), [valueMinutes]);
+
+  return (
+    <div
+      className="md:col-span-2 space-y-4 rounded-2xl border p-4 sm:p-5 transition-colors"
+      style={{
+        backgroundColor: isDark ? "rgba(15, 23, 42, 0.6)" : "rgba(248, 250, 252, 0.9)",
+        borderColor: isDark ? "rgba(51, 65, 85, 0.6)" : "rgba(226, 232, 240, 0.9)",
+      }}
+    >
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">
+            Practice Appointment Duration
+          </p>
+          <h3 className={`text-base font-black ${isDark ? "text-white" : "text-slate-900"}`}>
+            Consultation Duration & Calendar Grid Sync
+          </h3>
+          <p className={`text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+            Select how long each appointment lasts. Your calendar schedule and patient booking slots will automatically calibrate to this interval.
+          </p>
+        </div>
+      </div>
+
+      {/* Preset Pill Buttons */}
+      <div>
+        <span className={`block text-[10px] font-black uppercase tracking-wider mb-2 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+          Standard Clinical Durations
+        </span>
+        <div className="flex flex-wrap gap-2">
+          {DURATION_PRESETS.map((preset) => {
+            const active = !isCustom && valueMinutes === preset.minutes;
+            return (
+              <button
+                key={preset.minutes}
+                type="button"
+                onClick={() => handleSelectPreset(preset.minutes)}
+                className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-black transition border ${
+                  active
+                    ? "border-brand-teal bg-brand-teal text-white shadow-xs"
+                    : isDark
+                    ? "border-slate-800 bg-slate-950 text-slate-300 hover:border-slate-700 hover:text-white"
+                    : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-900"
+                }`}
+              >
+                <span>{preset.label}</span>
+                <span className="text-[10px] opacity-75 font-normal">({preset.hint})</span>
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => setIsCustom(true)}
+            className={`rounded-xl px-3 py-2 text-xs font-black transition border ${
+              isCustom
+                ? "border-brand-teal bg-brand-teal text-white shadow-xs"
+                : isDark
+                ? "border-slate-800 bg-slate-950 text-slate-300 hover:border-slate-700 hover:text-white"
+                : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-900"
+            }`}
+          >
+            Custom Duration...
+          </button>
+        </div>
+      </div>
+
+      {/* Custom Duration Controls */}
+      {isCustom && (
+        <div
+          className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center gap-3 ${
+            isDark ? "border-slate-800 bg-slate-950/70" : "border-slate-200 bg-white"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <span className={`text-xs font-black uppercase tracking-wider ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+              Enter Duration:
+            </span>
+            <input
+              type="number"
+              min={customUnit === "hours" ? "0.25" : "10"}
+              max={customUnit === "hours" ? "8" : "480"}
+              step={customUnit === "hours" ? "0.25" : "5"}
+              value={customValue}
+              onChange={(e) => handleCustomInputChange(e.target.value)}
+              className={`h-10 w-28 rounded-xl border px-3 text-sm font-bold outline-none transition ${
+                isDark
+                  ? "border-slate-800 bg-slate-900 text-white focus:border-brand-teal"
+                  : "border-slate-200 bg-slate-50 text-slate-900 focus:border-brand-teal"
+              }`}
+              placeholder={customUnit === "hours" ? "1.5" : "90"}
+            />
+          </div>
+
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => handleCustomUnitChange("minutes")}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition border ${
+                customUnit === "minutes"
+                  ? "border-brand-teal bg-brand-teal text-white"
+                  : isDark
+                  ? "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
+                  : "border-slate-200 bg-slate-100 text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Minutes
+            </button>
+            <button
+              type="button"
+              onClick={() => handleCustomUnitChange("hours")}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition border ${
+                customUnit === "hours"
+                  ? "border-brand-teal bg-brand-teal text-white"
+                  : isDark
+                  ? "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
+                  : "border-slate-200 bg-slate-100 text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Hours (e.g. 1.5, 2)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Live Synchronization Info Badge */}
+      <div
+        className={`rounded-xl border p-3.5 flex items-start gap-3 transition-colors ${
+          isDark
+            ? "border-teal-500/30 bg-teal-500/10 text-teal-100"
+            : "border-teal-200 bg-teal-50/80 text-teal-950"
+        }`}
+      >
+        <div className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-teal-500/20 text-brand-teal">
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+        </div>
+        <div className="min-w-0 flex-1 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-black text-sm text-brand-teal">{summary.title}</span>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold border ${
+              isDark ? "border-teal-400/30 bg-teal-400/10 text-teal-200" : "border-teal-300 bg-white text-teal-800"
+            }`}>
+              Synced to Calendar & Room
+            </span>
+          </div>
+          <p className={`mt-1 font-semibold ${isDark ? "text-teal-200/90" : "text-teal-900/80"}`}>
+            {summary.subtitle} &middot; {summary.timerNote}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type SignaturePoint = { x: number; y: number };
 type SignatureStroke = {
   points: SignaturePoint[];
@@ -2590,7 +2842,7 @@ export function DoctorSettingsModule({
   tone,
 }: {
   doctor: DoctorSettingsData;
-  onProfileUpdated?: (profile: { availability: string; status: string }) => void;
+  onProfileUpdated?: (profile: { availability: string; status: string; consultationDuration?: number }) => void;
   onProfileImageChange?: (image: string) => void;
   onToast?: (tone: "success" | "error", message: string) => void;
   tone?: "light" | "dark";
@@ -2616,8 +2868,15 @@ export function DoctorSettingsModule({
     bio: doctor.bio || "",
     consultFee: doctor.consultFee?.toString() || "",
     yearsExp: doctor.yearsExp?.toString() || "",
-    consultationDuration: doctor.consultationDuration?.toString() || "30",
-    consultationDurationUnit: doctor.consultationDurationUnit || "minutes",
+    consultationDuration: (() => {
+      const rawNum = doctor.consultationDuration ? Number(doctor.consultationDuration) : 30;
+      const rawUnit = doctor.consultationDurationUnit || "minutes";
+      if (rawUnit === "hours" && rawNum <= 12) {
+        return Math.round(rawNum * 60).toString();
+      }
+      return (rawNum || 30).toString();
+    })(),
+    consultationDurationUnit: "minutes",
     admitMode: "manual",
   }));
   const [isPending, startTransition] = useTransition();
@@ -2719,7 +2978,11 @@ export function DoctorSettingsModule({
       }
 
       showToast("success", message);
-      onProfileUpdated?.({ availability: form.availability, status: form.status });
+      onProfileUpdated?.({
+        availability: form.availability,
+        status: form.status,
+        consultationDuration: Number(form.consultationDuration) || 30,
+      });
       clearSettingsDraft(draftKey);
       router.refresh();
     });
@@ -2907,15 +3170,12 @@ export function DoctorSettingsModule({
                   { value: "OFFLINE", label: "Offline" },
                 ]}
               />
-              <Field label="Consultation duration" type="number" value={form.consultationDuration} onChange={(value) => setField("consultationDuration", value)} />
-              <SelectField
-                label="Duration unit"
-                value={form.consultationDurationUnit}
-                onChange={(value) => setField("consultationDurationUnit", value)}
-                options={[
-                  { value: "minutes", label: "Minutes" },
-                  { value: "hours", label: "Hours" },
-                ]}
+              <ConsultationDurationSelector
+                valueMinutes={Number(form.consultationDuration) || 30}
+                onChange={(minutes) => {
+                  setField("consultationDuration", minutes.toString());
+                  setField("consultationDurationUnit", "minutes");
+                }}
               />
               <div className="flex justify-end pt-1 md:col-span-2">
                 <button type="submit" disabled={isPending} className="rounded-xl bg-brand-teal px-5 py-3 text-sm font-black text-white transition hover:bg-teal-600 disabled:opacity-50">

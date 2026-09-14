@@ -79,13 +79,18 @@ function parseOptionalNumber(value?: string) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
-function parseDuration(value?: string) {
+function parseDuration(value?: string, unit?: string) {
   const parsed = parseOptionalNumber(value);
-  if (!parsed) {
+  if (!parsed || parsed <= 0) {
     return 30;
   }
 
-  return Math.max(1, Math.round(parsed));
+  // If unit is specified as "hours", convert to canonical minutes (e.g. 1 -> 60, 1.5 -> 90, 2 -> 120)
+  if (unit === "hours") {
+    return Math.max(15, Math.round(parsed * 60));
+  }
+
+  return Math.max(5, Math.round(parsed));
 }
 
 function normalizeDurationUnit(value?: string) {
@@ -290,8 +295,8 @@ export async function updateDoctorProfile(data: DoctorProfilePayload): Promise<A
 
     const consultFee = parseOptionalNumber(data.consultFee);
     const yearsExp = parseOptionalNumber(data.yearsExp);
-    const consultationDuration = parseDuration(data.consultationDuration);
-    const consultationDurationUnit = normalizeDurationUnit(data.consultationDurationUnit);
+    const consultationDuration = parseDuration(data.consultationDuration, data.consultationDurationUnit);
+    const consultationDurationUnit = "minutes";
 
     const existing = await prisma.doctor.findFirst({
       where: {

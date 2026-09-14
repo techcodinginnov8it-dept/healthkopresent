@@ -73,14 +73,16 @@ export async function bookAppointment(data: BookAppointmentPayload) {
 
     const doctor = await prisma.doctor.findUnique({
       where: { id: doctorId },
-      select: { isActive: true, isVerified: true, availability: true },
+      select: { isActive: true, isVerified: true, availability: true, consultationDuration: true },
     });
 
     if (!doctor || !doctor.isActive || !doctor.isVerified) {
       return { success: false, error: "Selected doctor is not available for bookings." };
     }
 
-    if (!isWithinDoctorAvailability(scheduledDate, DEFAULT_DURATION_MINUTES, doctor)) {
+    const appointmentDuration = doctor.consultationDuration || DEFAULT_DURATION_MINUTES;
+
+    if (!isWithinDoctorAvailability(scheduledDate, appointmentDuration, doctor)) {
       return { success: false, error: getOutsideAvailabilityMessage(doctor.availability) };
     }
 
@@ -96,7 +98,7 @@ export async function bookAppointment(data: BookAppointmentPayload) {
     const patientConflict = getScheduleConflict(
       patientAppointments,
       scheduledDate,
-      DEFAULT_DURATION_MINUTES,
+      appointmentDuration,
       undefined,
       ["CONFIRMED", "PENDING"]
     );
@@ -116,7 +118,7 @@ export async function bookAppointment(data: BookAppointmentPayload) {
     const conflict = getScheduleConflict(
       existingAppointments,
       scheduledDate,
-      DEFAULT_DURATION_MINUTES,
+      appointmentDuration,
       undefined,
       ["CONFIRMED", "PENDING"]
     );
@@ -131,7 +133,7 @@ export async function bookAppointment(data: BookAppointmentPayload) {
         scheduledAt: scheduledDate,
         reason,
         status: "PENDING",
-        duration: DEFAULT_DURATION_MINUTES,
+        duration: appointmentDuration,
       },
     });
 

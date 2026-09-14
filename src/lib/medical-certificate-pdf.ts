@@ -3,7 +3,16 @@
  * Produces a clinic-standard Medical Certificate PDF adhering to
  * DOH telemedicine documentation requirements.
  * Pure TypeScript, zero external dependencies.
+ *
+ * Redesigned v2 -- Professional Clinical Edition
+ * Color scheme: Navy blue (#142050 equiv) + Gold accent (#B89432 equiv)
  */
+
+import {
+  getStoredDoctorSignature,
+  prepareSignatureForPdf,
+  type PdfSignatureImage,
+} from "./signature-pdf-helper";
 
 export interface MedicalCertificatePdfData {
   certNumber: string;
@@ -22,6 +31,9 @@ export interface MedicalCertificatePdfData {
   restDaysFrom?: Date | string | null;
   restDaysTo?: Date | string | null;
   issuedAt?: Date | string;
+  doctorId?: string;
+  signatureDataUrl?: string | null;
+  signatureImage?: PdfSignatureImage | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -30,14 +42,14 @@ export interface MedicalCertificatePdfData {
 function escapePdf(value?: string | number | null): string {
   if (value === undefined || value === null) return "";
   return String(value)
-    .replace(/[—–]/g, " - ")
-    .replace(/['']/g, "'")
-    .replace(/[""]/g, '"')
-    .replace(/[•·]/g, "*")
-    .replace(/[°]/g, " deg ")
-    .replace(/½/g, "1/2")
-    .replace(/¼/g, "1/4")
-    .replace(/×/g, "x")
+    .replace(/[\u2014\u2013]/g, " - ")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2022\u00B7]/g, "*")
+    .replace(/\u00B0/g, " deg ")
+    .replace(/\u00BD/g, "1/2")
+    .replace(/\u00BC/g, "1/4")
+    .replace(/\u00D7/g, "x")
     .replace(/\\/g, "\\\\")
     .replace(/\(/g, "\\(")
     .replace(/\)/g, "\\)")
@@ -88,11 +100,12 @@ const PURPOSE_LABELS: Record<string, string> = {
 // ---------------------------------------------------------------------------
 const PAGE_W = 612;
 const PAGE_H = 792;
-const LEFT = 46;
-const RIGHT = 566;
+const LEFT = 50;
+const RIGHT = 562;
+const BODY_W = RIGHT - LEFT; // 512
 
 // ---------------------------------------------------------------------------
-// Build full page stream
+// Build full page stream -- Clean Structured Clinical Edition v3
 // ---------------------------------------------------------------------------
 function buildCertStream(data: MedicalCertificatePdfData): string {
   const cmds: string[] = [];
@@ -115,225 +128,234 @@ function buildCertStream(data: MedicalCertificatePdfData): string {
   const address = data.patientAddress || "";
   const diagnosis = data.diagnosis || "As clinically assessed";
   const remarks = data.remarks || "";
+  const docNameClean = doctorName.replace(/^DR\.?\s+/i, "").trim();
+  const docNameUpper = docNameClean.toUpperCase();
 
-  // Outer & inner border
-  cmds.push("0.85 0.9 0.92 RG 1 w");
-  cmds.push("28 28 556 736 re S");
-  cmds.push("0.92 0.95 0.96 RG 0.5 w");
-  cmds.push("32 32 548 728 re S");
+  // ── PAGE BACKGROUND ────────────────────────────────────────────────────────
+  cmds.push("0.986 0.989 0.993 rg");
+  cmds.push(`0 0 ${PAGE_W} ${PAGE_H} re f`);
 
-  // Header banner (teal)
-  cmds.push("0.05 0.58 0.53 rg");
-  cmds.push("32 720 548 40 re f");
-  cmds.push(
-    "BT /F2 12 Tf 1 1 1 rg 46 740 Td (HEALTHKO TELEHEALTH CLINICAL NETWORK) Tj ET"
-  );
-  cmds.push(
-    "BT /F1 8 Tf 0.9 0.98 0.96 rg 46 728 Td (OFFICIAL MEDICAL CERTIFICATE  -  ACCREDITED TELEMEDICINE PROVIDER) Tj ET"
-  );
+  // ── OUTER BORDER ────────────────────────────────────────────────────────────
+  cmds.push("0.08 0.14 0.30 RG 2 w");
+  cmds.push("24 24 564 744 re S");
 
-  // Cert type badge (right of banner)
-  cmds.push("0.04 0.44 0.4 rg");
-  cmds.push("430 724 134 28 re f");
-  cmds.push("BT /F2 7.5 Tf 1 1 1 rg 436 740 Td (MEDICAL CERTIFICATE) Tj ET");
-  cmds.push(
-    `BT /F1 7 Tf 0.85 0.95 0.93 rg 436 729 Td (${escapePdf(purposeLabel.toUpperCase())}) Tj ET`
-  );
+  // ── GOLD TOP BAR ────────────────────────────────────────────────────────────
+  cmds.push("0.72 0.58 0.20 rg");
+  cmds.push("24 766 564 4 re f");
 
-  // Doctor & clinic sub-header
-  const clinicName = `CLINIC OF ${doctorName.toUpperCase().replace(/^DR\.?\s+/i, "")}, MD`;
-  cmds.push(
-    `BT /F2 14 Tf 0.08 0.18 0.22 rg ${LEFT} 695 Td (${escapePdf(clinicName)}) Tj ET`
-  );
-  cmds.push(
-    `BT /F2 9 Tf 0.05 0.58 0.53 rg ${LEFT} 680 Td (${escapePdf(specialty.toUpperCase())}  -  SPECIALTY & TELEHEALTH PRACTICE) Tj ET`
-  );
-  cmds.push(
-    `BT /F1 8 Tf 0.4 0.45 0.5 rg ${LEFT} 667 Td (HealthKo Medical Systems  -  Verified Clinical Services  -  Provider ID: ${escapePdf(npi)}) Tj ET`
-  );
+  // ── NAVY LEFT STRIPE ────────────────────────────────────────────────────────
+  cmds.push("0.08 0.14 0.30 rg");
+  cmds.push("24 24 6 742 re f");
 
-  // Dividers
-  cmds.push("0.05 0.58 0.53 RG 2 w");
-  cmds.push(`${LEFT} 654 m ${RIGHT} 654 l S`);
-  cmds.push("0.85 0.88 0.9 RG 0.5 w");
-  cmds.push(`${LEFT} 651 m ${RIGHT} 651 l S`);
+  // ── HEADER BANNER ───────────────────────────────────────────────────────────
+  cmds.push("0.08 0.14 0.30 rg");
+  cmds.push("30 726 552 44 re f");
+  cmds.push("BT /F2 13 Tf 1 1 1 rg 56 748 Td (HEALTHKO TELEHEALTH CLINICAL NETWORK) Tj ET");
+  cmds.push("BT /F1 7.5 Tf 0.75 0.82 0.92 rg 56 734 Td (DOH Accredited Telemedicine Provider  |  Official Medical Document) Tj ET");
 
-  // Certificate title
-  cmds.push("BT /F2 16 Tf 0.05 0.58 0.53 rg 195 628 Td (MEDICAL CERTIFICATE) Tj ET");
-  cmds.push("0.05 0.58 0.53 RG 1 w");
-  cmds.push("195 622 m 417 622 l S");
+  // Gold type badge (right side of header)
+  cmds.push("0.72 0.58 0.20 rg");
+  cmds.push("416 730 130 32 re f");
+  cmds.push("BT /F2 8 Tf 0.08 0.14 0.30 rg 424 752 Td (MEDICAL CERTIFICATE) Tj ET");
+  cmds.push(`BT /F1 6.8 Tf 0.14 0.20 0.38 rg 424 740 Td (${escapePdf(purposeLabel.toUpperCase())}) Tj ET`);
 
-  // Date & cert number
-  cmds.push(`BT /F2 8 Tf 0.4 0.45 0.5 rg 390 642 Td (Date Issued:) Tj ET`);
-  cmds.push(
-    `BT /F1 8.5 Tf 0.1 0.15 0.2 rg 460 642 Td (${escapePdf(issuedShort)}) Tj ET`
-  );
-  cmds.push(`BT /F2 8 Tf 0.4 0.45 0.5 rg 390 630 Td (Certificate No.:) Tj ET`);
-  cmds.push(
-    `BT /F2 8 Tf 0.05 0.58 0.53 rg 460 630 Td (${escapePdf(certNum)}) Tj ET`
-  );
+  // ── DOCTOR / CLINIC ROW ─────────────────────────────────────────────────────
+  cmds.push("0.93 0.95 0.97 rg");
+  cmds.push("30 688 552 36 re f");
+  cmds.push(`BT /F2 9.5 Tf 0.08 0.14 0.30 rg 56 714 Td (DR. ${escapePdf(docNameUpper)}, MD) Tj ET`);
+  cmds.push(`BT /F1 8 Tf 0.38 0.44 0.55 rg 56 701 Td (${escapePdf(specialty)}  |  PRC: ${escapePdf(license)}  |  NPI: ${escapePdf(npi)}) Tj ET`);
 
-  // Patient details box
-  cmds.push("0.96 0.98 0.99 rg 46 563 520 50 re f");
-  cmds.push("0.82 0.88 0.9 RG 0.75 w 46 563 520 50 re S");
+  // ── GOLD RULE ───────────────────────────────────────────────────────────────
+  cmds.push("0.72 0.58 0.20 rg");
+  cmds.push(`${LEFT} 686 ${BODY_W} 2 re f`);
 
-  cmds.push(`BT /F2 8 Tf 0.4 0.45 0.5 rg 56 600 Td (PATIENT NAME:) Tj ET`);
-  cmds.push(
-    `BT /F2 9.5 Tf 0.1 0.15 0.2 rg 145 600 Td (${escapePdf(patientName)}) Tj ET`
-  );
-  cmds.push(`BT /F2 8 Tf 0.4 0.45 0.5 rg 56 586 Td (AGE / SEX:) Tj ET`);
-  cmds.push(
-    `BT /F1 8.5 Tf 0.1 0.15 0.2 rg 145 586 Td (${escapePdf(age)} / ${escapePdf(gender)}) Tj ET`
-  );
+  // ── DOCUMENT TITLE ──────────────────────────────────────────────────────────
+  cmds.push("BT /F2 20 Tf 0.08 0.14 0.30 rg 160 661 Td (MEDICAL CERTIFICATE) Tj ET");
+  // navy underline
+  cmds.push("0.08 0.14 0.30 RG 1.5 w");
+  cmds.push("160 653 m 394 653 l S");
+  // gold thin underline
+  cmds.push("0.72 0.58 0.20 RG 0.75 w");
+  cmds.push("160 651 m 394 651 l S");
+
+  // Cert number / date (right aligned)
+  cmds.push(`BT /F2 7 Tf 0.42 0.48 0.58 rg 406 666 Td (Cert. No.:) Tj ET`);
+  cmds.push(`BT /F2 8 Tf 0.08 0.14 0.30 rg 452 666 Td (${escapePdf(certNum)}) Tj ET`);
+  cmds.push(`BT /F2 7 Tf 0.42 0.48 0.58 rg 406 654 Td (Date of Issue:) Tj ET`);
+  cmds.push(`BT /F1 7.5 Tf 0.08 0.14 0.30 rg 452 654 Td (${escapePdf(issuedDate)}) Tj ET`);
+
+  // ── SECTION HELPER: draws a labeled section row ──────────────────────────
+  // We'll build each section manually below
+
+  let y = 634;
+  const SECTION_H = 36;
+  const LABEL_W = 148;
+  const VAL_X = LEFT + LABEL_W + 4;
+
+  // Helper to draw a section row
+  function sectionRow(labelText: string, valueText: string, rowH: number, valueLines?: string[]) {
+    const bottom = y - rowH;
+    // Label cell (light navy fill)
+    cmds.push("0.92 0.94 0.97 rg");
+    cmds.push(`${LEFT} ${bottom} ${LABEL_W} ${rowH} re f`);
+    cmds.push("0.08 0.14 0.30 RG 0.6 w");
+    cmds.push(`${LEFT} ${bottom} ${LABEL_W} ${rowH} re S`);
+    // Gold left accent
+    cmds.push("0.72 0.58 0.20 rg");
+    cmds.push(`${LEFT} ${bottom} 4 ${rowH} re f`);
+    // Label text
+    cmds.push(`BT /F2 7.5 Tf 0.08 0.14 0.30 rg ${LEFT + 9} ${y - 13} Td (${escapePdf(labelText)}) Tj ET`);
+
+    // Value cell
+    cmds.push("0.98 0.99 1.0 rg");
+    cmds.push(`${VAL_X} ${bottom} ${RIGHT - VAL_X} ${rowH} re f`);
+    cmds.push("0.82 0.86 0.90 RG 0.6 w");
+    cmds.push(`${VAL_X} ${bottom} ${RIGHT - VAL_X} ${rowH} re S`);
+
+    if (valueLines && valueLines.length > 1) {
+      let lineY = y - 13;
+      for (const vl of valueLines) {
+        cmds.push(`BT /F2 9 Tf 0.08 0.14 0.30 rg ${VAL_X + 8} ${lineY} Td (${escapePdf(vl)}) Tj ET`);
+        lineY -= 13;
+      }
+    } else {
+      cmds.push(`BT /F2 9.5 Tf 0.08 0.14 0.30 rg ${VAL_X + 8} ${y - 13} Td (${escapePdf(valueText)}) Tj ET`);
+    }
+
+    y -= rowH;
+  }
+
+  // ── SECTION 1: PATIENT INFORMATION (header) ─────────────────────────────
+  // Section header bar
+  cmds.push("0.08 0.14 0.30 rg");
+  cmds.push(`${LEFT} ${y - 16} ${BODY_W} 16 re f`);
+  cmds.push(`BT /F2 7.5 Tf 1 1 1 rg ${LEFT + 9} ${y - 11} Td (PATIENT INFORMATION) Tj ET`);
+  y -= 17;
+
+  sectionRow("Patient Name", patientName, SECTION_H);
+  sectionRow("Age / Sex", `${escapePdf(age)} / ${escapePdf(gender)}`, SECTION_H);
   if (address) {
-    cmds.push(`BT /F2 8 Tf 0.4 0.45 0.5 rg 56 572 Td (ADDRESS:) Tj ET`);
-    const addrLines = wrapText(address, 55);
-    cmds.push(
-      `BT /F1 8 Tf 0.1 0.15 0.2 rg 145 572 Td (${escapePdf(addrLines[0] || "")}) Tj ET`
-    );
+    const addrL = wrapText(address, 54);
+    sectionRow("Address", addrL[0] || "", addrL.length > 1 ? SECTION_H + 13 : SECTION_H, addrL.length > 1 ? addrL : undefined);
   }
 
-  // Certificate body
-  cmds.push(
-    `BT /F1 10 Tf 0.15 0.2 0.25 rg ${LEFT} 543 Td (To Whom It May Concern,) Tj ET`
-  );
+  y -= 14; // spacer
 
-  let y = 523;
+  // ── SECTION 2: CLINICAL FINDINGS (header) ───────────────────────────────
+  cmds.push("0.08 0.14 0.30 rg");
+  cmds.push(`${LEFT} ${y - 16} ${BODY_W} 16 re f`);
+  cmds.push(`BT /F2 7.5 Tf 1 1 1 rg ${LEFT + 9} ${y - 11} Td (CLINICAL FINDINGS) Tj ET`);
+  y -= 17;
 
-  const intro = `This is to certify that ${patientName}, a patient of this clinic, was seen and examined by the undersigned physician on ${issuedDate}.`;
-  const introLines = wrapText(intro, 88);
-  for (const line of introLines) {
-    cmds.push(
-      `BT /F1 9.5 Tf 0.15 0.2 0.25 rg ${LEFT} ${y} Td (${escapePdf(line)}) Tj ET`
-    );
-    y -= 14;
-  }
+  const diagLines = wrapText(diagnosis, 54);
+  const diagH = Math.max(SECTION_H, 14 + diagLines.length * 14);
+  sectionRow("Diagnosis / Condition", diagLines[0] || "", diagH, diagLines.length > 1 ? diagLines : undefined);
 
-  y -= 6;
+  y -= 14; // spacer
 
-  // Diagnosis box
-  cmds.push("0.96 0.98 0.99 rg");
-  cmds.push(`${LEFT} ${y - 8} 520 26 re f`);
-  cmds.push("0.82 0.88 0.9 RG 0.5 w");
-  cmds.push(`${LEFT} ${y - 8} 520 26 re S`);
-  cmds.push(
-    `BT /F2 8 Tf 0.4 0.45 0.5 rg ${LEFT + 10} ${y + 8} Td (DIAGNOSIS / CONDITION:) Tj ET`
-  );
-  const diagLines = wrapText(diagnosis, 68);
-  cmds.push(
-    `BT /F1 9 Tf 0.08 0.15 0.22 rg ${LEFT + 10} ${y - 2} Td (${escapePdf(diagLines[0] || "")}) Tj ET`
-  );
-  y -= 38;
-
-  // Recommendation
-  y -= 4;
-  cmds.push(
-    `BT /F1 9.5 Tf 0.15 0.2 0.25 rg ${LEFT} ${y} Td (Based on examination, the physician recommends the following:) Tj ET`
-  );
-  y -= 16;
-
-  cmds.push("0.05 0.58 0.53 rg");
-  cmds.push(`${LEFT} ${y - 8} 520 24 re f`);
-  cmds.push(
-    `BT /F2 9.5 Tf 1 1 1 rg ${LEFT + 10} ${y + 3} Td (${escapePdf(purposeLabel.toUpperCase())}) Tj ET`
-  );
-  y -= 34;
-
-  // Rest period (sick leave only)
+  // ── SECTION 3: CERTIFICATE PERIOD (sick leave) ──────────────────────────
   if (data.purpose === "sick_leave" && (data.restDaysFrom || data.restDaysTo)) {
     const from = formatDate(data.restDaysFrom);
-    const to = formatDate(data.restDaysTo);
-    const restText = `Patient is advised to rest from ${from} to ${to}.`;
-    cmds.push(
-      `BT /F1 9.5 Tf 0.15 0.2 0.25 rg ${LEFT} ${y} Td (${escapePdf(restText)}) Tj ET`
-    );
-    y -= 16;
+    const to   = formatDate(data.restDaysTo);
 
-    cmds.push("0.95 0.98 0.97 rg");
-    cmds.push(`${LEFT} ${y - 6} 520 24 re f`);
-    cmds.push("0.05 0.58 0.53 RG 0.75 w");
-    cmds.push(`${LEFT} ${y - 6} 520 24 re S`);
-    cmds.push(
-      `BT /F2 8 Tf 0.4 0.45 0.5 rg ${LEFT + 10} ${y + 8} Td (REST PERIOD: ) Tj /F2 8.5 Tf 0.05 0.58 0.53 rg (${escapePdf(from)}  to  ${escapePdf(to)}) Tj ET`
-    );
-    y -= 36;
-  }
+    cmds.push("0.08 0.14 0.30 rg");
+    cmds.push(`${LEFT} ${y - 16} ${BODY_W} 16 re f`);
+    cmds.push(`BT /F2 7.5 Tf 1 1 1 rg ${LEFT + 9} ${y - 11} Td (CERTIFICATE PERIOD) Tj ET`);
+    y -= 17;
 
-  // Remarks
-  if (remarks && remarks.trim()) {
-    y -= 4;
-    cmds.push(
-      `BT /F2 8.5 Tf 0.4 0.45 0.5 rg ${LEFT} ${y} Td (ADDITIONAL REMARKS:) Tj ET`
-    );
+    sectionRow("Rest Period — From", from, SECTION_H);
+    sectionRow("Rest Period — To", to, SECTION_H);
+
     y -= 14;
-    const remarkLines = wrapText(remarks, 88);
-    for (const line of remarkLines) {
-      cmds.push(
-        `BT /F1 9 Tf 0.15 0.2 0.25 rg ${LEFT} ${y} Td (${escapePdf(line)}) Tj ET`
-      );
-      y -= 13;
-    }
   }
 
-  // Closing statement
-  y -= 10;
-  cmds.push(
-    `BT /F1 9.5 Tf 0.15 0.2 0.25 rg ${LEFT} ${y} Td (This certificate is issued upon request for whatever legal purpose it may serve.) Tj ET`
-  );
+  // ── SECTION 4: PURPOSE OF CERTIFICATE ──────────────────────────────────
+  cmds.push("0.08 0.14 0.30 rg");
+  cmds.push(`${LEFT} ${y - 16} ${BODY_W} 16 re f`);
+  cmds.push(`BT /F2 7.5 Tf 1 1 1 rg ${LEFT + 9} ${y - 11} Td (PURPOSE OF CERTIFICATE) Tj ET`);
+  y -= 17;
 
-  // Footer separator
-  cmds.push("0.8 0.85 0.88 RG 1 w");
-  cmds.push(`${LEFT} 168 m ${RIGHT} 168 l S`);
+  sectionRow("Certificate Type", purposeLabel, SECTION_H);
+  sectionRow("Date of Examination", issuedDate, SECTION_H);
 
-  // Left footer — legal
-  cmds.push(
-    "BT /F2 7.5 Tf 0.4 0.45 0.5 rg 46 152 Td (ELECTRONIC CERTIFICATE AUTHENTICATION) Tj ET"
-  );
-  cmds.push(
-    "BT /F1 7 Tf 0.5 0.55 0.6 rg 46 140 Td (1. Generated in compliance with DOH / FDA Telemedicine Regulations.) Tj ET"
-  );
-  cmds.push(
-    "BT /F1 7 Tf 0.5 0.55 0.6 rg 46 130 Td (2. Authentic and valid for use at any government or private institution.) Tj ET"
-  );
-  cmds.push(
-    "BT /F1 7 Tf 0.5 0.55 0.6 rg 46 120 Td (3. Any unauthorized alteration or reproduction invalidates this certificate.) Tj ET"
-  );
-  cmds.push(
-    `BT /F2 7 Tf 0.05 0.58 0.53 rg 46 108 Td (Verification Token: ${escapePdf(certNum)}-SECURE-HK) Tj ET`
-  );
+  y -= 14;
 
-  // Right — Doctor Signature Card
-  cmds.push("0.96 0.98 0.99 rg 345 52 221 112 re f");
-  cmds.push("0.85 0.9 0.92 RG 0.5 w 345 52 221 112 re S");
+  // ── SECTION 5: REMARKS (if any) ─────────────────────────────────────────
+  if (remarks && remarks.trim()) {
+    cmds.push("0.08 0.14 0.30 rg");
+    cmds.push(`${LEFT} ${y - 16} ${BODY_W} 16 re f`);
+    cmds.push(`BT /F2 7.5 Tf 1 1 1 rg ${LEFT + 9} ${y - 11} Td (REMARKS) Tj ET`);
+    y -= 17;
 
-  cmds.push("0.05 0.58 0.53 rg 355 144 140 14 re f");
-  cmds.push(
-    "BT /F2 7 Tf 1 1 1 rg 360 148 Td (DIGITALLY E-SIGNED - AUTHENTIC) Tj ET"
-  );
+    const remarkLines = wrapText(remarks, 54);
+    const remarksH = Math.max(SECTION_H, 14 + remarkLines.length * 13);
+    sectionRow("Additional Notes", remarkLines[0] || "", remarksH, remarkLines.length > 1 ? remarkLines : undefined);
 
-  cmds.push(
-    `BT /F3 18 Tf 0.08 0.22 0.48 rg 355 124 Td (${escapePdf(displayDocName)}) Tj ET`
-  );
-  cmds.push("0.2 0.3 0.4 RG 0.75 w");
-  cmds.push("355 116 m 552 116 l S");
+    y -= 14;
+  }
 
-  const docNameUpper = doctorName.toUpperCase().replace(/^DR\.?\s+/i, "");
-  cmds.push(
-    `BT /F2 9.5 Tf 0.1 0.15 0.2 rg 355 103 Td (DR. ${escapePdf(docNameUpper)}, MD) Tj ET`
-  );
-  cmds.push(
-    `BT /F1 8 Tf 0.35 0.4 0.45 rg 355 92 Td (${escapePdf(specialty)}) Tj ET`
-  );
-  cmds.push(
-    `BT /F2 8 Tf 0.05 0.58 0.53 rg 355 81 Td (PRC License No.: ) Tj /F1 8 Tf 0.1 0.15 0.2 rg (${escapePdf(license)}) Tj ET`
-  );
-  cmds.push(
-    `BT /F2 8 Tf 0.4 0.45 0.5 rg 355 70 Td (NPI / PTR No.: ) Tj /F1 8 Tf 0.1 0.15 0.2 rg (${escapePdf(npi)}) Tj ET`
-  );
+  // ── PHYSICIAN'S CERTIFICATION STATEMENT ─────────────────────────────────
+  y -= 8;
+  const certStatement = `I hereby certify that the information above is true and correct based on my personal examination of the patient on ${issuedDate}.`;
+  const certLines = wrapText(certStatement, 86);
+  for (const line of certLines) {
+    cmds.push(`BT /F1 8.5 Tf 0.38 0.44 0.56 rg ${LEFT} ${y} Td (${escapePdf(line)}) Tj ET`);
+    y -= 12;
+  }
 
-  cmds.push(
-    "BT /F1 7 Tf 0.6 0.65 0.7 rg 165 38 Td (HealthKo Telehealth Technologies  -  Official Medical Document) Tj ET"
-  );
+  // ── FOOTER RULE ─────────────────────────────────────────────────────────
+  cmds.push("0.08 0.14 0.30 RG 0.4 w");
+  cmds.push(`${LEFT} 178 m ${RIGHT} 178 l S`);
+  cmds.push("0.72 0.58 0.20 RG 1.2 w");
+  cmds.push(`${LEFT} 176 m ${RIGHT} 176 l S`);
+
+  // ── LEFT FOOTER: AUTHENTICATION ─────────────────────────────────────────
+  cmds.push("BT /F2 7.5 Tf 0.08 0.14 0.30 rg 50 164 Td (DOCUMENT AUTHENTICATION) Tj ET");
+  cmds.push("0.72 0.58 0.20 RG 0.5 w");
+  cmds.push("50 162 m 178 162 l S");
+  cmds.push("BT /F1 6.5 Tf 0.46 0.52 0.60 rg 50 152 Td (1. Issued under DOH / FDA Telemedicine Regulations.) Tj ET");
+  cmds.push("BT /F1 6.5 Tf 0.46 0.52 0.60 rg 50 142 Td (2. Valid for any government or private institution.) Tj ET");
+  cmds.push("BT /F1 6.5 Tf 0.46 0.52 0.60 rg 50 132 Td (3. Unauthorized alteration renders this document void.) Tj ET");
+  cmds.push(`BT /F2 6.8 Tf 0.72 0.58 0.20 rg 50 118 Td (Token: ${escapePdf(certNum)}-SECURE-HK) Tj ET`);
+
+  // ── RIGHT: DOCTOR SIGNATURE CARD ────────────────────────────────────────
+  cmds.push("0.95 0.97 0.99 rg");
+  cmds.push("338 52 224 120 re f");
+  cmds.push("0.08 0.14 0.30 RG 1 w");
+  cmds.push("338 52 224 120 re S");
+  // Card top navy band
+  cmds.push("0.08 0.14 0.30 rg");
+  cmds.push("338 154 224 18 re f");
+  cmds.push("BT /F2 6.5 Tf 1 1 1 rg 348 161 Td (ELECTRONICALLY AUTHENTICATED  |  ORIGINAL) Tj ET");
+  // Gold left accent
+  cmds.push("0.72 0.58 0.20 rg");
+  cmds.push("338 52 5 120 re f");
+
+  // Signature (Clinical E-Signature image or stylized cursive fallback)
+  if (data.signatureImage) {
+    cmds.push("q");
+    cmds.push("170 0 0 28 350 126 cm");
+    cmds.push("/SigImg Do");
+    cmds.push("Q");
+  } else {
+    cmds.push(`BT /F3 16 Tf 0.08 0.14 0.30 rg 350 133 Td (${escapePdf(displayDocName)}) Tj ET`);
+  }
+
+  // Signature underline
+  cmds.push("0.72 0.58 0.20 RG 0.7 w");
+  cmds.push("350 125 m 548 125 l S");
+  cmds.push("0.20 0.28 0.48 RG 0.3 w");
+  cmds.push("350 123 m 548 123 l S");
+
+  // Credentials
+  cmds.push(`BT /F2 9 Tf 0.08 0.14 0.30 rg 350 112 Td (DR. ${escapePdf(docNameUpper)}, MD) Tj ET`);
+  cmds.push(`BT /F1 7 Tf 0.40 0.46 0.56 rg 350 100 Td (${escapePdf(specialty)}) Tj ET`);
+  cmds.push(`BT /F2 7 Tf 0.44 0.50 0.58 rg 350 89 Td (PRC License:) Tj /F1 7 Tf 0.08 0.14 0.30 rg ( ${escapePdf(license)}) Tj ET`);
+  cmds.push(`BT /F2 7 Tf 0.44 0.50 0.58 rg 350 78 Td (NPI / PTR:) Tj /F1 7 Tf 0.08 0.14 0.30 rg ( ${escapePdf(npi)}) Tj ET`);
+  cmds.push(`BT /F1 6.5 Tf 0.72 0.58 0.20 rg 350 63 Td (Signed: ${escapePdf(issuedShort)}) Tj ET`);
+
+  // ── PAGE FOOTER ─────────────────────────────────────────────────────────
+  cmds.push("BT /F1 6.5 Tf 0.55 0.60 0.68 rg 130 37 Td (HealthKo Telehealth Technologies  |  Official Medical Document  |  Unauthorized Reproduction Prohibited) Tj ET");
 
   return cmds.join("\n");
 }
@@ -353,8 +375,14 @@ export function generateMedicalCertificatePdf(
   const F3_ID = 5;
   const PAGE_ID = 6;
   const CONTENT_ID = 7;
+  const SIG_IMAGE_ID = 8;
+  const SIG_MASK_ID = 9;
 
   const fontResources = `/Font << /F1 ${F1_ID} 0 R /F2 ${F2_ID} 0 R /F3 ${F3_ID} 0 R >>`;
+  const xObjectResources = data.signatureImage
+    ? `/XObject << /SigImg ${SIG_IMAGE_ID} 0 R >>`
+    : "";
+  const pageResources = `<< ${fontResources} ${xObjectResources} >>`;
 
   const objects: { id: number; body: string }[] = [
     { id: CATALOG_ID, body: `<< /Type /Catalog /Pages ${PAGES_ID} 0 R >>` },
@@ -376,13 +404,28 @@ export function generateMedicalCertificatePdf(
     },
     {
       id: PAGE_ID,
-      body: `<< /Type /Page /Parent ${PAGES_ID} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << ${fontResources} >> /Contents ${CONTENT_ID} 0 R >>`,
+      body: `<< /Type /Page /Parent ${PAGES_ID} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources ${pageResources} /Contents ${CONTENT_ID} 0 R >>`,
     },
     {
       id: CONTENT_ID,
       body: `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
     },
   ];
+
+  if (data.signatureImage) {
+    const hasMask = !!(data.signatureImage.maskHexStream && data.signatureImage.maskLength);
+    const smaskRef = hasMask ? ` /SMask ${SIG_MASK_ID} 0 R` : "";
+    objects.push({
+      id: SIG_IMAGE_ID,
+      body: `<< /Type /XObject /Subtype /Image /Width ${data.signatureImage.width} /Height ${data.signatureImage.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter [/ASCIIHexDecode /DCTDecode] /Length ${data.signatureImage.length}${smaskRef} >>\nstream\n${data.signatureImage.hexStream}endstream`,
+    });
+    if (hasMask) {
+      objects.push({
+        id: SIG_MASK_ID,
+        body: `<< /Type /XObject /Subtype /Image /Width ${data.signatureImage.width} /Height ${data.signatureImage.height} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length ${data.signatureImage.maskLength} >>\nstream\n${data.signatureImage.maskHexStream}endstream`,
+      });
+    }
+  }
 
   objects.sort((a, b) => a.id - b.id);
 
@@ -410,13 +453,25 @@ export function generateMedicalCertificatePdf(
   return pdf;
 }
 
-export function downloadMedicalCertificatePdf(
+export async function downloadMedicalCertificatePdf(
   data: MedicalCertificatePdfData,
   customFilename?: string
-): void {
+): Promise<void> {
   if (typeof window === "undefined") return;
 
-  const pdfString = generateMedicalCertificatePdf(data);
+  // Automatically attach active doctor signature from Settings if not already provided
+  let preparedSig = data.signatureImage;
+  if (!preparedSig) {
+    const rawSig = data.signatureDataUrl || getStoredDoctorSignature(data.doctorId);
+    if (rawSig) {
+      preparedSig = (await prepareSignatureForPdf(rawSig)) || undefined;
+    }
+  }
+
+  const pdfString = generateMedicalCertificatePdf({
+    ...data,
+    signatureImage: preparedSig,
+  });
   const blob = new Blob([pdfString], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
