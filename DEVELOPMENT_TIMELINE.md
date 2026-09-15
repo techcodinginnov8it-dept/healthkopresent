@@ -930,3 +930,18 @@ Sep 8 21:15 ──────────────────────�
   - **Interactive Actions**: Each card includes category pill tags, date/clinic info, instant full-screen **Preview Modal** (`MedicalFilePreviewModal`), and direct **Download PDF** button.
   - Verified with `npx tsc --noEmit` (0 errors).
 
+### 60. Comprehensive Sample PDFs for All Uploadable Medical Document Categories
+- **Time**: Sep 16, ~05:35–05:45 +0800 · Duration: ~10 min
+- **Scope**: `medical-archive-sample-pdf.ts`, `SettingsModule.tsx`, `PatientDashboardClient.tsx`
+- **Changes**:
+  - **All-Category Sample PDF Generation**: Expanded the sample PDF suite to generate authentic clinical PDFs across all 7 uploadable categories:
+    1. *Consultation Report* — Comprehensive clinical encounter report with doctor license/NPI, vitals panel, assessment, directives, and follow-up plan (`consultation-report-pdf.ts`).
+    2. *Previous Outpatient Consultation Summary* (`consultation`) — Outpatient encounter review with previous vitals, ECG notes, and lipid management regimen.
+    3. *Annual Comprehensive Metabolic & CBC Panel* (`lab`) — Complete pathology laboratory exam with analyte result tables, units, and standard reference ranges.
+    4. *Historical Clinical Prescription Record* (`prescription`) — Official pharmaceutical order with medication names, dosage frequencies, course duration, and prescriber directives.
+    5. *Inpatient Clinical Discharge & Referral Summary* (`discharge`) — Inpatient cardiology admission and discharge handover with clinical course and outpatient referral.
+    6. *Official Medical Sick Leave Certificate* (`certificate`) — Certified doctor's clearance advising medical leave of absence and rest directives.
+    7. *Chest 2-Views Digital Radiography (X-Ray)* (`imaging`) — Digital diagnostic radiology report with structured anatomical evaluation and radiologist sign-off.
+  - **Auto-Sync**: Seed documents are merged across local storage so all sample categories immediately appear in both *Settings → Patient Profile → Previous Consultations & Medical Documents* and *Online Consultation → Current Encounter Documents*.
+  - Verified with `npx tsc --noEmit` (0 errors).
+

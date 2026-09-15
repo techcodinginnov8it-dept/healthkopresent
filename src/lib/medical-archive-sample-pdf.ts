@@ -295,6 +295,321 @@ export function generateLabReportPdf(doc?: {
 }
 
 /**
+ * Generates an Archived Past Prescription PDF
+ */
+export function generatePrescriptionSamplePdf(doc?: {
+  title?: string;
+  doctorOrClinic?: string;
+  consultationDate?: string;
+  notes?: string;
+}): string {
+  const doctor = doc?.doctorOrClinic || "Dr. Maria Luisa Santos, MD · Makati Medical Center";
+  const date = doc?.consultationDate || "2026-06-18";
+  const notes =
+    doc?.notes ||
+    "Prescribed: Cetirizine 10mg tab once daily at bedtime (14 days), Fluticasone furoate nasal spray 27.5mcg (1 spray each nostril daily for 30 days).";
+
+  const cmds: string[] = [
+    // Brand Banner (Purple / Indigo)
+    `0.35 0.18 0.55 rg 0 740 ${PAGE_W} 52 re f`,
+    `BT /F2 16 Tf 1 1 1 rg ${L} 765 Td (HEALTHKO ARCHIVED PRESCRIPTION RECORD) Tj ET`,
+    `BT /F1 8.5 Tf 0.9 0.85 0.95 rg ${L} 750 Td (ELECTRONIC MEDICAL ARCHIVE · HISTORICAL PHARMACEUTICAL ORDERS) Tj ET`,
+
+    // Doctor & Clinic Header
+    `0.98 0.96 0.99 rg ${L} 670 520 54 re f`,
+    `0.88 0.82 0.92 RG 0.5 w ${L} 670 520 54 re S`,
+    `BT /F2 11 Tf 0.2 0.1 0.35 rg ${L + 12} 708 Td (${esc(doctor)}) Tj ET`,
+    `BT /F1 8 Tf 0.45 0.4 0.5 rg ${L + 12} 694 Td (Internal Medicine & Clinical Immunology · PRC License #0098741 · S2 #87124) Tj ET`,
+    `BT /F1 8 Tf 0.45 0.4 0.5 rg ${L + 12} 680 Td (Prescribed Date: ${esc(date)} · Status: Dispensed & Archived) Tj ET`,
+
+    // Rx Symbol & Watermark Box
+    `0.35 0.18 0.55 rg ${L} 632 520 26 re f`,
+    `BT /F2 12 Tf 1 1 1 rg ${L + 10} 640 Td (Rx  -  OFFICIAL HISTORICAL PRESCRIPTION) Tj ET`,
+
+    // Medications Table Header
+    `0.92 0.88 0.95 rg ${L} 606 520 16 re f`,
+    `BT /F2 7.5 Tf 0.25 0.15 0.35 rg ${L + 8} 611 Td (MEDICATION / BRAND / FORM) Tj ET`,
+    `BT /F2 7.5 Tf 0.25 0.15 0.35 rg ${L + 200} 611 Td (DOSAGE & FREQUENCY) Tj ET`,
+    `BT /F2 7.5 Tf 0.25 0.15 0.35 rg ${L + 360} 611 Td (DURATION / QTY) Tj ET`,
+  ];
+
+  const rxItems = [
+    { name: "Cetirizine 10mg Film-Coated Tablet", dose: "1 tablet once daily at bedtime", dur: "14 days (#14 tabs)" },
+    { name: "Fluticasone Furoate 27.5mcg Nasal Spray", dose: "1 spray in each nostril once daily", dur: "30 days (1 bottle)" },
+    { name: "Saline Nasal Irrigation Wash", dose: "Flush nasal cavities twice daily as needed", dur: "As needed" },
+  ];
+
+  let curY = 588;
+  rxItems.forEach((rx, idx) => {
+    if (idx % 2 === 0) {
+      cmds.push(`0.98 0.96 0.99 rg ${L} ${curY - 4} 520 18 re f`);
+    }
+    cmds.push(
+      `BT /F2 8 Tf 0.15 0.1 0.25 rg ${L + 8} ${curY} Td (${esc(rx.name)}) Tj ET`,
+      `BT /F1 8 Tf 0.25 0.2 0.35 rg ${L + 200} ${curY} Td (${esc(rx.dose)}) Tj ET`,
+      `BT /F2 7.5 Tf 0.35 0.18 0.55 rg ${L + 360} ${curY} Td (${esc(rx.dur)}) Tj ET`
+    );
+    curY -= 20;
+  });
+
+  // Instructions & Notes
+  curY -= 10;
+  cmds.push(
+    `0.35 0.18 0.55 rg ${L} ${curY} 520 14 re f`,
+    `BT /F2 8 Tf 1 1 1 rg ${L + 6} ${curY + 4} Td (PRESCRIBER CLINICAL DIRECTIVES & SPECIAL INSTRUCTIONS) Tj ET`
+  );
+  curY -= 16;
+  const wrappedNotes = wrap(notes, 75);
+  for (const line of wrappedNotes) {
+    cmds.push(`BT /F1 8 Tf 0.2 0.15 0.25 rg ${L + 6} ${curY} Td (${esc(line)}) Tj ET`);
+    curY -= 12;
+  }
+
+  // Footer
+  cmds.push(
+    `0.9 0.85 0.92 RG 0.5 w ${L} 100 520 0 re S`,
+    `BT /F2 8 Tf 0.3 0.15 0.4 rg ${L} 85 Td (VALIDATED HISTORICAL RECORD · FDA & DOH COMPLIANT ARCHIVE) Tj ET`,
+    `BT /F1 7 Tf 0.45 0.4 0.5 rg ${L} 72 Td (This archived electronic copy reflects prescriptions originally validated and signed on HealthKo Telehealth platform.) Tj ET`,
+    `BT /F1 6.5 Tf 0.5 0.5 0.55 rg ${L} 50 Td (HEALTHKO ARCHIVE · CONFIDENTIAL PATIENT PHARMACEUTICAL RECORD) Tj ET`
+  );
+
+  return buildPdfString(cmds.join("\n"));
+}
+
+/**
+ * Generates an Archived Discharge & Referral Summary PDF
+ */
+export function generateDischargeSamplePdf(doc?: {
+  title?: string;
+  doctorOrClinic?: string;
+  consultationDate?: string;
+  notes?: string;
+}): string {
+  const facility = doc?.doctorOrClinic || "Cardinal Santos Medical Center · Department of Cardiology";
+  const date = doc?.consultationDate || "2026-04-10";
+  const notes =
+    doc?.notes ||
+    "Patient presented for acute chest tightness evaluation. Coronary angiogram negative for critical stenosis. Discharge in stable condition with referral to outpatient cardiology for lifestyle optimization.";
+
+  const cmds: string[] = [
+    // Blue Brand Banner
+    `0.12 0.32 0.58 rg 0 740 ${PAGE_W} 52 re f`,
+    `BT /F2 16 Tf 1 1 1 rg ${L} 765 Td (HOSPITAL DISCHARGE & CLINICAL REFERRAL SUMMARY) Tj ET`,
+    `BT /F1 8.5 Tf 0.85 0.92 0.98 rg ${L} 750 Td (DEPARTMENT OF CARDIOLOGY & INPATIENT SERVICES · CLINICAL HANDOVER) Tj ET`,
+
+    // Facility Info
+    `0.96 0.98 1 rg ${L} 670 520 54 re f`,
+    `0.85 0.9 0.95 RG 0.5 w ${L} 670 520 54 re S`,
+    `BT /F2 11 Tf 0.1 0.2 0.4 rg ${L + 12} 708 Td (${esc(facility)}) Tj ET`,
+    `BT /F1 8 Tf 0.4 0.48 0.55 rg ${L + 12} 694 Td (Hospital Admission #CSMC-2026-4401 · Attending Physician: Dr. Roberto Garcia, MD, FPCP, FPCC) Tj ET`,
+    `BT /F1 8 Tf 0.4 0.48 0.55 rg ${L + 12} 680 Td (Discharge Date: ${esc(date)} · Disposition: Discharged Home, Clinically Stable) Tj ET`,
+
+    // Discharge Details Box
+    `0.12 0.32 0.58 rg ${L} 632 520 26 re f`,
+    `BT /F2 8 Tf 1 1 1 rg ${L + 10} 643 Td (ADMISSION DIAGNOSIS: NON-CARDIAC CHEST DISCOMFORT) Tj ET`,
+    `BT /F2 8 Tf 1 1 1 rg ${L + 300} 643 Td (FINAL DISCHARGE STATUS: RESOLVED / STABLE) Tj ET`,
+
+    // Section 1: Hospital Course & Summary
+    `0.12 0.32 0.58 rg ${L} 606 520 14 re f`,
+    `BT /F2 8 Tf 1 1 1 rg ${L + 6} 610 Td (1. CLINICAL COURSE & INPATIENT SUMMARY) Tj ET`,
+  ];
+
+  let curY = 586;
+  const wrappedNotes = wrap(notes, 75);
+  for (const line of wrappedNotes) {
+    cmds.push(`BT /F1 8.5 Tf 0.1 0.15 0.25 rg ${L} ${curY} Td (${esc(line)}) Tj ET`);
+    curY -= 12;
+  }
+
+  // Section 2: Referral Directives
+  curY -= 6;
+  cmds.push(
+    `0.12 0.32 0.58 rg ${L} ${curY} 520 14 re f`,
+    `BT /F2 8 Tf 1 1 1 rg ${L + 6} ${curY + 4} Td (2. OUTPATIENT REFERRAL & FOLLOW-UP INSTRUCTIONS) Tj ET`
+  );
+  curY -= 16;
+  const referralLines = [
+    "* Referral to Outpatient Telehealth Cardiology via HealthKo for ongoing monitoring.",
+    "* Repeat 12-Lead ECG in 3 months or upon return of symptoms.",
+    "* Continue Low-dose Aspirin 80mg once daily with breakfast.",
+    "* Red flag symptoms discussed: severe crushing chest pain radiating to jaw or left arm requires immediate emergency admission.",
+  ];
+  for (const p of referralLines) {
+    cmds.push(`BT /F1 8 Tf 0.12 0.18 0.25 rg ${L + 6} ${curY} Td (${esc(p)}) Tj ET`);
+    curY -= 13;
+  }
+
+  // Footer
+  cmds.push(
+    `0.88 0.92 0.96 RG 0.5 w ${L} 100 520 0 re S`,
+    `BT /F2 8 Tf 0.15 0.25 0.4 rg ${L} 85 Td (OFFICIAL HOSPITAL DISCHARGE CLEARANCE · CERTIFIED COPY) Tj ET`,
+    `BT /F1 7 Tf 0.4 0.48 0.55 rg ${L} 72 Td (Produced electronically for patient health record. Medical record department copy archived.) Tj ET`,
+    `BT /F1 6.5 Tf 0.5 0.55 0.6 rg ${L} 50 Td (CONFIDENTIAL MEDICAL INFORMATION · HEALTHKO HEALTH ARCHIVE SYSTEM) Tj ET`
+  );
+
+  return buildPdfString(cmds.join("\n"));
+}
+
+/**
+ * Generates an Archived Medical Certificate PDF
+ */
+export function generateCertificateSamplePdf(doc?: {
+  title?: string;
+  doctorOrClinic?: string;
+  consultationDate?: string;
+  notes?: string;
+}): string {
+  const doctor = doc?.doctorOrClinic || "Dr. Maria Luisa Santos, MD · HealthKo Medical Network";
+  const date = doc?.consultationDate || "2026-06-18";
+  const notes =
+    doc?.notes ||
+    "To Whom It May Concern: This certifies that the patient was examined and diagnosed with Acute Upper Respiratory Tract Infection and is advised medical leave of absence for 3 days.";
+
+  const cmds: string[] = [
+    // Rose / Crimson Banner
+    `0.62 0.15 0.25 rg 0 740 ${PAGE_W} 52 re f`,
+    `BT /F2 16 Tf 1 1 1 rg ${L} 765 Td (OFFICIAL MEDICAL CERTIFICATE & FIT-TO-WORK CLEARANCE) Tj ET`,
+    `BT /F1 8.5 Tf 0.98 0.88 0.9 rg ${L} 750 Td (CERTIFIED CLINICAL DOCUMENT · PRC & DOH ACCREDITED TELEHEALTH PHYSICIAN) Tj ET`,
+
+    // Header
+    `0.99 0.96 0.97 rg ${L} 670 520 54 re f`,
+    `0.92 0.82 0.86 RG 0.5 w ${L} 670 520 54 re S`,
+    `BT /F2 11 Tf 0.4 0.1 0.18 rg ${L + 12} 708 Td (${esc(doctor)}) Tj ET`,
+    `BT /F1 8 Tf 0.48 0.4 0.44 rg ${L + 12} 694 Td (PRC Board Certified Specialist · License #0098741 · Professional PTR #441209) Tj ET`,
+    `BT /F1 8 Tf 0.48 0.4 0.44 rg ${L + 12} 680 Td (Certificate Date: ${esc(date)} · Certificate Reference: #MC-2026-0618-912) Tj ET`,
+
+    // Certificate Box
+    `0.62 0.15 0.25 rg ${L} 632 520 26 re f`,
+    `BT /F2 9.5 Tf 1 1 1 rg ${L + 10} 643 Td (CERTIFICATION: MEDICAL SICK LEAVE & FITNESS STATUS) Tj ET`,
+  ];
+
+  let curY = 590;
+  const wrappedNotes = wrap(notes, 75);
+  for (const line of wrappedNotes) {
+    cmds.push(`BT /F1 8.5 Tf 0.15 0.1 0.15 rg ${L + 6} ${curY} Td (${esc(line)}) Tj ET`);
+    curY -= 13;
+  }
+
+  // Recommendations
+  curY -= 10;
+  cmds.push(
+    `0.62 0.15 0.25 rg ${L} ${curY} 520 14 re f`,
+    `BT /F2 8 Tf 1 1 1 rg ${L + 6} ${curY + 4} Td (RECOMMENDED PERIOD OF REST & RESTRICTIONS) Tj ET`
+  );
+  curY -= 16;
+  const certBullets = [
+    "* Recommended Bed Rest Period: 3 Consecutive Days.",
+    "* Excused from physical office duties, strenuous manual labor, and physical education activities.",
+    "* Fit to resume light work duties from home as tolerated.",
+    "* Re-evaluation indicated if fever persists beyond 72 hours.",
+  ];
+  for (const p of certBullets) {
+    cmds.push(`BT /F1 8 Tf 0.15 0.1 0.15 rg ${L + 6} ${curY} Td (${esc(p)}) Tj ET`);
+    curY -= 13;
+  }
+
+  // Attending Signature Footer
+  cmds.push(
+    `0.92 0.85 0.88 RG 0.5 w ${L} 100 520 0 re S`,
+    `BT /F2 8 Tf 0.4 0.15 0.22 rg ${L} 85 Td (ATTENDING CLINICIAN ELECTRONIC SIGNATURE & VERIFICATION) Tj ET`,
+    `BT /F1 7 Tf 0.45 0.4 0.45 rg ${L} 72 Td (Verified electronically through HealthKo Medical Portal. Security Hash: #SHA256-MC912-VERIFIED.) Tj ET`,
+    `BT /F1 6.5 Tf 0.5 0.5 0.55 rg ${L} 50 Td (HEALTHKO ARCHIVED DOCUMENT · NOT VALID AS MEDICO-LEGAL EXPERT WITNESS TESTIMONY) Tj ET`
+  );
+
+  return buildPdfString(cmds.join("\n"));
+}
+
+/**
+ * Generates an Archived Imaging & Scan Report PDF (X-Ray, Ultrasound, CT, MRI)
+ */
+export function generateImagingSamplePdf(doc?: {
+  title?: string;
+  doctorOrClinic?: string;
+  consultationDate?: string;
+  notes?: string;
+}): string {
+  const facility = doc?.doctorOrClinic || "St. Luke's Advanced Diagnostic Imaging Center";
+  const date = doc?.consultationDate || "2026-03-05";
+  const notes =
+    doc?.notes ||
+    "Examination: 2-View Chest Radiograph (PA & Lateral). Lungs are clear without active infiltrates, consolidation, or pleural effusion. Cardiothoracic ratio is normal (0.46). Bony thorax and diaphragm intact.";
+
+  const cmds: string[] = [
+    // Cyan / Teal Banner
+    `0.08 0.42 0.48 rg 0 740 ${PAGE_W} 52 re f`,
+    `BT /F2 16 Tf 1 1 1 rg ${L} 765 Td (DIAGNOSTIC RADIOLOGY & IMAGING REPORT) Tj ET`,
+    `BT /F1 8.5 Tf 0.85 0.95 0.98 rg ${L} 750 Td (DIGITAL RADIOGRAPHY & MEDICAL IMAGING · ACCREDITED IMAGING FACILITY) Tj ET`,
+
+    // Facility & Scan Header
+    `0.96 0.99 1 rg ${L} 670 520 54 re f`,
+    `0.85 0.92 0.95 RG 0.5 w ${L} 670 520 54 re S`,
+    `BT /F2 11 Tf 0.05 0.25 0.32 rg ${L + 12} 708 Td (${esc(facility)}) Tj ET`,
+    `BT /F1 8 Tf 0.35 0.48 0.52 rg ${L + 12} 694 Td (Modality: Digital Radiography (X-Ray) · Accession #IMG-2026-0305-182) Tj ET`,
+    `BT /F1 8 Tf 0.35 0.48 0.52 rg ${L + 12} 680 Td (Exam Date: ${esc(date)} · Radiologist: Dr. Alexander Tan, MD, FPCR) Tj ET`,
+
+    // Modality Header Bar
+    `0.08 0.42 0.48 rg ${L} 632 520 26 re f`,
+    `BT /F2 8.5 Tf 1 1 1 rg ${L + 10} 643 Td (STUDY: CHEST 2-VIEWS (POSTEROANTERIOR & LATERAL)) Tj ET`,
+    `BT /F2 8.5 Tf 1 1 1 rg ${L + 340} 643 Td (CLINICAL STATUS: NORMAL STUDY) Tj ET`,
+
+    // Section 1: Technique & Findings
+    `0.08 0.42 0.48 rg ${L} 606 520 14 re f`,
+    `BT /F2 8 Tf 1 1 1 rg ${L + 6} 610 Td (1. RADIOLOGICAL OBSERVATIONS & FINDINGS) Tj ET`,
+  ];
+
+  let curY = 586;
+  const wrappedNotes = wrap(notes, 75);
+  for (const line of wrappedNotes) {
+    cmds.push(`BT /F1 8.5 Tf 0.1 0.18 0.22 rg ${L} ${curY} Td (${esc(line)}) Tj ET`);
+    curY -= 12;
+  }
+
+  // Section 2: Detailed Organ Findings Table
+  curY -= 8;
+  cmds.push(
+    `0.08 0.42 0.48 rg ${L} ${curY} 520 14 re f`,
+    `BT /F2 8 Tf 1 1 1 rg ${L + 6} ${curY + 4} Td (2. DETAILED ANATOMICAL STRUCTURE EVALUATION) Tj ET`
+  );
+  curY -= 16;
+  const findings = [
+    { area: "Trachea & Airways", status: "Midline, patent, no tracheobronchial deviation" },
+    { area: "Lungs & Parenchyma", status: "Normal vascularity, clear bilateral lung fields" },
+    { area: "Cardiac Silhouette", status: "Normal size and contour, CTR 0.46 (Normal < 0.50)" },
+    { area: "Costophrenic Angles", status: "Sharp bilaterally, no pleural thickening or fluid" },
+    { area: "Thoracic Skeleton", status: "No acute rib fractures or osteolytic focal lesions" },
+  ];
+  findings.forEach((item, idx) => {
+    if (idx % 2 === 0) {
+      cmds.push(`0.96 0.98 0.99 rg ${L} ${curY - 3} 520 14 re f`);
+    }
+    cmds.push(
+      `BT /F2 7.5 Tf 0.08 0.35 0.4 rg ${L + 6} ${curY} Td (${esc(item.area)}) Tj ET`,
+      `BT /F1 7.5 Tf 0.2 0.28 0.35 rg ${L + 160} ${curY} Td (${esc(item.status)}) Tj ET`
+    );
+    curY -= 14;
+  });
+
+  // Impression
+  curY -= 6;
+  cmds.push(
+    `0.08 0.42 0.48 rg ${L} ${curY} 520 14 re f`,
+    `BT /F2 8 Tf 1 1 1 rg ${L + 6} ${curY + 4} Td (3. FINAL RADIOLOGIST IMPRESSION) Tj ET`
+  );
+  curY -= 16;
+  cmds.push(`BT /F2 9 Tf 0.1 0.45 0.35 rg ${L + 6} ${curY} Td (IMPRESSION: NO ACUTE CARDIOPULMONARY ABNORMALITY DETECTED.) Tj ET`);
+
+  // Footer
+  cmds.push(
+    `0.88 0.92 0.94 RG 0.5 w ${L} 100 520 0 re S`,
+    `BT /F2 8 Tf 0.15 0.3 0.35 rg ${L} 85 Td (BOARD CERTIFIED RADIOLOGIST ELECTRONIC SIGN-OFF) Tj ET`,
+    `BT /F1 7 Tf 0.4 0.48 0.52 rg ${L} 72 Td (Report digitally transmitted via PACS and archived to patient HealthKo Medical Cloud.) Tj ET`,
+    `BT /F1 6.5 Tf 0.5 0.55 0.6 rg ${L} 50 Td (HEALTHKO ARCHIVED MEDICAL IMAGING · PROTECTED HEALTH INFORMATION) Tj ET`
+  );
+
+  return buildPdfString(cmds.join("\n"));
+}
+
+/**
  * Downloads a sample archive PDF based on document metadata
  */
 export async function downloadMedicalArchiveSamplePdf(doc: {
@@ -307,17 +622,40 @@ export async function downloadMedicalArchiveSamplePdf(doc: {
 }): Promise<void> {
   if (typeof window === "undefined") return;
 
-  const isLab =
-    doc.category === "lab" ||
-    (doc.title && /lab|metabolic|cbc|panel|blood/i.test(doc.title)) ||
-    (doc.fileName && /lab|panel/i.test(doc.fileName));
+  const cat = doc.category || "";
+  const title = (doc.title || "").toLowerCase();
+  const file = (doc.fileName || "").toLowerCase();
 
-  const pdfString = isLab ? generateLabReportPdf(doc) : generateConsultationSummaryPdf(doc);
+  let pdfString: string;
+  let fallbackName: string;
+
+  if (cat === "lab" || title.includes("lab") || title.includes("cbc") || title.includes("metabolic") || file.includes("lab")) {
+    pdfString = generateLabReportPdf(doc);
+    fallbackName = "Diagnostic_Lab_Report.pdf";
+  } else if (cat === "prescription" || title.includes("prescription") || file.includes("prescription") || title.includes("rx")) {
+    pdfString = generatePrescriptionSamplePdf(doc);
+    fallbackName = "Archived_Prescription.pdf";
+  } else if (cat === "discharge" || title.includes("discharge") || title.includes("referral") || file.includes("discharge")) {
+    pdfString = generateDischargeSamplePdf(doc);
+    fallbackName = "Discharge_Referral_Summary.pdf";
+  } else if (cat === "certificate" || title.includes("certificate") || file.includes("certificate") || title.includes("leave")) {
+    pdfString = generateCertificateSamplePdf(doc);
+    fallbackName = "Medical_Certificate.pdf";
+  } else if (cat === "imaging" || title.includes("x-ray") || title.includes("scan") || title.includes("ultrasound") || title.includes("mri") || file.includes("imaging")) {
+    pdfString = generateImagingSamplePdf(doc);
+    fallbackName = "Diagnostic_Imaging_Report.pdf";
+  } else {
+    // Default consultation or other clinical encounter record
+    pdfString = generateConsultationSummaryPdf(doc);
+    fallbackName = "Consultation_Summary.pdf";
+  }
+
   const blob = new Blob([pdfString], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  const fallbackName = isLab ? "Lab_Report_Panel.pdf" : "Consultation_Summary.pdf";
-  const name = doc.fileName?.toLowerCase().endsWith(".pdf") ? doc.fileName : `${(doc.fileName || fallbackName).replace(/\.[^/.]+$/, "")}.pdf`;
+  const name = doc.fileName?.toLowerCase().endsWith(".pdf")
+    ? doc.fileName
+    : `${(doc.fileName || fallbackName).replace(/\.[^/.]+$/, "")}.pdf`;
   a.href = url;
   a.download = name;
   document.body.appendChild(a);

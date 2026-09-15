@@ -998,13 +998,20 @@ export default function PatientDashboardClient({
       const storageKey = `healthko:patient-uploaded-documents:${patient.id}`;
       const raw = window.localStorage.getItem(storageKey);
       if (raw) {
-        const parsed = JSON.parse(raw);
+        const parsed: PatientUploadedDocument[] = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setMedicalDocuments(parsed);
+          const existingIds = new Set(parsed.map((d) => d.id));
+          const missingSeeds = INITIAL_PATIENT_MEDICAL_FILES.filter((s) => !existingIds.has(s.id));
+          const merged = [...parsed, ...missingSeeds];
+          setMedicalDocuments(merged);
+          if (missingSeeds.length > 0) {
+            window.localStorage.setItem(storageKey, JSON.stringify(merged));
+          }
           return;
         }
       }
       setMedicalDocuments(INITIAL_PATIENT_MEDICAL_FILES);
+      window.localStorage.setItem(storageKey, JSON.stringify(INITIAL_PATIENT_MEDICAL_FILES));
     } catch {
       setMedicalDocuments(INITIAL_PATIENT_MEDICAL_FILES);
     }

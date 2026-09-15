@@ -3513,6 +3513,54 @@ export const INITIAL_PATIENT_MEDICAL_FILES: PatientUploadedDocument[] = [
     uploadedAt: "2026-05-13T10:15:00.000Z",
     notes: "Fasting blood sugar, lipid profiles, and renal function markers all within normal physiological reference ranges.",
   },
+  {
+    id: "med-seed-3",
+    title: "Historical Clinical Prescription Record",
+    category: "prescription",
+    doctorOrClinic: "Dr. Maria Luisa Santos, MD · Makati Medical Center",
+    consultationDate: "2026-06-18",
+    fileName: "Historical_Prescription_Cetirizine_Fluticasone.pdf",
+    fileSize: "850 KB",
+    fileType: "application/pdf",
+    uploadedAt: "2026-06-19T09:00:00.000Z",
+    notes: "Prescribed Cetirizine 10mg once daily (#14 tabs) and Fluticasone furoate nasal spray 27.5mcg daily (#1 bottle). Completed course.",
+  },
+  {
+    id: "med-seed-4",
+    title: "Inpatient Clinical Discharge & Referral Summary",
+    category: "discharge",
+    doctorOrClinic: "Cardinal Santos Medical Center · Dept of Cardiology",
+    consultationDate: "2026-04-10",
+    fileName: "Discharge_Summary_CSMC_Cardiology_Apr2026.pdf",
+    fileSize: "1.8 MB",
+    fileType: "application/pdf",
+    uploadedAt: "2026-04-11T14:30:00.000Z",
+    notes: "Evaluated for non-cardiac chest discomfort. Coronary angiography negative for critical stenosis. Discharged home stable with outpatient referral.",
+  },
+  {
+    id: "med-seed-5",
+    title: "Official Medical Sick Leave Certificate",
+    category: "certificate",
+    doctorOrClinic: "Dr. Maria Luisa Santos, MD · HealthKo Medical Network",
+    consultationDate: "2026-06-18",
+    fileName: "Medical_Certificate_SickLeave_June2026.pdf",
+    fileSize: "920 KB",
+    fileType: "application/pdf",
+    uploadedAt: "2026-06-18T16:00:00.000Z",
+    notes: "Diagnosed with Acute Upper Respiratory Tract Infection. Recommended medical rest for 3 consecutive days from June 18-20, 2026.",
+  },
+  {
+    id: "med-seed-6",
+    title: "Chest 2-Views Digital Radiography (X-Ray)",
+    category: "imaging",
+    doctorOrClinic: "St. Luke's Advanced Diagnostic Imaging Center",
+    consultationDate: "2026-03-05",
+    fileName: "Diagnostic_Chest_XRay_PA_Lateral_Mar2026.pdf",
+    fileSize: "3.1 MB",
+    fileType: "application/pdf",
+    uploadedAt: "2026-03-06T11:45:00.000Z",
+    notes: "Chest PA & Lateral examination. Clear lung fields, normal cardiothoracic ratio (0.46). No active focal infiltrates or fractures.",
+  },
 ];
 
 export const CATEGORY_CONFIG: Record<
@@ -3729,9 +3777,16 @@ export function PatientMedicalDocumentsHub({
     try {
       const raw = window.localStorage.getItem(storageKey);
       if (raw) {
-        const parsed = JSON.parse(raw);
+        const parsed: PatientUploadedDocument[] = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setDocuments(parsed);
+          // Merge any newly introduced seed documents by id
+          const existingIds = new Set(parsed.map((d) => d.id));
+          const missingSeeds = INITIAL_PATIENT_MEDICAL_FILES.filter((s) => !existingIds.has(s.id));
+          const merged = [...parsed, ...missingSeeds];
+          setDocuments(merged);
+          if (missingSeeds.length > 0) {
+            window.localStorage.setItem(storageKey, JSON.stringify(merged));
+          }
           return;
         }
       }
