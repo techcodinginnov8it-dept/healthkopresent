@@ -885,3 +885,48 @@ Sep 8 21:15 ──────────────────────�
   - **Encounter Detail & Documents Panel Below**: Placed the full Encounter Detail section (Summary, Assessment & Plan, E-Prescriptions, Certificates, and Dialogue Transcript) directly underneath the horizontal Medical Records pipeline.
   - Verified with `npx tsc --noEmit` (0 errors).
 
+### 55. Patient Dashboard Overview Reordering & Latest Data Enforcement
+- **Time**: Sep 16, ~03:40–04:10 +0800 · Duration: ~30 min
+- **Scope**: `PatientDashboardClient.tsx` — `activeModule === "overview"`
+- **Changes**:
+  - **Latest Data Guarantee**: Updated all patient dashboard vital and consultation metrics to strictly query the latest recorded encounter rather than previous entries.
+  - **Section Reordering**: Reorganized the primary dashboard sections into the requested clinical flow:
+    1. *Vital Health Baseline* (Clinical Measurements)
+    2. *Clinical Risk Alerts* (High-Priority Safety Info)
+    3. *Clinical Archive* (Recent Documents & Vault)
+    4. *Online Consultation* (Consultation Schedule & Pipeline)
+  - Verified visual layout and responsive order.
+
+### 56. Patient Profile Merge & Medical File Uploads in Settings
+- **Time**: Sep 16, ~04:10–04:30 +0800 · Duration: ~20 min
+- **Scope**: `SettingsModule.tsx` — `PatientSettingsModule`
+- **Changes**:
+  - **Merged Profile Management & Medical Profile**: Combined the two tabs into a unified **"Patient Profile"** section.
+  - **Merged Contact Info & Emergency Contact**: Consolidated contact information and emergency contact fields into a unified contact pane.
+  - **Medical Files & Previous Consultations Hub**: Added file upload support (`PatientMedicalDocumentsHub`) allowing patients to upload PDFs, images, and previous clinical consultation records with category tags, notes, and local storage persistence.
+
+### 57. Consultation Report PDF Generator
+- **Time**: Sep 16, ~04:40–05:00 +0800 · Duration: ~20 min
+- **Scope**: `src/lib/consultation-report-pdf.ts`
+- **Changes**:
+  - **Comprehensive Encounter Report**: Built a dedicated raw-PDF generator distinct from dialogue transcripts.
+  - **Clinical Structure**: Includes HealthKo clinic branding, physician credentials (specialty, license, NPI), patient demographics, vital health baseline panel, chief complaint, diagnosis, clinical assessment, comprehensive care plan, prescription summary, and follow-up directives.
+  - Added one-click client download helper `downloadConsultationReportPdf()`.
+
+### 58. Medical Archive Real PDF Sample Generators
+- **Time**: Sep 16, ~05:00–05:15 +0800 · Duration: ~15 min
+- **Scope**: `src/lib/medical-archive-sample-pdf.ts` & `SettingsModule.tsx`
+- **Changes**:
+  - **Real PDF Samples**: Replaced plain-text fallback downloads with real formatted PDF generators for seed records:
+    - *Previous Outpatient Consultation Summary*: Complete outpatient clinical encounter summary with recorded vitals and care directives.
+    - *Annual Comprehensive Metabolic & CBC Panel*: Clinical pathology report featuring analyte table (FBS, HbA1c, Lipids, Renal, Liver, CBC) with standard reference ranges.
+  - Dispatched seamlessly from both the document list and preview modal.
+
+### 59. Current Encounter Documents Integration in Online Consultation
+- **Time**: Sep 16, ~05:15–05:35 +0800 · Duration: ~20 min
+- **Scope**: `PatientDashboardClient.tsx` — Online Consultation action hub (`consultationHubTab === "documents"`)
+- **Changes**:
+  - **Integrated Documents View**: Rather than displaying the entire standalone hub interface below, all archived documents from *Previous Consultations & Medical Documents* now render directly as individual document cards right inside the **Current Encounter Documents** section alongside the Consultation Report, E-Prescription, and Medical Certificates.
+  - **Interactive Actions**: Each card includes category pill tags, date/clinic info, instant full-screen **Preview Modal** (`MedicalFilePreviewModal`), and direct **Download PDF** button.
+  - Verified with `npx tsc --noEmit` (0 errors).
+
