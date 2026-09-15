@@ -181,7 +181,7 @@ export function DashboardShell<TModule extends ModuleId>({
     : "border-slate-200/80 bg-white/95";
 
   return (
-    <div className={`min-h-screen ${shellBg} font-sans lg:flex`}>
+    <div className={`min-h-screen ${shellBg} font-sans md:flex`}>
       {/* Mobile backdrop overlay */}
       {mobileNavOpen && (
         <button
@@ -369,7 +369,7 @@ export function DashboardShell<TModule extends ModuleId>({
       </aside>
 
       {/* Main content area */}
-      <div className="flex min-h-screen flex-1 flex-col">
+      <div className="flex min-h-screen flex-1 flex-col min-w-0">
         {/* Sticky header */}
         <header className={`sticky top-0 z-30 border-b ${headerBg} backdrop-blur-xl`}>
           <div className="px-4 py-3 lg:px-8">
@@ -508,7 +508,7 @@ export function DashboardShell<TModule extends ModuleId>({
           </div>
         </header>
 
-        <main className="flex-1 p-4 lg:p-8">{children}</main>
+        <main className="flex-1 min-w-0 p-4 lg:p-8">{children}</main>
       </div>
     </div>
   );

@@ -696,6 +696,8 @@ export function AppointmentCalendar({
   onAnchorDateChange,
   availability,
   consultationDuration = 30,
+  onSelectSlot,
+  onSelectDate,
 }: {
   appointments: CalendarAppointment[];
   tone?: "light" | "dark";
@@ -714,6 +716,8 @@ export function AppointmentCalendar({
   onAnchorDateChange?: (date: Date) => void;
   availability?: string | null;
   consultationDuration?: number;
+  onSelectSlot?: (slot: Date) => void;
+  onSelectDate?: (date: Date) => void;
 }) {
   const resolvedAnchorDate = startOfDay(anchorDate || new Date());
   const [selectedEntry, setSelectedEntry] = useState<{ appointment: CalendarAppointment; rect: DOMRect } | null>(null);
@@ -890,11 +894,16 @@ export function AppointmentCalendar({
                         onReschedule(appointmentId, moveAppointmentToDay(appointment.scheduledAt, day));
                       }
                     }}
+                    onClick={() => {
+                      if (dayAvailable && onSelectDate) {
+                        onSelectDate(day);
+                      }
+                    }}
                     className={`min-h-36 p-2 transition-colors ${
                       dayAvailable
                         ? dark ? "bg-slate-950 hover:bg-slate-900/60" : "bg-white hover:bg-teal-50/30"
                         : dark ? "bg-slate-900/60" : "bg-slate-50"
-                    }`}
+                    } ${dayAvailable && onSelectDate ? "cursor-pointer" : ""}`}
                     style={unavailableStyle}
                   >
                     <div className="mb-2 flex items-center justify-between gap-2">
@@ -1020,6 +1029,11 @@ export function AppointmentCalendar({
                               onReschedule(appointmentId, toLocalDateTimeValue(slot));
                             }
                           }}
+                          onClick={() => {
+                            if (slotAvailable && !slotFull && onSelectSlot) {
+                              onSelectSlot(slot);
+                            }
+                          }}
                           className={`relative min-h-[70px] p-1 transition-colors ${
                             slotAvailable
                               ? dark
@@ -1028,7 +1042,9 @@ export function AppointmentCalendar({
                               : dark
                                 ? "bg-slate-900/70"
                                 : "bg-slate-50/80"
-                          } ${!slotAvailable && !editable ? "cursor-not-allowed" : ""}`}
+                          } ${!slotAvailable && !editable ? "cursor-not-allowed" : ""} ${
+                            slotAvailable && !slotFull && onSelectSlot ? "cursor-pointer hover:ring-2 hover:ring-brand-teal/40" : ""
+                          }`}
                           style={unavailableSlotStyle}
                         >
                           {/* Prominent Not Available label when doctor is off-duty and slot is empty */}

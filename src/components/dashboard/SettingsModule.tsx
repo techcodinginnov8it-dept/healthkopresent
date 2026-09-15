@@ -13,6 +13,7 @@ import {
   requestDoctorContactUpdateOtp,
 } from "@/app/actions/settings";
 import { formatDate } from "@/lib/dashboard/format";
+import { downloadMedicalArchiveSamplePdf } from "@/lib/medical-archive-sample-pdf";
 
 type DoctorSettingsData = {
   id: string;
@@ -153,8 +154,7 @@ const blankPasswordForm: PasswordForm = {
 const SETTINGS_DRAFT_VERSION = 1;
 
 const patientSections = [
-  { id: "profile", label: "Profile Management", description: "" },
-  { id: "medical", label: "Medical Profile", description: "" },
+  { id: "profile", label: "Patient Profile", description: "" },
   { id: "security", label: "Account Security", description: "" },
   { id: "notifications", label: "Notifications", description: "" },
   { id: "privacy", label: "Privacy", description: "" },
@@ -246,6 +246,91 @@ function Field({
     </label>
   );
 }
+
+const COUNTRY_CODES = [
+  { code: "+1", label: "🇺🇸 +1" },
+  { code: "+44", label: "🇬🇧 +44" },
+  { code: "+61", label: "🇦🇺 +61" },
+  { code: "+63", label: "🇵🇭 +63" },
+  { code: "+65", label: "🇸🇬 +65" },
+  { code: "+81", label: "🇯🇵 +81" },
+  { code: "+82", label: "🇰🇷 +82" },
+  { code: "+86", label: "🇨🇳 +86" },
+  { code: "+91", label: "🇮🇳 +91" },
+  { code: "+49", label: "🇩🇪 +49" },
+  { code: "+33", label: "🇫🇷 +33" },
+  { code: "+39", label: "🇮🇹 +39" },
+  { code: "+34", label: "🇪🇸 +34" },
+  { code: "+55", label: "🇧🇷 +55" },
+  { code: "+52", label: "🇲🇽 +52" },
+  { code: "+27", label: "🇿🇦 +27" },
+  { code: "+234", label: "🇳🇬 +234" },
+  { code: "+20", label: "🇪🇬 +20" },
+  { code: "+966", label: "🇸🇦 +966" },
+  { code: "+971", label: "🇦🇪 +971" },
+];
+
+function PhoneField({
+  countryCode,
+  phone,
+  onCountryCodeChange,
+  onPhoneChange,
+}: {
+  countryCode: string;
+  phone: string;
+  onCountryCodeChange: (value: string) => void;
+  onPhoneChange: (value: string) => void;
+}) {
+  const tone = useSettingsTheme();
+  const isDark = tone === "dark";
+
+  const knownCode = COUNTRY_CODES.some((c) => c.code === countryCode);
+
+  return (
+    <label className={`space-y-1 text-xs font-black uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+      <span>Contact number</span>
+      <div className={`mt-1 flex h-11 w-full overflow-hidden rounded-xl border transition ${isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-white"}`}>
+        <select
+          value={knownCode ? countryCode : countryCode}
+          onChange={(e) => onCountryCodeChange(e.target.value)}
+          className={`h-full shrink-0 border-r bg-transparent pl-3 pr-2 text-sm font-semibold normal-case outline-none transition ${
+            isDark
+              ? "border-slate-800 text-white focus:border-brand-teal"
+              : "border-slate-200 text-slate-900 focus:border-brand-teal"
+          }`}
+          aria-label="Country code"
+        >
+          {knownCode
+            ? COUNTRY_CODES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.label}
+                </option>
+              ))
+            : [
+                <option key={countryCode} value={countryCode}>
+                  {countryCode}
+                </option>,
+                ...COUNTRY_CODES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.label}
+                  </option>
+                )),
+              ]}
+        </select>
+        <input
+          type="tel"
+          value={phone}
+          onChange={(e) => onPhoneChange(e.target.value)}
+          placeholder="Phone number"
+          className={`h-full min-w-0 flex-1 bg-transparent px-3.5 text-sm font-semibold normal-case outline-none ${
+            isDark ? "text-white placeholder-slate-500" : "text-slate-900 placeholder-slate-400"
+          }`}
+        />
+      </div>
+    </label>
+  );
+}
+
 
 function TextAreaField({
   label,
@@ -3378,6 +3463,810 @@ export function DoctorSettingsModule({
   );
 }
 
+// ─── Patient Medical Files & Previous Consultations Hub ──────────────────────
+
+type MedicalDocumentCategory =
+  | "consultation"
+  | "lab"
+  | "prescription"
+  | "discharge"
+  | "certificate"
+  | "imaging"
+  | "other";
+
+export type PatientUploadedDocument = {
+  id: string;
+  title: string;
+  category: MedicalDocumentCategory;
+  doctorOrClinic: string;
+  consultationDate: string;
+  fileName: string;
+  fileSize: string;
+  fileType: string;
+  fileData?: string;
+  uploadedAt: string;
+  notes?: string;
+};
+
+export const INITIAL_PATIENT_MEDICAL_FILES: PatientUploadedDocument[] = [
+  {
+    id: "med-seed-1",
+    title: "Previous Outpatient Consultation Summary",
+    category: "consultation",
+    doctorOrClinic: "Dr. Maria Luisa Santos · Makati Medical Center",
+    consultationDate: "2026-06-18",
+    fileName: "Consultation_Summary_MakatiMed_June2026.pdf",
+    fileSize: "1.2 MB",
+    fileType: "application/pdf",
+    uploadedAt: "2026-06-19T08:30:00.000Z",
+    notes: "Follow-up for seasonal allergic rhinitis. Prescribed oral antihistamine and nasal spray. Recommended 6-month review.",
+  },
+  {
+    id: "med-seed-2",
+    title: "Annual Comprehensive Metabolic & CBC Panel",
+    category: "lab",
+    doctorOrClinic: "Hi-Precision Diagnostics Center",
+    consultationDate: "2026-05-12",
+    fileName: "Diagnostic_Lab_CBC_Lipids_May2026.pdf",
+    fileSize: "2.4 MB",
+    fileType: "application/pdf",
+    uploadedAt: "2026-05-13T10:15:00.000Z",
+    notes: "Fasting blood sugar, lipid profiles, and renal function markers all within normal physiological reference ranges.",
+  },
+];
+
+export const CATEGORY_CONFIG: Record<
+  MedicalDocumentCategory,
+  { label: string; badgeClass: string; darkBadgeClass: string }
+> = {
+  consultation: {
+    label: "Previous Consultation",
+    badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200/80",
+    darkBadgeClass: "bg-emerald-950/60 text-emerald-300 border-emerald-800",
+  },
+  lab: {
+    label: "Lab & Diagnostics",
+    badgeClass: "bg-amber-50 text-amber-700 border-amber-200/80",
+    darkBadgeClass: "bg-amber-950/60 text-amber-300 border-amber-800",
+  },
+  prescription: {
+    label: "Past Prescription",
+    badgeClass: "bg-purple-50 text-purple-700 border-purple-200/80",
+    darkBadgeClass: "bg-purple-950/60 text-purple-300 border-purple-800",
+  },
+  discharge: {
+    label: "Discharge & Referral",
+    badgeClass: "bg-blue-50 text-blue-700 border-blue-200/80",
+    darkBadgeClass: "bg-blue-950/60 text-blue-300 border-blue-800",
+  },
+  certificate: {
+    label: "Medical Certificate",
+    badgeClass: "bg-rose-50 text-rose-700 border-rose-200/80",
+    darkBadgeClass: "bg-rose-950/60 text-rose-300 border-rose-800",
+  },
+  imaging: {
+    label: "Imaging & Scan",
+    badgeClass: "bg-cyan-50 text-cyan-700 border-cyan-200/80",
+    darkBadgeClass: "bg-cyan-950/60 text-cyan-300 border-cyan-800",
+  },
+  other: {
+    label: "Clinical Record",
+    badgeClass: "bg-slate-100 text-slate-700 border-slate-200",
+    darkBadgeClass: "bg-slate-800 text-slate-300 border-slate-700",
+  },
+};
+
+export function formatDocDate(dateStr?: string) {
+  if (!dateStr) return "N/A";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  } catch {
+    return dateStr;
+  }
+}
+
+export function MedicalFilePreviewModal({
+  doc,
+  onClose,
+}: {
+  doc: PatientUploadedDocument;
+  onClose: () => void;
+}) {
+  const isImage = doc.fileType.startsWith("image/") || (doc.fileData && doc.fileData.startsWith("data:image/"));
+  const isPdf = doc.fileType === "application/pdf" || doc.fileName.toLowerCase().endsWith(".pdf");
+
+  const handleDownload = () => {
+    if (doc.fileData) {
+      const a = document.createElement("a");
+      a.href = doc.fileData;
+      a.download = doc.fileName || `${doc.title}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } else {
+      downloadMedicalArchiveSamplePdf(doc);
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="relative flex max-h-[92vh] w-[min(94vw,54rem)] flex-col rounded-3xl border border-white/10 bg-slate-900 text-white shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Modal Header */}
+        <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
+          <div className="min-w-0 flex-1 pr-4">
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-brand-teal/20 px-2.5 py-0.5 text-[10px] font-black uppercase text-brand-teal">
+                {CATEGORY_CONFIG[doc.category]?.label || "Medical File"}
+              </span>
+              <span className="text-xs text-slate-400 font-semibold">{doc.fileSize}</span>
+            </div>
+            <h3 className="mt-1 truncate text-lg font-black text-white">{doc.title}</h3>
+            <p className="mt-0.5 truncate text-xs text-slate-400">
+              {doc.doctorOrClinic ? `${doc.doctorOrClinic} · ` : ""}Date: {formatDocDate(doc.consultationDate)}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleDownload}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-brand-teal px-3.5 py-2 text-xs font-black text-white hover:bg-teal-600 transition"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M12 3v10" />
+                <path d="m7 8 5 5 5-5" />
+                <path d="M5 19h14" />
+              </svg>
+              Download
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-white/5 text-lg font-black text-slate-300 hover:bg-white/10 transition"
+              aria-label="Close preview"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+
+        {/* Modal Body / Preview Canvas */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {doc.notes && (
+            <div className="rounded-2xl border border-white/10 bg-slate-800/60 p-4">
+              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Doctor / Encounter Notes</p>
+              <p className="mt-1 text-xs font-medium text-slate-200 leading-relaxed">{doc.notes}</p>
+            </div>
+          )}
+
+          {isImage && doc.fileData ? (
+            <div className="flex items-center justify-center rounded-2xl border border-white/10 bg-black/40 p-4">
+              <img src={doc.fileData} alt={doc.title} className="max-h-[55vh] max-w-full rounded-xl object-contain shadow-md" />
+            </div>
+          ) : isPdf && doc.fileData ? (
+            <div className="h-[55vh] w-full rounded-2xl border border-white/10 overflow-hidden bg-white">
+              <iframe src={doc.fileData} title={doc.title} className="h-full w-full border-none" />
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5 p-10 text-center">
+              <div className="mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-brand-teal/20 text-brand-teal">
+                <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                </svg>
+              </div>
+              <p className="text-sm font-black text-white">{doc.fileName}</p>
+              <p className="mt-1 text-xs text-slate-400">Clinical file archived in patient health vault ({doc.fileSize}).</p>
+              <button
+                type="button"
+                onClick={handleDownload}
+                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-brand-teal px-5 py-2.5 text-xs font-black text-white hover:bg-teal-600 transition"
+              >
+                Download Document ({doc.fileSize})
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function PatientMedicalDocumentsHub({
+  patientId,
+  onToast,
+}: {
+  patientId: string;
+  onToast?: (tone: "success" | "error", message: string) => void;
+}) {
+  const tone = useSettingsTheme();
+  const isDark = tone === "dark";
+  const storageKey = `healthko:patient-uploaded-documents:${patientId}`;
+
+  const [documents, setDocuments] = useState<PatientUploadedDocument[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<PatientUploadedDocument | null>(null);
+
+  // Upload Form State
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFileData, setUploadFileData] = useState<string>("");
+  const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadCategory, setUploadCategory] = useState<MedicalDocumentCategory>("consultation");
+  const [uploadConsultationDate, setUploadConsultationDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [uploadDoctorOrClinic, setUploadDoctorOrClinic] = useState("");
+  const [uploadNotes, setUploadNotes] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load from localStorage or initialize with seed
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setDocuments(parsed);
+          return;
+        }
+      }
+      setDocuments(INITIAL_PATIENT_MEDICAL_FILES);
+      window.localStorage.setItem(storageKey, JSON.stringify(INITIAL_PATIENT_MEDICAL_FILES));
+    } catch {
+      setDocuments(INITIAL_PATIENT_MEDICAL_FILES);
+    }
+  }, [storageKey]);
+
+  // Save changes to localStorage
+  const persistDocuments = (newDocs: PatientUploadedDocument[]) => {
+    setDocuments(newDocs);
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(newDocs));
+      } catch (err) {
+        console.error("Failed to save to localStorage", err);
+      }
+    }
+  };
+
+  const handleFileSelect = (file: File) => {
+    // 15MB limit check
+    if (file.size > 15 * 1024 * 1024) {
+      onToast?.("error", "File size exceeds 15MB limit. Please choose a smaller file.");
+      return;
+    }
+
+    setUploadFile(file);
+    if (!uploadTitle.trim()) {
+      // Auto-populate title with pretty filename
+      const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+      setUploadTitle(cleanName);
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setUploadFileData(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUploadSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uploadFile) {
+      onToast?.("error", "Please select a file to upload.");
+      return;
+    }
+    if (!uploadTitle.trim()) {
+      onToast?.("error", "Please enter a document title.");
+      return;
+    }
+
+    setIsProcessing(true);
+
+    const formatFileSize = (bytes: number) => {
+      if (bytes < 1024 * 1024) {
+        return `${(bytes / 1024).toFixed(0)} KB`;
+      }
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    };
+
+    const newDoc: PatientUploadedDocument = {
+      id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      title: uploadTitle.trim(),
+      category: uploadCategory,
+      doctorOrClinic: uploadDoctorOrClinic.trim() || "Attending Physician",
+      consultationDate: uploadConsultationDate || new Date().toISOString().slice(0, 10),
+      fileName: uploadFile.name,
+      fileSize: formatFileSize(uploadFile.size),
+      fileType: uploadFile.type || "application/octet-stream",
+      fileData: uploadFileData,
+      uploadedAt: new Date().toISOString(),
+      notes: uploadNotes.trim() || undefined,
+    };
+
+    const updated = [newDoc, ...documents];
+    persistDocuments(updated);
+    setIsProcessing(false);
+    setIsUploadOpen(false);
+
+    // Reset upload form
+    setUploadFile(null);
+    setUploadFileData("");
+    setUploadTitle("");
+    setUploadCategory("consultation");
+    setUploadDoctorOrClinic("");
+    setUploadNotes("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+
+    onToast?.("success", "Medical file uploaded to your clinical archive.");
+  };
+
+  const handleDeleteDoc = (docId: string) => {
+    const updated = documents.filter((d) => d.id !== docId);
+    persistDocuments(updated);
+    onToast?.("success", "Document removed from your records.");
+  };
+
+  const handleDownloadDoc = (doc: PatientUploadedDocument) => {
+    if (doc.fileData) {
+      const a = document.createElement("a");
+      a.href = doc.fileData;
+      a.download = doc.fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } else {
+      downloadMedicalArchiveSamplePdf(doc);
+    }
+  };
+
+  // Filtered documents
+  const filteredDocs = documents.filter((doc) => {
+    const matchesCategory = selectedCategory === "all" || doc.category === selectedCategory;
+    const matchesSearch =
+      searchQuery.trim() === "" ||
+      doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      doc.doctorOrClinic.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (doc.notes && doc.notes.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchesCategory && matchesSearch;
+  });
+
+  return (
+    <>
+      {previewDoc && <MedicalFilePreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />}
+
+      <section
+        className={`rounded-2xl border p-6 transition-colors ${
+          isDark ? "border-slate-850 bg-slate-900 text-white shadow-xs" : "border-slate-200 bg-white text-slate-900 shadow-xs"
+        }`}
+      >
+        {/* Header with Title and Upload Button */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b pb-5" style={{ borderColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }}>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="rounded-lg bg-brand-teal/10 p-1.5 text-brand-teal">
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                </svg>
+              </span>
+              <h2 className={`text-xl font-black ${isDark ? "text-white" : "text-slate-950"}`}>
+                Previous Consultations & Medical Documents
+              </h2>
+            </div>
+            <p className={`mt-1 text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+              Upload outside hospital records, previous doctor consultations, diagnostic lab results, and external health files.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsUploadOpen((prev) => !prev)}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-teal px-4 py-2.5 text-xs font-black text-white shadow-sm hover:bg-teal-600 transition active:scale-[0.98]"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            {isUploadOpen ? "Close Uploader" : "Upload Medical File"}
+          </button>
+        </div>
+
+        {/* Upload Form (Expandable) */}
+        {isUploadOpen && (
+          <div
+            className={`mt-5 rounded-2xl border p-5 transition-all ${
+              isDark ? "border-brand-teal/30 bg-slate-950/80" : "border-brand-teal/20 bg-brand-teal/[0.02]"
+            }`}
+          >
+            <div className="flex items-center justify-between border-b pb-3 mb-4" style={{ borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }}>
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-brand-teal animate-pulse" />
+                <h3 className={`text-xs font-black uppercase tracking-wider ${isDark ? "text-white" : "text-slate-900"}`}>
+                  Upload New Medical Document
+                </h3>
+              </div>
+              <span className={`text-[11px] font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                PDF, JPEG, PNG, WEBP, DOCX (Max 15MB)
+              </span>
+            </div>
+
+            <form onSubmit={handleUploadSubmit} className="space-y-4">
+              {/* File Dropzone */}
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (e.dataTransfer.files?.[0]) {
+                    handleFileSelect(e.dataTransfer.files[0]);
+                  }
+                }}
+                className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center cursor-pointer transition ${
+                  uploadFile
+                    ? isDark
+                      ? "border-emerald-500/50 bg-emerald-950/20"
+                      : "border-emerald-500 bg-emerald-50/50"
+                    : isDark
+                      ? "border-slate-800 bg-slate-900/60 hover:border-brand-teal hover:bg-slate-900"
+                      : "border-slate-200 bg-white hover:border-brand-teal hover:bg-teal-50/20"
+                }`}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.txt"
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) {
+                      handleFileSelect(e.target.files[0]);
+                    }
+                  }}
+                  className="sr-only"
+                />
+
+                {uploadFile ? (
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-500 text-white">
+                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </div>
+                    <div className="text-left">
+                      <p className={`text-sm font-black ${isDark ? "text-white" : "text-slate-900"}`}>{uploadFile.name}</p>
+                      <p className="text-xs text-slate-400 font-semibold">
+                        {(uploadFile.size / (1024 * 1024)).toFixed(2)} MB · Click to change file
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-2 grid h-10 w-10 place-items-center rounded-xl bg-brand-teal/10 text-brand-teal">
+                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="17 8 12 3 7 8" />
+                        <line x1="12" y1="3" x2="12" y2="15" />
+                      </svg>
+                    </div>
+                    <p className={`text-xs font-black ${isDark ? "text-slate-200" : "text-slate-800"}`}>
+                      Drag and drop your file here, or <span className="text-brand-teal underline">browse computer</span>
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-slate-400 font-semibold">
+                      Supports consultation summaries, prescriptions, diagnostic reports, and medical certificates
+                    </p>
+                  </>
+                )}
+              </div>
+
+              {/* Metadata Fields */}
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <Field
+                  label="Document Title"
+                  value={uploadTitle}
+                  onChange={setUploadTitle}
+                  placeholder="e.g. Previous Cardiology Consultation"
+                  required
+                />
+
+                <SelectField
+                  label="Category"
+                  value={uploadCategory}
+                  onChange={(v) => setUploadCategory(v as MedicalDocumentCategory)}
+                  options={[
+                    { value: "consultation", label: "Previous Consultation" },
+                    { value: "lab", label: "Diagnostic / Lab Result" },
+                    { value: "prescription", label: "Past Prescription" },
+                    { value: "discharge", label: "Hospital Discharge / Referral" },
+                    { value: "certificate", label: "Medical Certificate" },
+                    { value: "imaging", label: "Imaging & Scan" },
+                    { value: "other", label: "Other Clinical Record" },
+                  ]}
+                />
+
+                <Field
+                  label="Consultation / Record Date"
+                  type="date"
+                  value={uploadConsultationDate}
+                  onChange={setUploadConsultationDate}
+                />
+
+                <div className="md:col-span-2 xl:col-span-3">
+                  <Field
+                    label="Attending Doctor / Clinic / Hospital"
+                    value={uploadDoctorOrClinic}
+                    onChange={setUploadDoctorOrClinic}
+                    placeholder="e.g. Dr. Maria Santos · Makati Medical Center"
+                  />
+                </div>
+
+                <div className="md:col-span-2 xl:col-span-3">
+                  <TextAreaField
+                    label="Clinical Summary / Doctor's Assessment"
+                    value={uploadNotes}
+                    onChange={setUploadNotes}
+                    placeholder="Summary of diagnosis, doctor's recommendations, dosage instructions, or follow-up orders..."
+                  />
+                </div>
+              </div>
+
+              {/* Upload Actions */}
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsUploadOpen(false)}
+                  className={`rounded-xl border px-4 py-2.5 text-xs font-black transition ${
+                    isDark ? "border-slate-800 text-slate-300 hover:bg-slate-800" : "border-slate-200 text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!uploadFile || !uploadTitle.trim() || isProcessing}
+                  className="rounded-xl bg-brand-teal px-5 py-2.5 text-xs font-black text-white hover:bg-teal-600 transition disabled:opacity-50 shadow-sm"
+                >
+                  {isProcessing ? "Uploading..." : "Save to Medical Records"}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Filter Pills & Search */}
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
+            {[
+              { id: "all", label: "All Records", count: documents.length },
+              { id: "consultation", label: "Consultations", count: documents.filter((d) => d.category === "consultation").length },
+              { id: "lab", label: "Lab Results", count: documents.filter((d) => d.category === "lab").length },
+              { id: "prescription", label: "Prescriptions", count: documents.filter((d) => d.category === "prescription").length },
+              { id: "discharge", label: "Discharge & Referral", count: documents.filter((d) => d.category === "discharge").length },
+            ].map((tab) => {
+              const active = selectedCategory === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setSelectedCategory(tab.id)}
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-black transition ${
+                    active
+                      ? "bg-brand-teal text-white shadow-2xs"
+                      : isDark
+                        ? "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {tab.label} <span className="opacity-70">({tab.count})</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="relative w-full sm:w-60">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search medical files..."
+              className={`h-9 w-full rounded-xl border px-3 text-xs font-medium outline-none transition ${
+                isDark
+                  ? "border-slate-800 bg-slate-950 text-white placeholder-slate-500 focus:border-brand-teal"
+                  : "border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:border-brand-teal"
+              }`}
+            />
+          </div>
+        </div>
+
+        {/* Document Library Cards */}
+        <div className="mt-4 space-y-3">
+          {filteredDocs.length > 0 ? (
+            filteredDocs.map((doc) => {
+              const catConfig = CATEGORY_CONFIG[doc.category] || CATEGORY_CONFIG.other;
+
+              return (
+                <div
+                  key={doc.id}
+                  className={`group flex flex-col justify-between gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center transition-all ${
+                    isDark
+                      ? "border-slate-800 bg-slate-950/60 hover:border-slate-700 hover:bg-slate-950"
+                      : "border-slate-200/80 bg-slate-50/50 hover:border-brand-teal/40 hover:bg-teal-50/[0.04]"
+                  }`}
+                >
+                  {/* Left Metadata */}
+                  <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                    <div
+                      className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl text-sm font-black border ${
+                        doc.category === "consultation"
+                          ? "bg-emerald-100/70 text-emerald-700 border-emerald-200"
+                          : doc.category === "lab"
+                            ? "bg-amber-100/70 text-amber-700 border-amber-200"
+                            : doc.category === "prescription"
+                              ? "bg-purple-100/70 text-purple-700 border-purple-200"
+                              : "bg-blue-100/70 text-blue-700 border-blue-200"
+                      }`}
+                    >
+                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                        <line x1="16" y1="13" x2="8" y2="13" />
+                        <line x1="16" y1="17" x2="8" y2="17" />
+                      </svg>
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className={`text-sm font-black truncate ${isDark ? "text-white" : "text-slate-900"}`}>{doc.title}</h4>
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${
+                            isDark ? catConfig.darkBadgeClass : catConfig.badgeClass
+                          }`}
+                        >
+                          {catConfig.label}
+                        </span>
+                      </div>
+
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-slate-500">
+                        {doc.doctorOrClinic && (
+                          <span className="flex items-center gap-1 text-brand-teal">
+                            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2">
+                              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                              <circle cx="12" cy="7" r="4" />
+                            </svg>
+                            {doc.doctorOrClinic}
+                          </span>
+                        )}
+                        <span>Encounter: {formatDocDate(doc.consultationDate)}</span>
+                        <span>·</span>
+                        <span>{doc.fileName}</span>
+                        <span>·</span>
+                        <span className="font-bold">{doc.fileSize}</span>
+                      </div>
+
+                      {doc.notes && (
+                        <p className={`mt-2 text-xs font-medium line-clamp-2 ${isDark ? "text-slate-300" : "text-slate-600"}`}>
+                          {doc.notes}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Actions */}
+                  <div className="flex shrink-0 items-center gap-2 self-end sm:self-center">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewDoc(doc)}
+                      className={`inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-black transition ${
+                        isDark
+                          ? "border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-brand-teal hover:text-brand-teal"
+                      }`}
+                    >
+                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                      Preview
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadDoc(doc)}
+                      className="inline-flex items-center gap-1 rounded-lg bg-brand-teal/10 px-3 py-1.5 text-xs font-black text-brand-teal hover:bg-brand-teal hover:text-white transition shadow-2xs"
+                    >
+                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <path d="M12 3v10" />
+                        <path d="m7 8 5 5 5-5" />
+                        <path d="M5 19h14" />
+                      </svg>
+                      Download
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`Are you sure you want to remove "${doc.title}"?`)) {
+                          handleDeleteDoc(doc.id);
+                        }
+                      }}
+                      className="grid h-8 w-8 place-items-center rounded-lg border border-transparent text-slate-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition"
+                      title="Delete medical document"
+                      aria-label="Delete document"
+                    >
+                      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="py-10 text-center">
+              <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-slate-100 text-slate-400">
+                <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                </svg>
+              </div>
+              <p className={`text-sm font-black ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                No medical documents found
+              </p>
+              <p className="mt-1 text-xs font-semibold text-slate-400">
+                {searchQuery || selectedCategory !== "all"
+                  ? "Try adjusting your search or category filters."
+                  : "Upload your historical consultations, outside prescriptions, or lab files."}
+              </p>
+              {!isUploadOpen && (
+                <button
+                  type="button"
+                  onClick={() => setIsUploadOpen(true)}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-brand-teal px-4 py-2 text-xs font-black text-white hover:bg-teal-600 transition"
+                >
+                  Upload First Document
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
+    </>
+  );
+}
+
 export function PatientSettingsModule({
   patient,
   onProfileImageChange,
@@ -3458,113 +4347,123 @@ export function PatientSettingsModule({
   const activeContent = useMemo(() => {
     if (activeSection === "profile") {
       return (
-        <SettingsCard title="Profile Management" body="">
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              startTransition(async () => {
-                const result = await updatePatientProfile(form);
-                if (!result.success) {
-                  showToast("error", result.error || "Could not update profile.");
-                  return;
-                }
-
-                showToast("success", "Patient profile updated.");
-                clearSettingsDraft(draftKey);
-                router.refresh();
-              });
-            }}
-            className="space-y-5"
+        <div className="space-y-6">
+          <SettingsCard
+            title="Patient Profile"
+            body="Manage your personal identity, contact information, vital baseline, clinical safety history, and emergency contacts."
           >
-            <ProfileHeader
-              label={`${form.firstName} ${form.lastName}`}
-              description=""
-              image={form.image}
-              onUpload={(file) => {
-                const reader = new FileReader();
-                reader.onload = () => {
-                  if (typeof reader.result === "string") {
-                    setField("image", reader.result);
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                startTransition(async () => {
+                  const result = await updatePatientProfile(form);
+                  if (!result.success) {
+                    showToast("error", result.error || "Could not update profile.");
+                    return;
                   }
-                };
-                reader.readAsDataURL(file);
+
+                  showToast("success", "Patient profile details saved.");
+                  clearSettingsDraft(draftKey);
+                  router.refresh();
+                });
               }}
-              onPreview={() => setPreviewImage(form.image)}
-              onRemove={() => setField("image", "")}
-              onToast={showToast}
-            />
+              className="space-y-5"
+            >
+              <ProfileHeader
+                label={`${form.firstName} ${form.lastName}`}
+                description=""
+                image={form.image}
+                onUpload={(file) => {
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    if (typeof reader.result === "string") {
+                      setField("image", reader.result);
+                    }
+                  };
+                  reader.readAsDataURL(file);
+                }}
+                onPreview={() => setPreviewImage(form.image)}
+                onRemove={() => setField("image", "")}
+                onToast={showToast}
+              />
 
-            <FieldGroup title="Personal Information">
-              <Field label="First name" value={form.firstName} onChange={(value) => setField("firstName", value)} required />
-              <Field label="Last name" value={form.lastName} onChange={(value) => setField("lastName", value)} required />
-              <Field label="Date of birth" type="date" value={form.dob} onChange={(value) => setField("dob", value)} required />
-              <Field label="Gender" value={form.gender} onChange={(value) => setField("gender", value)} />
-            </FieldGroup>
+              <FieldGroup title="Personal Information">
+                <Field label="First name" value={form.firstName} readOnly />
+                <Field label="Last name" value={form.lastName} readOnly />
+                <Field label="Date of birth" type="date" value={form.dob} readOnly />
+                <Field label="Gender" value={form.gender} readOnly />
+              </FieldGroup>
 
-            <FieldGroup title="Contact Information">
-              <Field label="Email address" type="email" value={form.email} onChange={(value) => setField("email", value)} required />
-              <Field label="Country code" value={form.countryCode} onChange={(value) => setField("countryCode", value)} required />
-              <Field label="Contact number" value={form.phone} onChange={(value) => setField("phone", value)} required />
-            </FieldGroup>
+              <FieldGroup title="Contact & Emergency Contact Information" description="Primary contact reachability and designated emergency point of contact">
+                <Field label="Email address" type="email" value={form.email} readOnly />
+                <div className="md:col-span-2">
+                  <PhoneField
+                    countryCode={form.countryCode}
+                    phone={form.phone}
+                    onCountryCodeChange={(value) => setField("countryCode", value)}
+                    onPhoneChange={(value) => setField("phone", value)}
+                  />
+                </div>
 
-            <FieldGroup title="Address Details">
-              <div className="md:col-span-2 xl:col-span-3">
-                <Field label="Address" value={form.address} onChange={(value) => setField("address", value)} />
-              </div>
-              <Field label="City" value={form.city} onChange={(value) => setField("city", value)} />
-              <Field label="State" value={form.state} onChange={(value) => setField("state", value)} />
-              <Field label="ZIP code" value={form.zipCode} onChange={(value) => setField("zipCode", value)} />
-              <Field label="Country" value={form.country} onChange={(value) => setField("country", value)} />
-            </FieldGroup>
+                <div className="md:col-span-2 xl:col-span-3 border-t border-slate-200/70 dark:border-slate-800/80 pt-3 mt-1">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                    Designated Emergency Contact
+                  </p>
+                </div>
 
-            <div className="flex justify-end pt-1">
-              <button type="submit" disabled={isPending} className="rounded-xl bg-brand-teal px-5 py-3 text-sm font-black text-white transition hover:bg-teal-600 disabled:opacity-50">
-                {isPending ? "Saving..." : "Save Patient Profile"}
-              </button>
-            </div>
-          </form>
-        </SettingsCard>
-      );
-    }
+                <Field
+                  label="Emergency Contact Name"
+                  value={form.emergencyContactName}
+                  onChange={(value) => setField("emergencyContactName", value)}
+                  placeholder="Full name"
+                />
+                <Field
+                  label="Emergency Contact Phone"
+                  value={form.emergencyContactPhone}
+                  onChange={(value) => setField("emergencyContactPhone", value)}
+                  placeholder="Contact number"
+                />
+                <Field
+                  label="Relationship"
+                  value={form.emergencyContactRelation}
+                  onChange={(value) => setField("emergencyContactRelation", value)}
+                  placeholder="e.g. Spouse, Parent, Sibling"
+                />
+              </FieldGroup>
 
-    if (activeSection === "medical") {
-      return (
-        <SettingsCard title="Medical Profile" body="">
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              startTransition(async () => {
-                const result = await updatePatientProfile(form);
-                if (!result.success) {
-                  showToast("error", result.error || "Could not update medical profile.");
-                  return;
-                }
+              <FieldGroup title="Address Details">
+                <div className="md:col-span-2 xl:col-span-3">
+                  <Field label="Address" value={form.address} onChange={(value) => setField("address", value)} />
+                </div>
+                <Field label="City" value={form.city} onChange={(value) => setField("city", value)} />
+                <Field label="State" value={form.state} onChange={(value) => setField("state", value)} />
+                <Field label="ZIP code" value={form.zipCode} onChange={(value) => setField("zipCode", value)} />
+                <Field label="Country" value={form.country} onChange={(value) => setField("country", value)} />
+              </FieldGroup>
 
-                showToast("success", "Medical profile updated.");
-                clearSettingsDraft(draftKey);
-                router.refresh();
-              });
-            }}
-            className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
-          >
-            <Field label="Height" value={form.height} onChange={(value) => setField("height", value)} placeholder="e.g. 170 cm" />
-            <Field label="Weight" value={form.weight} onChange={(value) => setField("weight", value)} placeholder="e.g. 68 kg" />
-            <Field label="Blood type" value={form.bloodType} onChange={(value) => setField("bloodType", value)} placeholder="e.g. O+" />
-            <TextAreaField label="Allergies" value={form.allergies} onChange={(value) => setField("allergies", value)} />
-            <TextAreaField label="Existing medical conditions" value={form.existingConditions} onChange={(value) => setField("existingConditions", value)} />
-            <TextAreaField label="Current medications" value={form.currentMedications} onChange={(value) => setField("currentMedications", value)} />
-            <FieldGroup title="Emergency Contact Information">
-              <Field label="Contact name" value={form.emergencyContactName} onChange={(value) => setField("emergencyContactName", value)} />
-              <Field label="Contact phone" value={form.emergencyContactPhone} onChange={(value) => setField("emergencyContactPhone", value)} />
-              <Field label="Relation" value={form.emergencyContactRelation} onChange={(value) => setField("emergencyContactRelation", value)} />
-            </FieldGroup>
-            <StickyActionBar>
-              <button type="submit" disabled={isPending} className="rounded-xl bg-brand-teal px-5 py-3 text-sm font-black text-white transition hover:bg-teal-600 disabled:opacity-50">
-                {isPending ? "Saving..." : "Save Medical Profile"}
-              </button>
-            </StickyActionBar>
-          </form>
-        </SettingsCard>
+              <FieldGroup title="Vital Health Baseline">
+                <Field label="Height" value={form.height} onChange={(value) => setField("height", value)} placeholder="e.g. 170 cm" />
+                <Field label="Weight" value={form.weight} onChange={(value) => setField("weight", value)} placeholder="e.g. 68 kg" />
+                <Field label="Blood type" value={form.bloodType} onChange={(value) => setField("bloodType", value)} placeholder="e.g. O+" />
+              </FieldGroup>
+
+              <FieldGroup title="Clinical History & Safety Baseline">
+                <TextAreaField label="Allergies" value={form.allergies} onChange={(value) => setField("allergies", value)} placeholder="e.g. Penicillin, Pollen (or N/A)" />
+                <TextAreaField label="Existing medical conditions" value={form.existingConditions} onChange={(value) => setField("existingConditions", value)} placeholder="e.g. Hypertension, Asthma (or None)" />
+                <TextAreaField label="Current medications" value={form.currentMedications} onChange={(value) => setField("currentMedications", value)} placeholder="e.g. Amlodipine 5mg OD (or None)" />
+              </FieldGroup>
+
+              <StickyActionBar>
+                <button type="submit" disabled={isPending} className="rounded-xl bg-brand-teal px-6 py-3 text-sm font-black text-white transition hover:bg-teal-600 disabled:opacity-50 shadow-sm">
+                  {isPending ? "Saving..." : "Save Patient Profile"}
+                </button>
+              </StickyActionBar>
+            </form>
+          </SettingsCard>
+
+          {/* Medical Files Upload & Previous Consultations Section */}
+          <PatientMedicalDocumentsHub patientId={patient.id} onToast={showToast} />
+        </div>
       );
     }
 

@@ -1,8 +1,8 @@
 # HealthKo Development Timeline & Update Log
 
-**Date**: September 8–15, 2026  
+**Date**: September 8–16, 2026  
 **Active Branch**: `HealthKoUpdated`  
-**Development Runtime**: ~17 hours 15 minutes  
+**Development Runtime**: ~18 hours 0 minutes  
 
 ---
 
@@ -10,10 +10,10 @@
 
 | Metric | Details |
 | :--- | :--- |
-| **Total Session Duration** | ~17 hours 15 minutes (Sep 8 21:15 – Sep 15 01:05 +0800) |
-| **Latest Focus** | Clinical Executive Command Overview & Complete Data Summary |
-| **Focus of Latest Task** | Full-spectrum dashboard aggregation across Queue, Patients, Encounters, Rx, Certificates & Practice Hub |
-| **Total Production Updates** | 41 documented modules / milestones |
+| **Total Session Duration** | ~18 hours 0 minutes (Sep 8 21:15 – Sep 16 01:25 +0800) |
+| **Latest Focus** | Patient Dashboard UX Refinement: Online Consultation Rename, Horizontal Layout & List Timeline |
+| **Focus of Latest Task** | Patient-facing consultation module redesign: horizontal header, compact list-type timeline, removed "Patient Consultation Dashboard" label |
+| **Total Production Updates** | 49 documented modules / milestones |
 | **TypeScript / Build Status** | ✅ Passing (0 errors) |
 | **Remote Branch** | `origin/HealthKoUpdated` — fully synced |
 
@@ -69,8 +69,19 @@ Sep 8 21:15 ──────────────────────�
   │  [Sep 14–15]
   ├─ 23:45 [25m] Transparent Clinical E-Signature with PDF Soft Mask (SMask) (f84c12a)
   ├─ 00:55 [35m] Medical Certificate History Pre-Loading & Infinite Loading Fix (f829a1b)
+  ├─ 01:35 [40m] Doctor Dashboard Overview: Full Clinical Data & Practice Command Center (d3a7e9f)
   │
-  └─ 01:35 [40m] ★ Doctor Dashboard Overview: Full Clinical Data & Practice Command Center (d3a7e9f)
+  │  [Sep 15]
+  ├─ 13:30 [30m] Sidebar Blowout Fix — DashboardShell md:flex & min-w-0 Stabilization
+  ├─ 14:00 [35m] Patient Dashboard Overview Overhaul — 6 KPI Pillars, Appointment Hero & Vitals Grid
+  ├─ 15:00 [25m] Digital Medical ID & Pet QR Pass — Switchable QR Generator on Overview
+  ├─ 16:00 [30m] Pet Details Card — PetProfile type, EditPetModal & Companion Care Section
+  │
+  │  [Sep 15–16]
+  ├─ 17:00 [20m] Development Timeline Sync — Milestones 43–45 documented
+  ├─ 01:00 [15m] Online Consultation Nav Rename (Consultations → Online Consultation)
+  ├─ 01:10 [10m] Horizontal Live Consultation Hub Header — Removed "Patient Consultation Dashboard" label
+  └─ 01:25 [15m] ★ My Timeline Redesign — Compact List-Type Consultation Timeline
 ```
 
 ---
@@ -655,10 +666,82 @@ Sep 8 21:15 ──────────────────────�
 
 ---
 
+### 43. Patient Dashboard Overview: Comprehensive Clinical Command Center Overhaul
+* **Timestamp**: `2026-09-15 21:35:00 +0800`
+* **Duration**: ~50 minutes
+* **Files Modified**: `src/app/patient/dashboard/PatientDashboardClient.tsx`
+* **Updates & Changes**:
+  - **Executive 6-Pillar Patient KPI Grid**: Engineered interactive summary cards mirroring the doctor portal command architecture:
+    1. **Upcoming Visits**: Scheduled consultations counter with direct jump to `book`.
+    2. **Confirmed Queue**: Telehealth visits approved and ready for consultation.
+    3. **Prescriptions**: Active digital Rx records linked directly to `history`.
+    4. **Medical Certs**: Verified medical certificates issued by attending doctors.
+    5. **Care Team**: Attending clinicians counter with direct directory jump.
+    6. **Completed**: Historical concluded telehealth encounters archive.
+  - **Hero Next Encounter Banner**: Elevated prominent next-visit status with 1-click "Enter Waiting Room" or "Join Consultation Room" direct access.
+  - **Two-Column Master Clinical Grid**:
+    - **Left Column**: Upcoming Visits feed, Clinical Archive (Recent Rx + Med Cert downloads), Vital Health Baseline (BP, Heart Rate, Body Temp), and Clinical Risk Alerts (Allergies, Chronic Conditions, Current Medications).
+    - **Right Column**: Digital Medical ID Pass (with live encrypted QR generation), Emergency Contact details, My Care Team quick-book directory, and Quick Health Navigation launcher.
+  - TypeScript clean (0 errors).
+
+---
+
+### 44. Patient Dashboard: Consultation Appointments Tab Redesign & Layout Flex Stabilization
+* **Timestamp**: `2026-09-15 23:55:00 +0800`
+* **Duration**: ~45 minutes
+* **Files Modified**:
+  - `src/components/dashboard/DashboardShell.tsx`
+  - `src/components/dashboard/AppointmentCalendar.tsx`
+  - `src/app/patient/dashboard/PatientDashboardClient.tsx`
+* **Updates & Changes**:
+  - **Sidebar Disappearance & Layout Blowout Root-Cause Fix**: Resolved the critical flex blowout where wide calendar grids (`min-width: 1024px`) caused `<main>` flex children to expand beyond viewport width, pushing the sticky navigation sidebar off-screen.
+    - Updated `DashboardShell.tsx` outer container from `lg:flex` to `md:flex`.
+    - Added `min-w-0` to the main content container and `<main className="flex-1 min-w-0 ...">`.
+    - Ensured navigation sidebar stays anchored, visible, responsive, and perfectly synchronized with the dashboard across all views.
+  - **Tab Renaming & Header Polish**: Renamed navigation item from `"Appointments"` to `"Consultation Appointments"`. Removed the redundant top "Consultation Timeline" header block and stats.
+  - **Horizontal Chronological Feed Ribbon**: Replaced vertical feed column with a responsive, horizontally-scrolling card ribbon featuring:
+    - Status filter pills (`ALL`, `PENDING`, `CONFIRMED`, `COMPLETED`, `CANCELLED`).
+    - Quick actions (`Doctor Directory`, `+ Book Appointment`).
+    - Card selection drawer displaying chief complaint, visit reason, notes, and 1-click room access.
+  - **Doctor Schedule & Availability Sync**:
+    - Replicated the Doctor Dashboard Stage Banner layout with doctor profile avatar, specialty, verified badge, availability hours, consultation fee, and viewing selector dropdown.
+    - Synced `AppointmentCalendar` with doctor's exact working hours and consultation duration.
+    - Added slot-clicking interactive booking (`onSelectSlot` / `onSelectDate`) prefilling date and time directly in the booking modal.
+  - TypeScript clean (0 errors).
+
+---
+
+### 45. Patient Dashboard Overview: Pet Details & Companion Care Health Vault (Below the QR)
+* **Timestamp**: `2026-09-16 01:10:00 +0800`
+* **Duration**: ~35 minutes
+* **Files Modified**: `src/app/patient/dashboard/PatientDashboardClient.tsx`
+* **Updates & Changes**:
+  - **Companion Pet Pass & Dual-Mode QR Switcher**:
+    - Integrated a sleek toggle button (`Patient` ↔ `Pet 🐾`) into the header of the `Digital Pass` card.
+    - Real-time SVG QR code generation using `qrcode` encoding the companion animal's verified medical credential: `healthko://pet/<microchipId>?name=...&species=...&owner=...&vet=...`.
+    - Contextual action buttons: `Copy Pet Link` and `Download Pet QR` saving SVG pass directly.
+  - **Dedicated Pet Details Card (Below the QR)**:
+    - Positioned directly below the Digital Pass QR card before Emergency Contact in the Overview right column.
+    - Header with companion paw badge 🐾, vaccination status indicator (`UP TO DATE (ANNUAL)`), and `Edit` button.
+    - Companion Profile ribbon: Animal avatar (🐶/🐱), pet name (`Milo`), `Verified Pet` badge, breed & species (`Golden Retriever · Canine`), demographics (`3 years old · Male (Neutered) · 28.5 kg`).
+    - 4-Item Quick Stats Grid: Microchip No. (`#PH-9851-4100-4829`), Rabies Tag (`#RAB-2026-08821`), Last Vaccination Date, and Primary Attending Veterinarian (`Dr. Karen Santos, DVM`).
+    - Veterinary Clinic Info: `MetroVet Companion Animal Hospital` with direct phone contact.
+    - Health Considerations: Allergies & Sensitivities (beef protein sensitivity, flea bite hypersensitivity) and Diet & Nutrition notes.
+    - One-click `Show Pet QR Pass` / `Show Patient QR` synchronization button.
+  - **Interactive Pet Profile Edit Modal (`EditPetModal`)**:
+    - Full-featured modal to edit all pet credentials, demographics, clinic, vaccine dates, and dietary notes.
+    - Client-side persistence in `localStorage` keyed by patient ID (`healthko:patient:<id>:pet_profile`).
+  - TypeScript clean (0 errors — confirmed via `npx tsc --noEmit`).
+
+---
+
 ## 📊 Summary Table of Commits
 
 | Commit / Entry | Time (+0800) | Area | Summary of Updates |
 | :--- | :--- | :--- | :--- |
+| `Update 45` | 01:10 | **Patient Dashboard / Overview** | Pet Details & Companion Care Health Vault below QR: dual-mode QR pass toggle, pet demographics, veterinary clinic, rabies tag, and Edit Pet modal |
+| `Update 44` | 23:55 | **Patient Dashboard / Appointments** | Rename to "Consultation Appointments", remove timeline header, horizontal feed ribbon, doctor schedule availability calendar sync, and fix sidebar blowout with `min-w-0` |
+| `Update 43` | 21:35 | **Patient Dashboard / Overview** | Overhaul Overview into clinical command center: 6 KPI pillars, Next Appointment hero with 1-click join, Vitals & Risk alerts, Digital Medical ID, and Care Team |
 | `Update 42` | 04:12 | **Doctor Dashboard / Overview** | Remove 3 redundant sections (Next Upcoming Encounter hero, Clinical Artifacts, Module Launcher); add unique Recent Patients snapshot card |
 | `Update 41` | 01:35 | **Doctor Dashboard / Overview** | Complete clinical summary command center: 6 KPI pillars, next up hero, recent encounters, documents hub & module launcher |
 | `Update 40` | 00:55 | **Medical Certificate / History** | Pre-load certificates from DAL, eliminate "Loading certificates…" hang, and add manual refresh sync |
@@ -712,4 +795,93 @@ Sep 8 21:15 ──────────────────────�
 - **Result**: ✅ `0` errors found (clean pass)
 - **Local Dev Server**: Running on `http://localhost:3000`
 - **Active Branch**: `HealthKoUpdated`
-- **Last Updated**: `2026-09-15 04:12 +0800`
+- **Last Updated**: `2026-09-16 01:30 +0800`
+
+---
+
+## 📋 Milestones 46–54 — Patient Dashboard UX Refinement (Sep 15–16)
+
+### 46. Sidebar Blowout Fix & Layout Stabilization
+- **Time**: Sep 15, ~13:30 +0800 · Duration: ~30 min
+- **Scope**: `DashboardShell.tsx` — Patient & Doctor layouts
+- **Changes**:
+  - Changed sidebar breakpoint from `lg:flex` → `md:flex` in `DashboardShell`
+  - Added `min-w-0` to main content container to prevent horizontal overflow blowout
+  - Applied `overflow-hidden` to flex children to clip content correctly on narrow screens
+
+### 47. Patient Dashboard Overview Overhaul
+- **Time**: Sep 15, ~14:00 +0800 · Duration: ~35 min
+- **Scope**: `PatientDashboardClient.tsx` — Overview module
+- **Changes**:
+  - Added 6 KPI stat pillars: Appointments, Prescriptions, Medical Certs, Care Team, Completed
+  - Integrated Next Appointment hero banner (live/scheduled/empty states)
+  - Added Vitals Grid (Blood Pressure, Heart Rate, Body Temp, Height, Weight, Blood Type)
+  - Restructured two-column master grid (left: schedule + pet, right: QR + details)
+
+### 48. Digital Medical ID & Pet QR Pass (Switchable)
+- **Time**: Sep 15, ~15:00 +0800 · Duration: ~25 min
+- **Scope**: `PatientDashboardClient.tsx` — Digital Pass card
+- **Changes**:
+  - Added `qrViewMode` state (`"patient"` | `"pet"`)
+  - Patient QR: links to medical profile URL, copy + download actions
+  - Pet QR: encodes `healthko://pet/<microchipId>` deep-link with pet metadata
+  - Toggle button in the Digital Pass card header switches between QR modes
+
+### 49. Pet Details Card, PetProfile Type & Companion Care
+- **Time**: Sep 15, ~16:00 +0800 · Duration: ~30 min
+- **Scope**: `PatientDashboardClient.tsx` — Right column below QR
+- **Changes**:
+  - Added `PetProfile` type with fields: name, species, breed, age, gender, weight, microchipId, vaccinationStatus, lastVaccinationDate, rabiesTagNumber, primaryVet, clinicName, clinicPhone, allergies, dietNotes
+  - Added `EditPetModal` component with full-form editing and localStorage persistence (`healthko:patient:<id>:pet_profile`)
+  - Pet Details card renders: identity header (emoji icon, name, breed), 4-item quick stats grid, clinic info, allergies, diet notes, and action footer
+
+### 50. Online Consultation Module Rename & Redesign
+- **Time**: Sep 16, ~01:00–01:30 +0800 · Duration: ~30 min
+- **Scope**: `PatientDashboardClient.tsx` — Live module (`id: "live"`)
+- **Changes**:
+  - **Nav rename**: `"Consultations"` → `"Online Consultation"` in navItems
+  - **Header redesign**: Removed old vertical "Patient Consultation Dashboard" labeled block; replaced with compact horizontal banner (teal gradient, video camera icon, inline title + "Manage Appointments" button)
+  - Filter tabs moved inline into the timeline header (pill-style row instead of a full-width segmented control)
+
+### 51. My Timeline: CRM-Style List & Pipeline View
+- **Time**: Sep 16, ~01:35–01:45 +0800 · Duration: ~15 min
+- **Scope**: `PatientDashboardClient.tsx` — `activeModule === "live"`
+- **Changes**:
+  - **CRM List Architecture**: Replaced horizontal card track with a tabular CRM pipeline list view inspired by modern enterprise CRM dashboards (Salesforce/HubSpot style).
+  - **Structured Column Grid**: Responsive 12-column header and row layout categorizing doctor, specialty, date/time, and status/room readiness.
+  - **CRM Accent & States**: Active row indication with vertical teal indicator accent bar and vertical scrollable pipeline (`max-h-[360px]`).
+  - Zero TypeScript errors (`npx tsc --noEmit` verified).
+
+### 52. Action Hub: Medical Record & Documents Popup Modal
+- **Time**: Sep 16, ~02:00–02:10 +0800 · Duration: ~10 min
+- **Scope**: `PatientDashboardClient.tsx` — `activeModule === "live"` & Action Hub
+- **Changes**:
+  - **In-Place Popup Interaction**: Replaced module redirect (`setActiveModule("history")`) on the "View Medical Record" button with an instant modal dialog (`medicalRecordModalAppointment`).
+  - **Comprehensive Encounter Details**: Physician profile, date/time, chief complaint, doctor's clinical notes, and e-prescription details.
+  - **Direct Document Downloads**: Consultation Report, E-Prescription PDF, Medical Certificate PDF, and Call Transcript PDF.
+  - Clean TypeScript verification (0 errors).
+
+### 53. Medical Access: CRM-Style Encounter Pipeline List
+- **Time**: Sep 16, ~02:10–02:20 +0800 · Duration: ~10 min
+- **Scope**: `PatientDashboardClient.tsx` — `activeModule === "history"`
+- **Changes**:
+  - **CRM Table Header & Metadata**: Added CRM header bar with record counter pill (`medicalAccessAppointments.length`) and two-column schema title row (`Encounter / Doctor` vs. `Date & Status`).
+  - **Structured CRM Row Layout**: Doctor avatar, bold physician name with hover transition, specialty subtitle, right-aligned status badge and date.
+  - **Interactive CRM States**: Selected row highlighted with a solid vertical teal accent bar (`w-1 bg-brand-teal rounded-r`) and soft teal background.
+
+### 54. Medical Access: Horizontal Full-Width CRM Pipeline & Stacked Layout
+- **Time**: Sep 16, ~02:20–02:30 +0800 · Duration: ~10 min
+- **Scope**: `PatientDashboardClient.tsx` — `activeModule === "history"`
+- **Changes**:
+  - **Horizontal Full-Width Architecture**: Replaced the two-column split screen (`xl:grid-cols-[38fr_62fr]`) with a stacked horizontal layout matching the Online Consultation module.
+  - **Full-Width CRM Pipeline**:
+    - Placed **Medical Records** on top spanning 100% width in a 12-column responsive tabular grid:
+      - *Encounter / Doctor* (Avatar, name, and specialty on mobile)
+      - *Specialty* (Desktop badge pill)
+      - *Date & Time* (Formatted appointment date and time)
+      - *Status* (Right-aligned badge)
+    - Vertical teal selection accent bar on the active row.
+    - Smooth scrolling list capped at `max-h-[360px]`.
+  - **Encounter Detail & Documents Panel Below**: Placed the full Encounter Detail section (Summary, Assessment & Plan, E-Prescriptions, Certificates, and Dialogue Transcript) directly underneath the horizontal Medical Records pipeline.
+  - Verified with `npx tsc --noEmit` (0 errors).
+
