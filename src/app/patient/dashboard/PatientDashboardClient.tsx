@@ -20,6 +20,7 @@ import {
   type PatientUploadedDocument,
 } from "@/components/dashboard/SettingsModule";
 import { downloadMedicalArchiveSamplePdf } from "@/lib/medical-archive-sample-pdf";
+import { savePetProfileToDatabase, getPetProfileByPatientId } from "@/app/actions/pet";
 import { ConcurrentLoginModal } from "@/components/dashboard/ConcurrentLoginModal";
 import { ActiveCallWarningModal } from "@/components/dashboard/ActiveCallWarningModal";
 import { AppointmentCalendar, type CalendarViewMode, type CalendarAppointment } from "@/components/dashboard/AppointmentCalendar";
@@ -77,6 +78,7 @@ type Patient = DashboardPatient & {
   createdAt: Date;
   bookings: PatientAppointment[];
   medicalCertificates?: PatientMedicalCertificate[];
+  petProfiles?: any[];
 };
 
 type PatientDashboardClientProps = {
@@ -1197,6 +1199,9 @@ export default function PatientDashboardClient({
   const [medicalIdQrSvg, setMedicalIdQrSvg] = useState("");
   const [medicalIdAction, setMedicalIdAction] = useState<"idle" | "copied" | "downloaded">("idle");
   const [petProfile, setPetProfile] = useState<PetProfile>(() => {
+    if (patient.petProfiles?.[0]) {
+      return patient.petProfiles[0] as PetProfile;
+    }
     if (typeof window !== "undefined") {
       try {
         const saved = localStorage.getItem(`healthko:patient:${patient.id}:pet_profile`);
@@ -1205,6 +1210,22 @@ export default function PatientDashboardClient({
     }
     return DEFAULT_PET_PROFILE;
   });
+
+  useEffect(() => {
+    if (!patient.id) return;
+    let isMounted = true;
+    getPetProfileByPatientId(patient.id).then((res) => {
+      if (isMounted && res.success && res.petProfile) {
+        setPetProfile(res.petProfile as PetProfile);
+        try {
+          localStorage.setItem(`healthko:patient:${patient.id}:pet_profile`, JSON.stringify(res.petProfile));
+        } catch {}
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [patient.id]);
   const [isEditingPet, setIsEditingPet] = useState(false);
   const [petQrSvg, setPetQrSvg] = useState("");
   const [qrViewMode, setQrViewMode] = useState<"patient" | "pet">("patient");
@@ -1576,15 +1597,26 @@ export default function PatientDashboardClient({
     window.setTimeout(() => setPetQrAction("idle"), 2000);
   }, [petProfile.microchipId, petProfile.name, petQrSvg, showToast]);
 
-  const handleSavePetProfile = useCallback((updated: PetProfile) => {
+  const handleSavePetProfile = useCallback(async (updated: PetProfile) => {
     setPetProfile(updated);
     if (typeof window !== "undefined") {
       try {
         localStorage.setItem(`healthko:patient:${patient.id}:pet_profile`, JSON.stringify(updated));
       } catch {}
     }
-    showToast("success", "Pet details updated successfully.");
     setIsEditingPet(false);
+    showToast("success", "Pet details updated.");
+
+    try {
+      const res = await savePetProfileToDatabase(patient.id, updated);
+      if (res.success) {
+        showToast("success", "Pet Companion Pass synced with Supabase!");
+      } else if (res.error) {
+        console.warn("Database sync note:", res.error);
+      }
+    } catch (err) {
+      console.error("Failed to sync pet profile to database", err);
+    }
   }, [patient.id, showToast]);
 
   useEffect(() => {

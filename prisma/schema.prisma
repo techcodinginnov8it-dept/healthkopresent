@@ -81,6 +81,7 @@ model Patient {
   lastLoginAt              DateTime?      @map("last_login_at")
   bookings                 Consultation[]
   medicalCertificates      MedicalCertificate[]
+  petProfiles              PetProfile[]
   createdBy                Admin?         @relation("AdminPatients", fields: [createdById], references: [id])
   user                     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -253,6 +254,32 @@ model EmailOtp {
 
   @@index([email])
   @@map("email_otps")
+}
+
+model PetProfile {
+  id                  String   @id @default(uuid())
+  patientId           String   @map("patient_id")
+  name                String
+  species             String
+  breed               String
+  age                 String
+  gender              String
+  weight              String
+  microchipId         String?  @map("microchip_id")
+  vaccinationStatus   String?  @map("vaccination_status")
+  lastVaccinationDate String?  @map("last_vaccination_date")
+  rabiesTagNumber     String?  @map("rabies_tag_number")
+  primaryVet          String?  @map("primary_vet")
+  clinicName          String?  @map("clinic_name")
+  clinicPhone         String?  @map("clinic_phone")
+  allergies           String?
+  dietNotes           String?  @map("diet_notes")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  patient             Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@map("pet_profiles")
 }
 
 enum UserRole {

@@ -11,9 +11,9 @@
 | Metric | Details |
 | :--- | :--- |
 | **Total Session Duration** | ~19 hours 30 minutes (Sep 8 21:15 – Sep 16 23:15 +0800) |
-| **Latest Focus** | Dedicated Medical Documents Hub Sidebar Module & Navigation Migration |
-| **Focus of Latest Task** | Added dedicated Medical Documents Hub sidebar item (`documents`) on Patient Dashboard, configured DashboardShell icon/routes, and migrated Previous Consultations & Medical Documents into standalone module |
-| **Total Production Updates** | 66 documented modules / milestones |
+| **Latest Focus** | Pet Companion Pass Database Table & Supabase Real-Time Persistence Sync |
+| **Focus of Latest Task** | Created `pet_profiles` database model & Supabase table migration, built server actions (`getPetProfileByPatientId`, `savePetProfileToDatabase`), and wired dual offline cache + Supabase sync in Patient Dashboard |
+| **Total Production Updates** | 67 documented modules / milestones |
 | **TypeScript / Build Status** | ✅ Passing (0 errors) |
 | **Remote Branch** | `origin/HealthKoUpdated` — fully synced |
 
@@ -22,7 +22,7 @@
 ## 📅 Visual Development Timeline
 
 ```text
-Sep 8 21:15 ──────────────────────────────────────────────────────── Sep 17 02:35 +0800
+Sep 8 21:15 ──────────────────────────────────────────────────────── Sep 17 02:45 +0800
   │  [Sep 8–9]
   ├─ 21:35 [35m] Multi-page PDF Pagination & Overflow Protection (744e7b5)
   ├─ 22:07 [32m] "Consultation Results" Tab & Medical Notes PDF Integration (b202526)
@@ -91,7 +91,8 @@ Sep 8 21:15 ──────────────────────�
   ├─ 21:35 [15m] Current Encounter Documents: Enterprise CRM Registry & 5-Item Scroll View
   ├─ 23:30 [60m] Enterprise Admin Command Center UI/UX & Management Suite (7 Modules)
   ├─ 02:25 [25m] Patient Overview Refinement: Phone Badge, Basic Details Removal & Lab Results Archive
-  └─ 02:35 [15m] ★ Dedicated Medical Documents Hub Sidebar Module & Navigation Migration
+  ├─ 02:35 [15m] Dedicated Medical Documents Hub Sidebar Module & Navigation Migration
+  └─ 02:45 [15m] ★ Pet Profile Database Model, Supabase Table & Real-Time Sync Action Suite
 ```
 
 ---
@@ -1026,5 +1027,15 @@ Sep 8 21:15 ──────────────────────�
   - **DashboardShell Integration**: Extended `DashboardShell` `NavIcon` with custom document & clinical records SVG icon for `case "documents"`.
   - **Migrated Previous Consultations & Medical Documents**: Moved `PatientMedicalDocumentsHub` out of the Settings profile tab directly into its own top-level module view (`activeModule === "documents"`).
   - **Full Document Management**: Users can now upload new external records, search, filter across 7 clinical categories, preview documents in full-screen modal, download authentic PDF files, and delete archived records right from the sidebar.
+  - **Type Safety & Build**: Passed `npx tsc --noEmit` with 0 TypeScript compiler errors.
+
+### 67. Pet Profile Database Model, Supabase Table & Real-Time Sync Action Suite
+- **Time**: Sep 17, ~02:35–02:45 +0800 · Duration: ~15 min
+- **Scope**: `prisma/schema.prisma`, `supabase/pet_profiles_table.sql`, `src/app/actions/pet.ts`, `PatientDashboardClient.tsx`
+- **Changes**:
+  - **Prisma & Database Model**: Defined `PetProfile` schema model in `prisma/schema.prisma` with patient foreign key relation (`patientId`), fields for species, breed, age, gender, weight, microchip ID, rabies tag, vet contacts, allergies, and diet notes.
+  - **Supabase SQL Migration**: Created `supabase/pet_profiles_table.sql` with automatic UUID generation, foreign key constraints, indexes on `patient_id`, and Row Level Security (RLS) policies for authenticated and service roles.
+  - **Server Action Engine (`src/app/actions/pet.ts`)**: Built robust backend actions (`getPetProfileByPatientId`, `savePetProfileToDatabase`) supporting direct Supabase Admin Client operations and Prisma upserts.
+  - **Client-Side Real-Time Sync**: Updated `PatientDashboardClient.tsx` to automatically hydrate pet data from the database on mount and synchronize every modal edit/save operation across Supabase, Prisma, and local storage cache.
   - **Type Safety & Build**: Passed `npx tsc --noEmit` with 0 TypeScript compiler errors.
 
