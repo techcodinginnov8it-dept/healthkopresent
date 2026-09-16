@@ -1,4 +1,4 @@
-export type DashboardRole = "patient" | "doctor";
+export type DashboardRole = "patient" | "doctor" | "admin";
 
 export type PatientModuleId =
   | "overview"
@@ -26,7 +26,16 @@ export type DoctorModuleId =
   | "research"
   | "settings";
 
-export type ModuleId = PatientModuleId | DoctorModuleId;
+export type AdminModuleId =
+  | "overview"
+  | "screening"
+  | "doctors"
+  | "patients"
+  | "consultations"
+  | "analytics"
+  | "settings";
+
+export type ModuleId = PatientModuleId | DoctorModuleId | AdminModuleId;
 
 export type AppointmentStatus = "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | string;
 
@@ -279,4 +288,69 @@ export type DoctorArticle = {
   isPeerArticle?: boolean;
   commentsCount?: number;
   comments?: ArticleComment[];
+};
+
+export type AdminDoctorEntity = {
+  id: string;
+  name: string;
+  npi: string;
+  email: string;
+  specialty: string;
+  licenseNumber?: string | null;
+  licenseState?: string | null;
+  consultFee?: number | null;
+  rating?: number;
+  reviewCount?: number;
+  isVerified?: boolean;
+  isActive: boolean;
+  totalConsultations: number;
+  joinedAt: string;
+  phone?: string | null;
+};
+
+export type AdminPatientEntity = {
+  id: string;
+  name: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  dob: string;
+  gender?: string | null;
+  city?: string | null;
+  bloodType?: string | null;
+  allergies?: string | null;
+  isActive: boolean;
+  totalConsultations: number;
+  joinedAt: string;
+  emergencyContact?: string | null;
+};
+
+export type AdminConsultationEntity = {
+  id: string;
+  doctorId: string;
+  doctorName: string;
+  doctorSpecialty: string;
+  patientId: string;
+  patientName: string;
+  scheduledAt: string;
+  status: string;
+  reason?: string | null;
+  notes?: string | null;
+  prescription?: string | null;
+  hasCertificate?: boolean;
+  durationMinutes?: number | null;
+  consultFee?: number | null;
+};
+
+export type AdminSystemStats = {
+  totalPatients: number;
+  activePatients: number;
+  totalDoctors: number;
+  activeDoctors: number;
+  verifiedDoctors: number;
+  pendingAudits: number;
+  totalConsultations: number;
+  completedConsultations: number;
+  activeVideoConsultations: number;
 };
