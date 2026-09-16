@@ -1218,6 +1218,7 @@ export default function PatientDashboardClient({
   const [callExtendedMinutes, setCallExtendedMinutes] = useState(0);
   const [medicalDocuments, setMedicalDocuments] = useState<PatientUploadedDocument[]>([]);
   const [previewMedicalDoc, setPreviewMedicalDoc] = useState<PatientUploadedDocument | null>(null);
+  const [overviewLabFilter, setOverviewLabFilter] = useState<"all" | "lab" | "consultation" | "imaging" | "discharge">("all");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -2831,6 +2832,16 @@ export default function PatientDashboardClient({
         );
         const recentPrescriptionsList = prescriptions.slice(0, 2);
         const recentCertificatesList = sortedCertificatesList.slice(0, 2);
+        const labDocs = medicalDocuments.filter((d) => d.category === "lab");
+        const consultDocs = medicalDocuments.filter((d) => d.category === "consultation");
+        const imagingDocs = medicalDocuments.filter((d) => d.category === "imaging");
+        const dischargeDocs = medicalDocuments.filter((d) => d.category === "discharge");
+        const allDiagnosticDocs = medicalDocuments.filter(
+          (d) => d.category === "lab" || d.category === "consultation" || d.category === "imaging" || d.category === "discharge"
+        );
+        const displayedDiagnosticDocs = overviewLabFilter === "all"
+          ? allDiagnosticDocs
+          : medicalDocuments.filter((d) => d.category === overviewLabFilter);
 
         return (
           <div className="space-y-6">
@@ -2858,10 +2869,30 @@ export default function PatientDashboardClient({
                         Verified Patient
                       </span>
                     </div>
-                    <p className="mt-0.5 text-xs font-semibold text-slate-500">
-                      {patientAge ? `${patientAge} yrs · ` : ""}{patient.gender ? `${patient.gender} · ` : ""}Health ID: #{patient.id.slice(-6).toUpperCase()}
-                      {patient.city ? ` · ${patient.city}, ${patient.state || patient.country || ""}` : ""}
-                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold text-slate-500">
+                      {patientAge ? <span>{patientAge} yrs</span> : null}
+                      {patientAge && patient.gender ? <span>·</span> : null}
+                      {patient.gender ? <span className="capitalize">{patient.gender}</span> : null}
+                      <span>·</span>
+                      <span>Health ID: #{patient.id.slice(-6).toUpperCase()}</span>
+                      {patient.phone ? (
+                        <>
+                          <span>·</span>
+                          <span className="inline-flex items-center gap-1.5 rounded-md bg-teal-50 border border-teal-200/70 px-2 py-0.5 text-xs font-bold text-teal-800 shadow-2xs">
+                            <svg viewBox="0 0 24 24" className="h-3 w-3 text-brand-teal shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                            </svg>
+                            {patient.countryCode ? `${patient.countryCode} ` : ""}{patient.phone}
+                          </span>
+                        </>
+                      ) : null}
+                      {patient.city ? (
+                        <>
+                          <span>·</span>
+                          <span>{patient.city}, {patient.state || patient.country || ""}</span>
+                        </>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
 
@@ -3023,171 +3054,6 @@ export default function PatientDashboardClient({
                 </button>
               ))}
             </div>
-
-            {/* ── Patient Basic Details (Separate Cards — Excludes Name) ── */}
-            <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-xs backdrop-blur-md">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-3.5">
-                <div className="flex items-center gap-2.5">
-                  <div className="grid h-8 w-8 place-items-center rounded-xl bg-brand-teal/10 text-brand-teal">
-                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2">
-                      <rect x="3" y="4" width="18" height="16" rx="2" />
-                      <line x1="16" y1="2" x2="16" y2="6" />
-                      <line x1="8" y1="2" x2="8" y2="6" />
-                      <line x1="3" y1="10" x2="21" y2="10" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.22em] text-brand-teal">Patient Profile</p>
-                    <h2 className="text-sm font-black tracking-tight text-slate-950">Basic Details</h2>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold text-slate-600">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    Verified Patient Baseline
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setActiveModule("settings")}
-                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 hover:border-brand-teal hover:text-brand-teal transition shadow-2xs"
-                  >
-                    Edit in Settings →
-                  </button>
-                </div>
-              </div>
-
-              {/* Individual cards for each basic detail (NO NAME) */}
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                {/* 1. Birthday / DOB */}
-                <div className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-slate-50/60 p-3.5 transition-all hover:bg-slate-50 hover:border-slate-300">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Birthday</span>
-                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-teal-500/10 text-brand-teal">
-                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2">
-                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                        <line x1="16" y1="2" x2="16" y2="6"/>
-                        <line x1="8" y1="2" x2="8" y2="6"/>
-                        <line x1="3" y1="10" x2="21" y2="10"/>
-                      </svg>
-                    </span>
-                  </div>
-                  <div className="mt-2.5">
-                    <p className="text-xs font-black text-slate-900 truncate">
-                      {patient.dob ? formatDate(patient.dob) : "Not recorded"}
-                    </p>
-                    <p className="mt-0.5 text-[10px] font-semibold text-slate-500">
-                      {patientAge ? `${patientAge} years old` : "Age unrecorded"}
-                    </p>
-                  </div>
-                </div>
-
-                {/* 2. Gender */}
-                <div className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-slate-50/60 p-3.5 transition-all hover:bg-slate-50 hover:border-slate-300">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Gender</span>
-                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-blue-500/10 text-blue-600">
-                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2">
-                        <circle cx="12" cy="8" r="5" />
-                        <path d="M20 21a8 8 0 0 0-16 0" />
-                      </svg>
-                    </span>
-                  </div>
-                  <div className="mt-2.5">
-                    <p className="text-xs font-black text-slate-900 capitalize">
-                      {patient.gender || "Not specified"}
-                    </p>
-                    <p className="mt-0.5 text-[10px] font-semibold text-slate-500">
-                      Biological Sex
-                    </p>
-                  </div>
-                </div>
-
-                {/* 3. Blood Type */}
-                <div className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-slate-50/60 p-3.5 transition-all hover:bg-slate-50 hover:border-slate-300">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Blood Type</span>
-                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-red-500/10 text-brand-red">
-                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2">
-                        <path d="M12 21s6-5 6-11a6 6 0 0 0-12 0c0 6 6 11 6 11Z" />
-                      </svg>
-                    </span>
-                  </div>
-                  <div className="mt-2.5">
-                    <span className="inline-flex items-center rounded-md bg-red-50 px-2 py-0.5 text-xs font-black text-brand-red border border-red-200/60">
-                      {patient.bloodType || "N/A"}
-                    </span>
-                    <p className="mt-0.5 text-[10px] font-semibold text-slate-500">
-                      ABO / Rh Typing
-                    </p>
-                  </div>
-                </div>
-
-                {/* 4. Health ID */}
-                <div className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-slate-50/60 p-3.5 transition-all hover:bg-slate-50 hover:border-slate-300">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Health ID</span>
-                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-indigo-500/10 text-indigo-600">
-                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2">
-                        <rect x="3" y="4" width="18" height="16" rx="2" />
-                        <circle cx="9" cy="10" r="2" />
-                        <line x1="15" y1="8" x2="17" y2="8" />
-                        <line x1="15" y1="12" x2="17" y2="12" />
-                      </svg>
-                    </span>
-                  </div>
-                  <div className="mt-2.5">
-                    <p className="font-mono text-xs font-black text-slate-900">
-                      #{patient.id.slice(-8).toUpperCase()}
-                    </p>
-                    <p className="mt-0.5 text-[10px] font-semibold text-slate-500">
-                      Patient Identifier
-                    </p>
-                  </div>
-                </div>
-
-                {/* 5. Phone / Contact */}
-                <div className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-slate-50/60 p-3.5 transition-all hover:bg-slate-50 hover:border-slate-300">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Phone</span>
-                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-amber-500/10 text-amber-600">
-                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2">
-                        <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.7-3.1 19.2 19.2 0 0 1-6-6A19.8 19.8 0 0 1 2 4.1 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.2 1.1.6 2.1 1.1 3a2 2 0 0 1-.4 2.1L8.6 10.6a16 16 0 0 0 4.8 4.8l1.8-1.1a2 2 0 0 1 2.1-.4c.9.5 1.9.9 3 1.1A2 2 0 0 1 22 16.9Z" />
-                      </svg>
-                    </span>
-                  </div>
-                  <div className="mt-2.5">
-                    <p className="text-xs font-black text-slate-900 truncate">
-                      {`${patient.countryCode || ""} ${patient.phone}`.trim() || "Not recorded"}
-                    </p>
-                    <p className="mt-0.5 text-[10px] font-semibold text-slate-500">
-                      Primary Contact
-                    </p>
-                  </div>
-                </div>
-
-                {/* 6. Address / Location */}
-                <div className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-slate-50/60 p-3.5 transition-all hover:bg-slate-50 hover:border-slate-300">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Location</span>
-                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-purple-500/10 text-purple-600">
-                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2">
-                        <path d="M12 21s6-4.8 6-10a6 6 0 1 0-12 0c0 5.2 6 10 6 10Z" />
-                        <circle cx="12" cy="11" r="2.5" />
-                      </svg>
-                    </span>
-                  </div>
-                  <div className="mt-2.5">
-                    <p className="text-xs font-black text-slate-900 truncate">
-                      {[patient.city, patient.state || patient.country].filter(Boolean).join(", ") || patient.address || "Not recorded"}
-                    </p>
-                    <p className="mt-0.5 text-[10px] font-semibold text-slate-500">
-                      {patient.zipCode ? `Postal Code ${patient.zipCode}` : "Residence Area"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </section>
-
 
             {/* ── Two-Column Master Grid ── */}
             <div className="grid gap-6 xl:grid-cols-12">
@@ -3372,7 +3238,191 @@ export default function PatientDashboardClient({
                   </div>
                 </section>
 
-                {/* 4. Consultation Schedule (Online Consultation) */}
+                {/* 4. Laboratory Results & Diagnostic Archives */}
+                <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 p-6 shadow-xs backdrop-blur-md">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-500/10 text-emerald-700 shadow-2xs">
+                        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M10 2v7.31M14 2v7.31M8.5 2h7M14 9.3a6.5 6.5 0 1 1-4 0" />
+                          <path d="M5.52 16h12.96" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-700">Diagnostic &amp; Clinical Archive</p>
+                        <h2 className="mt-0.5 text-lg font-black tracking-tight text-slate-950">Laboratory Results &amp; Previous Consultations</h2>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveModule("settings")}
+                        className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-emerald-500 hover:text-emerald-700 transition shadow-2xs"
+                      >
+                        <span>Open Documents Hub</span>
+                        <span>→</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Filter Tabs */}
+                  <div className="mt-4 flex flex-wrap items-center gap-1.5 border-b border-slate-100 pb-3">
+                    {[
+                      { id: "all", label: "All Diagnostics", count: allDiagnosticDocs.length },
+                      { id: "lab", label: "Lab Results", count: labDocs.length },
+                      { id: "consultation", label: "Previous Consultations", count: consultDocs.length },
+                      { id: "imaging", label: "Imaging & Scans", count: imagingDocs.length },
+                      { id: "discharge", label: "Discharge Summaries", count: dischargeDocs.length },
+                    ].map((tab) => {
+                      const isActive = overviewLabFilter === tab.id;
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => setOverviewLabFilter(tab.id as any)}
+                          className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                            isActive
+                              ? "bg-slate-900 text-white shadow-2xs"
+                              : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                          }`}
+                        >
+                          <span>{tab.label}</span>
+                          <span
+                            className={`rounded-full px-1.5 py-0.2 text-[10px] font-black ${
+                              isActive ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"
+                            }`}
+                          >
+                            {tab.count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Documents List with scroll view */}
+                  <div className="mt-3 max-h-[380px] overflow-y-auto divide-y divide-slate-100 rounded-xl border border-slate-100 bg-slate-50/30">
+                    {displayedDiagnosticDocs.length > 0 ? (
+                      displayedDiagnosticDocs.map((doc) => {
+                        const catCfg = CATEGORY_CONFIG[doc.category] || CATEGORY_CONFIG.other;
+                        return (
+                          <div
+                            key={doc.id}
+                            className="group flex flex-col sm:grid sm:grid-cols-12 gap-3 p-3.5 sm:items-center bg-white hover:bg-slate-50/90 transition"
+                          >
+                            <div className="col-span-5 flex items-center gap-3 min-w-0">
+                              <div
+                                className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl shadow-2xs ${
+                                  doc.category === "lab"
+                                    ? "bg-emerald-500/10 text-emerald-700"
+                                    : doc.category === "consultation"
+                                    ? "bg-sky-500/10 text-sky-700"
+                                    : doc.category === "imaging"
+                                    ? "bg-amber-500/10 text-amber-700"
+                                    : "bg-violet-500/10 text-violet-700"
+                                }`}
+                              >
+                                {doc.category === "lab" ? (
+                                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M10 2v7.31M14 2v7.31M8.5 2h7M14 9.3a6.5 6.5 0 1 1-4 0" />
+                                    <path d="M5.52 16h12.96" />
+                                  </svg>
+                                ) : doc.category === "consultation" ? (
+                                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                    <polyline points="14 2 14 8 20 8" />
+                                    <line x1="16" y1="13" x2="8" y2="13" />
+                                    <line x1="16" y1="17" x2="8" y2="17" />
+                                  </svg>
+                                ) : doc.category === "imaging" ? (
+                                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                    <circle cx="8.5" cy="8.5" r="1.5" />
+                                    <polyline points="21 15 16 10 5 21" />
+                                  </svg>
+                                ) : (
+                                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                                    <polyline points="17 21 17 13 7 13 7 21" />
+                                    <polyline points="7 3 7 8 15 8" />
+                                  </svg>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-black text-slate-950 truncate group-hover:text-brand-teal transition-colors">
+                                  {doc.title}
+                                </p>
+                                <p className="mt-0.5 text-[10px] font-medium text-slate-500 line-clamp-1">
+                                  {doc.notes || "Archived patient diagnostic clinical report"}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="col-span-2">
+                              <span className={`inline-block rounded-md border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${catCfg.badgeClass}`}>
+                                {catCfg.label}
+                              </span>
+                            </div>
+
+                            <div className="col-span-2 text-xs text-slate-600">
+                              <p className="font-bold text-slate-800 truncate">{doc.doctorOrClinic || "Diagnostic Clinic"}</p>
+                              <p className="text-[10px] text-slate-400">{formatDocDate(doc.consultationDate)} · {doc.fileSize}</p>
+                            </div>
+
+                            <div className="col-span-3 flex items-center justify-start sm:justify-end gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setPreviewMedicalDoc(doc)}
+                                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:border-slate-300 hover:bg-slate-50 shadow-2xs transition"
+                              >
+                                <svg className="h-3.5 w-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                                  <circle cx="12" cy="12" r="3" />
+                                </svg>
+                                Preview
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (doc.fileData) {
+                                    const a = document.createElement("a");
+                                    a.href = doc.fileData;
+                                    a.download = doc.fileName;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    document.body.removeChild(a);
+                                  } else {
+                                    downloadMedicalArchiveSamplePdf(doc);
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-700 px-2.5 py-1.5 text-xs font-black text-white hover:bg-emerald-800 shadow-2xs transition"
+                              >
+                                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                  <polyline points="7 10 12 15 17 10" />
+                                  <line x1="12" y1="15" x2="12" y2="3" />
+                                </svg>
+                                Download PDF
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="py-8 text-center">
+                        <p className="text-xs font-bold text-slate-500">No diagnostic documents found for this category.</p>
+                        <button
+                          type="button"
+                          onClick={() => setOverviewLabFilter("all")}
+                          className="mt-1.5 text-xs font-bold text-brand-teal hover:underline"
+                        >
+                          Show all diagnostic archives
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </section>
+
+                {/* 5. Consultation Schedule (Online Consultation) */}
                 <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 shadow-xs backdrop-blur-md">
 
                   {/* Live room alert banner — only when room is open */}

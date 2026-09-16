@@ -11,9 +11,9 @@
 | Metric | Details |
 | :--- | :--- |
 | **Total Session Duration** | ~19 hours 30 minutes (Sep 8 21:15 – Sep 16 23:15 +0800) |
-| **Latest Focus** | Enterprise Admin Command Center UI/UX & Comprehensive Management Suite |
-| **Focus of Latest Task** | Built unified 7-module Admin Command Center (Doctor Screening & PRC Verification, Doctor Directory, Patient Directory, Consultations Ledger, Analytics & Growth, Settings & Security) integrated with DashboardShell |
-| **Total Production Updates** | 64 documented modules / milestones |
+| **Latest Focus** | Patient Dashboard Overview Optimization: Phone Badge, Basic Details Removal & Laboratory Archive |
+| **Focus of Latest Task** | Enhanced Welcome greeting with stylized phone badge, removed redundant Basic Details section, and added Laboratory & Diagnostic Results archive with multi-category filters, PDF preview, and download actions |
+| **Total Production Updates** | 65 documented modules / milestones |
 | **TypeScript / Build Status** | ✅ Passing (0 errors) |
 | **Remote Branch** | `origin/HealthKoUpdated` — fully synced |
 
@@ -22,7 +22,7 @@
 ## 📅 Visual Development Timeline
 
 ```text
-Sep 8 21:15 ──────────────────────────────────────────────────────── Sep 16 23:30 +0800
+Sep 8 21:15 ──────────────────────────────────────────────────────── Sep 17 02:25 +0800
   │  [Sep 8–9]
   ├─ 21:35 [35m] Multi-page PDF Pagination & Overflow Protection (744e7b5)
   ├─ 22:07 [32m] "Consultation Results" Tab & Medical Notes PDF Integration (b202526)
@@ -89,7 +89,8 @@ Sep 8 21:15 ──────────────────────�
   ├─ 21:00 [30m] PDF Download Binary Fix & Cross-Browser Safe Trigger Engine (`pdf-download-helper.ts`)
   ├─ 21:25 [25m] Consultation Report & Medical Certificate Preview + Download Action Suite
   ├─ 21:35 [15m] Current Encounter Documents: Enterprise CRM Registry & 5-Item Scroll View
-  └─ 23:30 [60m] ★ Enterprise Admin Command Center UI/UX & Management Suite (7 Modules)
+  ├─ 23:30 [60m] Enterprise Admin Command Center UI/UX & Management Suite (7 Modules)
+  └─ 02:25 [25m] ★ Patient Overview Refinement: Phone Badge, Basic Details Removal & Lab Results Archive
 ```
 
 ---
@@ -1001,5 +1002,18 @@ Sep 8 21:15 ──────────────────────�
     6. *Analytics & Growth (`analytics`)*: Platform performance metrics, clinical specialty distribution breakdowns, active doctor/patient ratios, and operational insights.
     7. *Admin Settings & Security (`settings`)*: Active administrative session viewer, role permissions summary, platform maintenance toggle, and quick export actions.
   - **Backend Server Actions**: Created secure admin server actions in `src/app/actions/admin.ts` with session validation (`getAdminDashboardData`, `toggleDoctorStatus`, `togglePatientStatus`, `toggleDoctorVerification`, `deleteDoctorByAdmin`, `deletePatientByAdmin`).
+  - **Type Safety & Build**: Passed `npx tsc --noEmit` with 0 TypeScript compiler errors.
+
+### 65. Patient Overview Refinement: Phone Badge, Basic Details Removal & Laboratory Archive
+- **Time**: Sep 17, ~02:00–02:25 +0800 · Duration: ~25 min
+- **Scope**: `PatientDashboardClient.tsx` — Overview Module (`activeModule === "overview"`)
+- **Changes**:
+  - **Phone Number Added to Greeting**: Included the patient's verified phone number with a stylized emerald/teal badge in the main greeting line (*"Welcome back, [Patient Name]"*), displaying country code, phone icon, and active contact information alongside age, gender, and Health ID.
+  - **Removed Redundant Basic Details Card**: Removed the large 6-card "Basic Details" section from the Overview tab, reducing visual noise and prioritizing direct clinical telemetry and encounter documents.
+  - **Added Laboratory & Diagnostic Results Section**: Added a dedicated, interactive diagnostic archive card right below *Clinical Archive* featuring:
+    - Multi-category filter tabs (*All Diagnostics*, *Lab Results*, *Previous Consultations*, *Imaging & Scans*, *Discharge Summaries*).
+    - Structured CRM document list with color-coded iconography, doctor/clinic facility tags, encounter dates, file sizes, and summary clinical notes.
+    - Paired **[👁 Preview]** modal trigger (via `MedicalFilePreviewModal`) and **[⬇ Download PDF]** actions (via `downloadMedicalArchiveSamplePdf`).
+    - Scrollable container configured with `max-h-[380px] overflow-y-auto divide-y divide-slate-100` for compact density.
   - **Type Safety & Build**: Passed `npx tsc --noEmit` with 0 TypeScript compiler errors.
 
