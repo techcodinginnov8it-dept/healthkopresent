@@ -1039,3 +1039,16 @@ Sep 8 21:15 ──────────────────────�
   - **Client-Side Real-Time Sync**: Updated `PatientDashboardClient.tsx` to automatically hydrate pet data from the database on mount and synchronize every modal edit/save operation across Supabase, Prisma, and local storage cache.
   - **Type Safety & Build**: Passed `npx tsc --noEmit` with 0 TypeScript compiler errors.
 
+### 68. Live Consultation Widescreen Horizontal Layout & Video Screen Maximization
+- **Time**: Sep 17, ~03:00–03:10 +0800 · Duration: ~10 min
+- **Scope**: `SharedModules.tsx` — `LiveConsultationPanel`, `PatientDashboardClient.tsx`, `DoctorDashboardClient.tsx`
+- **Changes**:
+  - **Horizontal-First Canvas Architecture**: Restructured `LiveConsultationPanel` to give the video calling stage dominant horizontal space (`xl:col-span-8 2xl:col-span-9` in default split mode, and `col-span-12` in full widescreen mode).
+  - **Maximize Video / Cinema Mode**: Added a dedicated top-bar and floating-dock action `[ ⛶ Maximize Video ]` / `[ 🗗 Split View ]` that expands the video calling canvas to span 100% full horizontal width for immersive telemedical examinations and screen shares.
+  - **Dynamic Video Layout Modes**:
+    - *50/50 Horizontal Split Grid*: Balanced widescreen side-by-side feeds for local and remote participants with active speaker pulse indicators.
+    - *Speaker Focus + Picture-in-Picture (PiP)*: Full-canvas remote video stage with a floating, widescreen self-preview card in the corner.
+  - **Tabbed Companion Panel**: Consolidated Doctor Notes / Rx, In-Call Chat, and Live Speech Transcript into a sleek, top-tabbed companion drawer (`[📋 Notes & Rx]` | `[💬 Chat]` | `[🎙️ Speech]`), preventing vertical overflow and keeping the horizontal workspace open and expansive.
+  - **Type Safety & Build**: Passed `npx tsc --noEmit` with 0 TypeScript compiler errors.
+
+

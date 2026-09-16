@@ -1119,99 +1119,252 @@ export function LiveConsultationPanel({
     };
   }, [status, isMicOn, commitTurn]);
 
+  // ── Layout & Viewport Modes ───────────────────────────────────────────
+  const [isMaximized, setIsMaximized] = useState(false);
+  const [videoLayout, setVideoLayout] = useState<"side-by-side" | "focus-pip">("side-by-side");
+  const [activeCompanionTab, setActiveCompanionTab] = useState<"documentation" | "chat" | "transcript">(
+    documentation ? "documentation" : "chat"
+  );
+  const [showCompanionDrawer, setShowCompanionDrawer] = useState(false);
+
   return (
-    <div className="grid gap-4 xl:grid-cols-12">
-      <section className={`relative rounded-xl border transition-colors xl:col-span-7 ${
-        isDark ? "border-slate-800 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-900 shadow-xs"
-      }`}>
-        <header className={`flex flex-col gap-3 border-b p-4 md:flex-row md:items-center md:justify-between ${
-          isDark ? "border-slate-800" : "border-slate-100"
-        }`}>
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Live Consultation</p>
-            <h2 className={`mt-1 text-lg font-black ${isDark ? "text-white" : "text-slate-900"}`}>{counterpartName}</h2>
-            <p className={`text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>{formatDateTime(appointmentTime)}</p>
-          </div>
-          <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase ${
-            status === "connected"
-              ? isDark ? "bg-emerald-500/15 text-emerald-300" : "border border-emerald-300 bg-emerald-50 text-emerald-800 font-bold"
-              : isDark ? "bg-amber-500/15 text-amber-300" : "border border-amber-300 bg-amber-50 text-amber-800 font-bold"
-          }`}>
-            {statusLabel}
-          </span>
-        </header>
-        <div className={`flex flex-wrap items-center gap-2 border-b px-4 py-3 ${
-          isDark ? "border-slate-800" : "border-slate-100"
-        }`}>
-          <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${
-            connectionState === "failed"
-              ? "bg-red-500/15 text-red-400"
-              : isDark ? "bg-white/10 text-slate-200" : "border border-slate-200 bg-slate-100 text-slate-700 font-semibold"
-          }`}>
-            {connectionLabel}
-          </span>
-          {status === "connected" && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${
-                isDark ? "border-white/10 bg-white/5 text-slate-200" : "border-slate-200 bg-slate-50 text-slate-700"
-              }`}>
-                {callDuration} / {totalDurationMinutes}m
-              </span>
-              {remainingSeconds <= 600 ? (
-                <button
-                  type="button"
-                  onClick={() => setShowExtendModal(true)}
-                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
-                    remainingSeconds <= 0
-                      ? "bg-rose-500/15 text-rose-500 border border-rose-500/30 animate-pulse hover:bg-rose-500/25"
-                      : "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25"
-                  }`}
-                  title="Click to extend consultation time"
-                >
-                  <span>⚠️</span>
-                  <span>
-                    {remainingSeconds <= 0
-                      ? `Exceeded (+${Math.abs(Math.floor(remainingSeconds / 60))}m)`
-                      : `${Math.max(1, Math.ceil(remainingSeconds / 60))}m left`}
-                  </span>
-                  <span className="underline font-bold">Extend</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setShowExtendModal(true)}
-                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
-                    isDark
-                      ? "border-slate-700 bg-slate-800/80 text-slate-300 hover:bg-slate-700 hover:text-white"
-                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  }`}
-                  title="Extend consultation time"
-                >
-                  <svg className="h-2.5 w-2.5 text-brand-teal" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 16 14" />
-                  </svg>
-                  + Extend
-                </button>
-              )}
+    <div className="grid gap-4 xl:grid-cols-12 items-start">
+      {/* ── Main Widescreen Video Calling Stage ── */}
+      <section
+        className={`relative flex flex-col rounded-2xl border transition-all duration-300 ${
+          isMaximized ? "xl:col-span-12" : "xl:col-span-8 2xl:col-span-9"
+        } ${
+          isDark
+            ? "border-slate-800 bg-slate-950 text-white shadow-2xl shadow-black/40"
+            : "border-slate-200 bg-white text-slate-900 shadow-md"
+        }`}
+      >
+        {/* Header Bar */}
+        <header
+          className={`flex flex-col gap-3 border-b p-4 md:flex-row md:items-center md:justify-between ${
+            isDark ? "border-slate-800" : "border-slate-100"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-teal/15 text-brand-teal font-black">
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m16 13 5 3V8l-5 3" />
+                <rect width="14" height="10" x="2" y="7" rx="2" />
+              </svg>
             </div>
-          )}
-          {isLocalScreenSharing ? (
-            <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-cyan-600 dark:text-cyan-200">
-              You are Presenting
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Live Video Consultation</p>
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.2 text-[9px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  HD 16:9
+                </span>
+              </div>
+              <h2 className={`text-lg font-black leading-snug ${isDark ? "text-white" : "text-slate-900"}`}>{counterpartName}</h2>
+              <p className={`text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-500"}`}>{formatDateTime(appointmentTime)}</p>
+            </div>
+          </div>
+
+          {/* Right Header Toolbar: Status, Extend, View Layout Switcher & Maximize Toggle */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider ${
+                status === "connected"
+                  ? isDark
+                    ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                    : "border border-emerald-300 bg-emerald-50 text-emerald-800 font-bold"
+                  : isDark
+                    ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                    : "border border-amber-300 bg-amber-50 text-amber-800 font-bold"
+              }`}
+            >
+              {statusLabel}
             </span>
-          ) : isRemoteScreenSharing ? (
-            <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-cyan-600 dark:text-cyan-200">
-              {counterpartName} is Presenting
+
+            {/* Video Layout Mode Switcher (Side-by-Side vs PiP) */}
+            <div className={`hidden sm:inline-flex items-center rounded-xl p-0.5 border ${
+              isDark ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-slate-100"
+            }`}>
+              <button
+                type="button"
+                onClick={() => setVideoLayout("side-by-side")}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+                  videoLayout === "side-by-side"
+                    ? "bg-brand-teal text-white shadow-xs"
+                    : isDark ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900"
+                }`}
+                title="Side-by-Side Split View"
+              >
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <rect x="3" y="4" width="8" height="16" rx="2" />
+                  <rect x="13" y="4" width="8" height="16" rx="2" />
+                </svg>
+                <span>50/50</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setVideoLayout("focus-pip")}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+                  videoLayout === "focus-pip"
+                    ? "bg-brand-teal text-white shadow-xs"
+                    : isDark ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900"
+                }`}
+                title="Speaker Focus + Picture-in-Picture View"
+              >
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <rect x="2" y="3" width="20" height="18" rx="2" />
+                  <rect x="13" y="12" width="7" height="7" rx="1.5" fill="currentColor" fillOpacity="0.25" stroke="currentColor" strokeWidth="1.5" />
+                </svg>
+                <span>Focus PiP</span>
+              </button>
+            </div>
+
+            {/* Maximize / Cinema Widescreen Mode Toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                setIsMaximized((prev) => !prev);
+              }}
+              className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[11px] font-black uppercase tracking-wider transition cursor-pointer ${
+                isMaximized
+                  ? "border-brand-teal bg-brand-teal/15 text-brand-teal shadow-xs hover:bg-brand-teal/25"
+                  : isDark
+                    ? "border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 hover:text-white"
+                    : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+              }`}
+              title={isMaximized ? "Restore split layout" : "Maximize horizontal video calling screen"}
+            >
+              {isMaximized ? (
+                <>
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                    <path d="M4 14h6v6m10-10h-6V4m0 6 7-7M10 14l-7 7" />
+                  </svg>
+                  <span>Split View</span>
+                </>
+              ) : (
+                <>
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+                  </svg>
+                  <span>Maximize Video</span>
+                </>
+              )}
+            </button>
+
+            {/* In maximized mode, show companion drawer button */}
+            {isMaximized && (
+              <button
+                type="button"
+                onClick={() => setShowCompanionDrawer(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-teal-500/40 bg-brand-teal px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-white shadow-md hover:bg-teal-600 transition cursor-pointer"
+                title="Open clinical notes, chat & transcript drawer"
+              >
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                </svg>
+                <span>Notes &amp; Chat</span>
+              </button>
+            )}
+          </div>
+        </header>
+
+        {/* Call Info & Diagnostic Bar */}
+        <div
+          className={`flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5 ${
+            isDark ? "border-slate-800 bg-slate-900/40" : "border-slate-100 bg-slate-50/50"
+          }`}
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase ${
+                connectionState === "failed"
+                  ? "bg-red-500/15 text-red-400"
+                  : isDark
+                    ? "bg-white/10 text-slate-200"
+                    : "border border-slate-200 bg-white text-slate-700 font-semibold"
+              }`}
+            >
+              {connectionLabel}
             </span>
-          ) : null}
-          {mediaError && (
-            <span className="rounded-full bg-red-500/15 px-2.5 py-1 text-[10px] font-bold text-red-500">
-              {mediaError}
+
+            {status === "connected" && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span
+                  className={`rounded-full border px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.16em] ${
+                    isDark ? "border-white/10 bg-white/5 text-slate-200" : "border-slate-200 bg-white text-slate-700"
+                  }`}
+                >
+                  {callDuration} / {totalDurationMinutes}m
+                </span>
+                {remainingSeconds <= 600 ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowExtendModal(true)}
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+                      remainingSeconds <= 0
+                        ? "bg-rose-500/15 text-rose-500 border border-rose-500/30 animate-pulse hover:bg-rose-500/25"
+                        : "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25"
+                    }`}
+                    title="Click to extend consultation time"
+                  >
+                    <span>⚠️</span>
+                    <span>
+                      {remainingSeconds <= 0
+                        ? `Exceeded (+${Math.abs(Math.floor(remainingSeconds / 60))}m)`
+                        : `${Math.max(1, Math.ceil(remainingSeconds / 60))}m left`}
+                    </span>
+                    <span className="underline font-bold">Extend</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowExtendModal(true)}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
+                      isDark
+                        ? "border-slate-700 bg-slate-800/80 text-slate-300 hover:bg-slate-700 hover:text-white"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                    }`}
+                    title="Extend consultation time"
+                  >
+                    <svg className="h-2.5 w-2.5 text-brand-teal" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    + Extend
+                  </button>
+                )}
+              </div>
+            )}
+
+            {isLocalScreenSharing ? (
+              <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.16em] text-cyan-600 dark:text-cyan-200">
+                You are Presenting
+              </span>
+            ) : isRemoteScreenSharing ? (
+              <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.16em] text-cyan-600 dark:text-cyan-200">
+                {counterpartName} is Presenting
+              </span>
+            ) : null}
+
+            {mediaError && (
+              <span className="rounded-full bg-red-500/15 px-2.5 py-0.5 text-[10px] font-bold text-red-500">
+                {mediaError}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 hidden sm:inline">
+              Layout: {videoLayout === "side-by-side" ? "50/50 Horizontal Split" : "Focus + Picture-in-Picture"}
             </span>
-          )}
+          </div>
         </div>
-        <div className={`border-b px-4 py-3 ${isDark ? "border-slate-800" : "border-slate-100"}`}>
+
+        {/* Media Devices Selector */}
+        <div className={`border-b px-4 py-2.5 ${isDark ? "border-slate-800" : "border-slate-100"}`}>
           <MediaDeviceControls
             devices={devices}
             cameraDeviceId={cameraDeviceId}
@@ -1224,9 +1377,11 @@ export function LiveConsultationPanel({
         </div>
 
         {/* Live Audio Speech Recognition & Transcript Bar */}
-        <div className={`border-b px-4 py-2.5 text-xs flex items-center justify-between gap-3 ${
-          isDark ? "bg-slate-900/90 border-slate-800 text-slate-300" : "bg-teal-50/80 border-teal-100 text-slate-700"
-        }`}>
+        <div
+          className={`border-b px-4 py-2 text-xs flex items-center justify-between gap-3 ${
+            isDark ? "bg-slate-900/90 border-slate-800 text-slate-300" : "bg-teal-50/70 border-teal-100 text-slate-700"
+          }`}
+        >
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <span className="relative flex h-2.5 w-2.5 shrink-0">
               {isMicOn && speechStatus !== "error" && speechStatus !== "unsupported" ? (
@@ -1238,7 +1393,7 @@ export function LiveConsultationPanel({
                 <span className="inline-flex rounded-full h-2.5 w-2.5 bg-slate-400" />
               )}
             </span>
-            <span className="font-black shrink-0 text-[11px] uppercase tracking-wider text-brand-teal">
+            <span className="font-black shrink-0 text-[10px] uppercase tracking-wider text-brand-teal">
               Live Transcript:
             </span>
             <span className="truncate italic text-[11px] text-slate-600 dark:text-slate-300">
@@ -1247,119 +1402,104 @@ export function LiveConsultationPanel({
                 : interimText
                   ? `Hearing: "${interimText}..."`
                   : transcriptTurns.length > 0
-                    ? `Last turn: "${transcriptTurns[transcriptTurns.length - 1].speaker}: ${transcriptTurns[transcriptTurns.length - 1].text.slice(0, 45)}..."`
+                    ? `Last turn: "${transcriptTurns[transcriptTurns.length - 1].speaker}: ${transcriptTurns[transcriptTurns.length - 1].text.slice(0, 50)}..."`
                     : speechStatus === "unsupported"
-                      ? "Browser speech recognition offline. In-call chat messages are automatically archived to the transcript."
+                      ? "Browser speech recognition offline. In-call chat messages are archived to transcript."
                       : "Listening for live consultation speech..."}
             </span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <span className="rounded-full bg-brand-teal/15 text-brand-teal px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider">
-              {transcriptTurns.length} turns recorded
+              {transcriptTurns.length} turns
             </span>
           </div>
         </div>
 
-        {isAnyScreenSharing ? (
-          <div className="flex flex-col gap-4 p-4 pb-28 min-h-[480px]">
-            {/* Minimized Camera Previews: Synchronized on both Presenter and Viewer ends */}
-            <div className="grid grid-cols-2 gap-3">
-              {/* Minimized Local Camera */}
-              <div className="relative h-[160px] sm:h-[180px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-md">
-                <ConsultationVideoTile
-                  stream={localStream}
-                  label="You (Camera)"
-                  detail={isCameraOn ? "Camera on" : "Camera off"}
-                  active={isCameraOn}
-                  cameraOn={isCameraOn}
-                  micOn={isMicOn}
-                  muted={true}
-                  className="h-full"
-                  tone="slate"
-                />
-              </div>
+        {/* ── Video Canvas ────────────────────────────────────────── */}
+        <div className="relative flex-1 p-3 sm:p-4 pb-24 md:pb-28">
+          {isAnyScreenSharing ? (
+            /* Screen Sharing Presentation Layout */
+            <div className="flex flex-col gap-3 min-h-[500px] lg:min-h-[580px] xl:min-h-[640px]">
+              {/* Minimized Camera Previews Bar */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="relative h-[140px] sm:h-[160px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-md">
+                  <ConsultationVideoTile
+                    stream={localStream}
+                    label="You (Camera)"
+                    detail={isCameraOn ? "Camera on" : "Camera off"}
+                    active={isCameraOn}
+                    cameraOn={isCameraOn}
+                    micOn={isMicOn}
+                    muted={true}
+                    className="h-full"
+                    tone="slate"
+                  />
+                </div>
 
-              {/* Minimized Counterpart Camera */}
-              <div className="relative h-[160px] sm:h-[180px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-md">
-                <ConsultationVideoTile
-                  stream={isLocalScreenSharing ? remoteStream : null}
-                  label={counterpartName}
-                  detail={
-                    isLocalScreenSharing
-                      ? counterpartCameraOn
-                        ? role === "doctor"
-                          ? "Patient stream"
-                          : "Doctor stream"
-                        : "Camera disabled"
-                      : "Presenting screen"
-                  }
-                  active={isLocalScreenSharing ? Boolean(counterpartCameraOn) : true}
-                  cameraOn={counterpartCameraOn}
-                  micOn={counterpartMicOn}
-                  muted={isLocalScreenSharing ? false : true}
-                  className="h-full"
-                  tone="teal"
-                />
-              </div>
-            </div>
-
-            {/* Dedicated Screen Share Presentation Window: Crisp, uncropped letterbox */}
-            <div className="relative min-h-[380px] md:min-h-[480px] overflow-hidden rounded-xl border-2 border-cyan-500/40 bg-slate-950 shadow-2xl">
-              {/* Dismiss / Stop Presentation Button */}
-              <div className="absolute top-3 right-3 z-30 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPresentationDismissed(true);
-                    onDismissPresentation?.();
-                    if (isLocalScreenSharing) {
-                      onToggleScreenShare?.();
+                <div className="relative h-[140px] sm:h-[160px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-md">
+                  <ConsultationVideoTile
+                    stream={isLocalScreenSharing ? remoteStream : null}
+                    label={counterpartName}
+                    detail={
+                      isLocalScreenSharing
+                        ? counterpartCameraOn
+                          ? role === "doctor"
+                            ? "Patient stream"
+                            : "Doctor stream"
+                          : "Camera disabled"
+                        : "Presenting screen"
                     }
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600/95 hover:bg-rose-600 px-3.5 py-2 text-xs font-black text-white shadow-xl backdrop-blur-sm transition active:scale-95 cursor-pointer"
-                  title="Close screen presentation and return to camera view"
-                >
-                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                  <span>{isLocalScreenSharing ? "Stop Sharing Screen" : "Close Screen Share View"}</span>
-                </button>
+                    active={isLocalScreenSharing ? Boolean(counterpartCameraOn) : true}
+                    cameraOn={counterpartCameraOn}
+                    micOn={counterpartMicOn}
+                    muted={isLocalScreenSharing ? false : true}
+                    className="h-full"
+                    tone="teal"
+                  />
+                </div>
               </div>
 
-              <ConsultationVideoTile
-                stream={isLocalScreenSharing ? screenShareStream : remoteStream}
-                label={isLocalScreenSharing ? "Your Screen Presentation" : `${counterpartName}'s Screen Presentation`}
-                detail={isLocalScreenSharing ? "Presenting screen in real time" : "Viewing shared screen in real time"}
-                active={true}
-                cameraOn={true}
-                micOn={isLocalScreenSharing ? isMicOn : counterpartMicOn}
-                muted={isLocalScreenSharing ? true : false}
-                className="h-full min-h-[380px] md:min-h-[480px]"
-                tone="teal"
-                objectFit="contain"
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="grid min-h-[480px] gap-4 p-4 pb-28 md:grid-cols-2">
-            {/* Left: Your local camera preview */}
-            <div className="relative min-h-[420px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
-              <ConsultationVideoTile
-                stream={localStream}
-                label="Your stream"
-                detail={isCameraOn ? "Camera active" : "Camera disabled"}
-                active={isCameraOn}
-                cameraOn={isCameraOn}
-                micOn={isMicOn}
-                muted={true}
-                className="h-full min-h-[420px]"
-                tone="slate"
-              />
-            </div>
+              {/* Dedicated Screen Share Presentation Window: Crisp, uncropped widescreen letterbox */}
+              <div className="relative flex-1 min-h-[420px] lg:min-h-[500px] overflow-hidden rounded-2xl border-2 border-cyan-500/40 bg-slate-950 shadow-2xl">
+                <div className="absolute top-3 right-3 z-30 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPresentationDismissed(true);
+                      onDismissPresentation?.();
+                      if (isLocalScreenSharing) {
+                        onToggleScreenShare?.();
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600/95 hover:bg-rose-600 px-3.5 py-2 text-xs font-black text-white shadow-xl backdrop-blur-sm transition active:scale-95 cursor-pointer"
+                    title="Close screen presentation and return to camera view"
+                  >
+                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                    <span>{isLocalScreenSharing ? "Stop Sharing Screen" : "Close Screen Share View"}</span>
+                  </button>
+                </div>
 
-            {/* Right: Counterpart remote feed */}
-            <div className="relative min-h-[420px] overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+                <ConsultationVideoTile
+                  stream={isLocalScreenSharing ? screenShareStream : remoteStream}
+                  label={isLocalScreenSharing ? "Your Screen Presentation" : `${counterpartName}'s Screen Presentation`}
+                  detail={isLocalScreenSharing ? "Presenting screen in real time" : "Viewing shared screen in real time"}
+                  active={true}
+                  cameraOn={true}
+                  micOn={isLocalScreenSharing ? isMicOn : counterpartMicOn}
+                  muted={isLocalScreenSharing ? true : false}
+                  className="h-full min-h-[420px] lg:min-h-[500px]"
+                  tone="teal"
+                  objectFit="contain"
+                />
+              </div>
+            </div>
+          ) : videoLayout === "focus-pip" ? (
+            /* Speaker Focus + Picture-in-Picture Layout */
+            <div className="relative w-full h-full min-h-[500px] lg:min-h-[580px] xl:min-h-[640px] rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-xl">
+              {/* Primary Large Feed (Counterpart) */}
               <ConsultationVideoTile
                 stream={remoteStream}
                 label={counterpartName}
@@ -1374,151 +1514,510 @@ export function LiveConsultationPanel({
                 cameraOn={counterpartCameraOn}
                 micOn={counterpartMicOn}
                 muted={false}
-                className="h-full min-h-[420px]"
+                className="w-full h-full min-h-[500px] lg:min-h-[580px] xl:min-h-[640px]"
                 tone="teal"
               />
-            </div>
-          </div>
-        )}
-        <footer className="absolute bottom-5 left-1/2 flex -translate-x-1/2 flex-wrap items-center justify-center gap-4 rounded-full border border-white/10 bg-[rgba(24,24,27,0.7)] px-5 py-3 shadow-2xl shadow-black/30 backdrop-blur-[12px]">
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={onToggleCamera}
-              aria-label={isCameraOn ? "Turn camera off" : "Turn camera on"}
-              title={isCameraOn ? "Turn camera off" : "Turn camera on"}
-              className={`grid h-12 w-12 place-items-center rounded-full border transition focus:outline-none focus:ring-4 ${
-                isCameraOn
-                  ? "border-white/15 bg-white/10 text-white hover:bg-white/15 focus:ring-white/20"
-                  : "border-red-300/40 bg-red-500/15 text-red-200 hover:bg-red-500/25 focus:ring-red-300/30"
-              }`}
-            >
-              <VideoControlIcon off={!isCameraOn} />
-            </button>
-            <button
-              type="button"
-              onClick={onToggleMic}
-              aria-label={isMicOn ? "Mute microphone" : "Unmute microphone"}
-              title={isMicOn ? "Mute microphone" : "Unmute microphone"}
-              className={`grid h-12 w-12 place-items-center rounded-full border transition focus:outline-none focus:ring-4 ${
-                isMicOn
-                  ? "border-white/15 bg-white/10 text-white hover:bg-white/15 focus:ring-white/20"
-                  : "border-red-300/40 bg-red-500/15 text-red-200 hover:bg-red-500/25 focus:ring-red-300/30"
-              }`}
-            >
-              <MicControlIcon off={!isMicOn} />
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (isLocalScreenSharing) {
-                  onToggleScreenShare?.();
-                } else if (isRemoteScreenSharing) {
-                  setPresentationDismissed(true);
-                  onDismissPresentation?.();
-                } else {
-                  setPresentationDismissed(false);
-                  onToggleScreenShare?.();
-                }
-              }}
-              disabled={!screenShareSupported}
-              aria-label={isAnyScreenSharing ? "Stop screen share" : "Start screen share"}
-              title={screenShareSupported ? (isAnyScreenSharing ? "Stop screen share" : "Start screen share") : "Screen sharing not supported"}
-              className={`grid h-12 w-12 place-items-center rounded-full border transition focus:outline-none focus:ring-4 ${
-                isAnyScreenSharing
-                  ? "border-cyan-300/30 bg-cyan-500/15 text-cyan-100 hover:bg-cyan-500/20 focus:ring-cyan-300/20"
-                  : "border-white/15 bg-white/10 text-white hover:bg-white/15 focus:ring-white/20 disabled:cursor-not-allowed disabled:opacity-50"
-              }`}
-            >
-              <ScreenShareIcon off={!isAnyScreenSharing} />
-            </button>
-          </div>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={onEnd}
-              aria-label="End consultation"
-              title={
-                !canEndCall && role === "doctor"
-                  ? "Consultation notes / clinical observations required before ending call"
-                  : "End consultation"
-              }
-              className={`grid h-14 w-14 place-items-center rounded-full transition focus:outline-none focus:ring-4 ${
-                !canEndCall && role === "doctor"
-                  ? "bg-amber-600 hover:bg-amber-700 text-white shadow-lg shadow-amber-950/40 ring-2 ring-amber-400/50 focus:ring-amber-300"
-                  : "bg-brand-red text-white shadow-lg shadow-red-950/40 hover:bg-red-700 focus:ring-red-300"
-              }`}
-            >
-              <PhoneDownIcon />
-            </button>
-            {!canEndCall && role === "doctor" && (
-              <span
-                className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 text-slate-950 font-black text-[10px] shadow border border-amber-300 animate-pulse"
-                title="Clinical notes required before call can be ended"
-              >
-                !
-              </span>
-            )}
-          </div>
-        </footer>
-      </section>
 
-      <div className="space-y-4 xl:col-span-5">
-        {documentation}
-        {chat}
-
-        {/* Live Synchronous Dialogue Stream */}
-        <section className={`rounded-xl border p-4 shadow-xs max-h-64 overflow-y-auto ${
-          isDark ? "border-slate-800 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-900"
-        }`}>
-          <div className="flex items-center justify-between border-b pb-2 mb-2.5 border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-brand-teal animate-pulse" />
-              <h4 className="text-xs font-black uppercase tracking-wider text-brand-teal">
-                Live Dialogue Transcript ({transcriptTurns.length})
-              </h4>
+              {/* Floating Self Camera (Picture-in-Picture) */}
+              <div className="absolute top-4 right-4 z-20 w-44 sm:w-60 md:w-72 aspect-video rounded-xl overflow-hidden border-2 border-white/20 bg-slate-900 shadow-2xl transition hover:scale-105">
+                <ConsultationVideoTile
+                  stream={localStream}
+                  label="You (Self)"
+                  detail={isCameraOn ? "Camera active" : "Camera off"}
+                  active={isCameraOn}
+                  cameraOn={isCameraOn}
+                  micOn={isMicOn}
+                  muted={true}
+                  className="h-full w-full"
+                  tone="slate"
+                />
+              </div>
             </div>
-            <span className="text-[10px] text-slate-400">Archived to PDF report</span>
-          </div>
-          {transcriptTurns.length === 0 ? (
-            <p className="text-xs italic text-slate-400 py-4 text-center">
-              Spoken conversation turns and in-call messages will appear here in real time.
-            </p>
           ) : (
-            <div className="space-y-2">
-              {transcriptTurns.map((turn) => (
-                <div key={turn.id} className="text-xs rounded-lg p-2.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/50">
-                  <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 mb-0.5">
-                    <span className={turn.role === "doctor" ? "text-brand-teal font-black" : "text-emerald-600 dark:text-emerald-400 font-black"}>
-                      {turn.speaker} ({turn.role})
-                    </span>
-                    <span>{turn.timestamp}</span>
-                  </div>
-                  <p className="text-slate-800 dark:text-slate-200 leading-relaxed">{turn.text}</p>
-                </div>
-              ))}
+            /* Horizontal 50/50 Split Grid (Balanced Widescreen) */
+            <div className="grid h-full min-h-[500px] lg:min-h-[580px] xl:min-h-[640px] gap-4 md:grid-cols-2">
+              {/* Left: Your local camera preview */}
+              <div className="relative h-full min-h-[420px] lg:min-h-[520px] overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-lg">
+                <ConsultationVideoTile
+                  stream={localStream}
+                  label="Your stream"
+                  detail={isCameraOn ? "Camera active" : "Camera disabled"}
+                  active={isCameraOn}
+                  cameraOn={isCameraOn}
+                  micOn={isMicOn}
+                  muted={true}
+                  className="h-full min-h-[420px] lg:min-h-[520px]"
+                  tone="slate"
+                />
+              </div>
+
+              {/* Right: Counterpart remote feed */}
+              <div className="relative h-full min-h-[420px] lg:min-h-[520px] overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-lg">
+                <ConsultationVideoTile
+                  stream={remoteStream}
+                  label={counterpartName}
+                  detail={
+                    counterpartCameraOn
+                      ? role === "doctor"
+                        ? "Patient stream"
+                        : "Doctor stream"
+                      : "Camera disabled"
+                  }
+                  active={Boolean(counterpartCameraOn)}
+                  cameraOn={counterpartCameraOn}
+                  micOn={counterpartMicOn}
+                  muted={false}
+                  className="h-full min-h-[420px] lg:min-h-[520px]"
+                  tone="teal"
+                />
+              </div>
             </div>
           )}
 
-          {/* Quick Dialogue Entry Bar */}
-          <form onSubmit={handleAddQuickRemark} className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex gap-2">
-            <input
-              type="text"
-              value={quickRemark}
-              onChange={(e) => setQuickRemark(e.target.value)}
-              placeholder={role === "doctor" ? "Log verbal remark or advice..." : "Log verbal question or symptom..."}
-              className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-teal"
-            />
+          {/* ── Floating Glassmorphic Control Dock ── */}
+          <footer className="absolute bottom-5 left-1/2 flex -translate-x-1/2 flex-wrap items-center justify-center gap-3 sm:gap-4 rounded-full border border-white/15 bg-slate-950/85 px-4 sm:px-6 py-2.5 sm:py-3 shadow-2xl shadow-black/60 backdrop-blur-md z-30">
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Camera Toggle */}
+              <button
+                type="button"
+                onClick={onToggleCamera}
+                aria-label={isCameraOn ? "Turn camera off" : "Turn camera on"}
+                title={isCameraOn ? "Turn camera off" : "Turn camera on"}
+                className={`grid h-11 w-11 sm:h-12 sm:w-12 place-items-center rounded-full border transition focus:outline-none focus:ring-4 cursor-pointer ${
+                  isCameraOn
+                    ? "border-white/15 bg-white/10 text-white hover:bg-white/20 focus:ring-white/20"
+                    : "border-red-300/40 bg-red-500/20 text-red-200 hover:bg-red-500/30 focus:ring-red-300/30"
+                }`}
+              >
+                <VideoControlIcon off={!isCameraOn} />
+              </button>
+
+              {/* Mic Toggle */}
+              <button
+                type="button"
+                onClick={onToggleMic}
+                aria-label={isMicOn ? "Mute microphone" : "Unmute microphone"}
+                title={isMicOn ? "Mute microphone" : "Unmute microphone"}
+                className={`grid h-11 w-11 sm:h-12 sm:w-12 place-items-center rounded-full border transition focus:outline-none focus:ring-4 cursor-pointer ${
+                  isMicOn
+                    ? "border-white/15 bg-white/10 text-white hover:bg-white/20 focus:ring-white/20"
+                    : "border-red-300/40 bg-red-500/20 text-red-200 hover:bg-red-500/30 focus:ring-red-300/30"
+                }`}
+              >
+                <MicControlIcon off={!isMicOn} />
+              </button>
+
+              {/* Screen Share Toggle */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (isLocalScreenSharing) {
+                    onToggleScreenShare?.();
+                  } else if (isRemoteScreenSharing) {
+                    setPresentationDismissed(true);
+                    onDismissPresentation?.();
+                  } else {
+                    setPresentationDismissed(false);
+                    onToggleScreenShare?.();
+                  }
+                }}
+                disabled={!screenShareSupported}
+                aria-label={isAnyScreenSharing ? "Stop screen share" : "Start screen share"}
+                title={
+                  screenShareSupported
+                    ? isAnyScreenSharing
+                      ? "Stop screen share"
+                      : "Start screen share"
+                    : "Screen sharing not supported"
+                }
+                className={`grid h-11 w-11 sm:h-12 sm:w-12 place-items-center rounded-full border transition focus:outline-none focus:ring-4 cursor-pointer ${
+                  isAnyScreenSharing
+                    ? "border-cyan-300/40 bg-cyan-500/25 text-cyan-100 hover:bg-cyan-500/35 focus:ring-cyan-300/20"
+                    : "border-white/15 bg-white/10 text-white hover:bg-white/20 focus:ring-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+                }`}
+              >
+                <ScreenShareIcon off={!isAnyScreenSharing} />
+              </button>
+
+              {/* Layout Switcher (Mobile/Dock Shortcut) */}
+              <button
+                type="button"
+                onClick={() => setVideoLayout((prev) => (prev === "side-by-side" ? "focus-pip" : "side-by-side"))}
+                aria-label="Toggle layout mode"
+                title={videoLayout === "side-by-side" ? "Switch to Focus + PiP" : "Switch to 50/50 Split"}
+                className="grid h-11 w-11 sm:h-12 sm:w-12 place-items-center rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/20 focus:outline-none focus:ring-4 focus:ring-white/20 cursor-pointer"
+              >
+                {videoLayout === "side-by-side" ? (
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="2" y="3" width="20" height="18" rx="2" />
+                    <rect x="13" y="12" width="7" height="7" rx="1.5" fill="currentColor" fillOpacity="0.25" stroke="currentColor" strokeWidth="1.5" />
+                  </svg>
+                ) : (
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="4" width="8" height="16" rx="2" />
+                    <rect x="13" y="4" width="8" height="16" rx="2" />
+                  </svg>
+                )}
+              </button>
+
+              {/* Maximize Toggle Button */}
+              <button
+                type="button"
+                onClick={() => setIsMaximized((prev) => !prev)}
+                aria-label={isMaximized ? "Restore view" : "Maximize horizontal video screen"}
+                title={isMaximized ? "Restore split layout" : "Maximize horizontal video screen"}
+                className={`grid h-11 w-11 sm:h-12 sm:w-12 place-items-center rounded-full border transition focus:outline-none focus:ring-4 cursor-pointer ${
+                  isMaximized
+                    ? "border-teal-400/40 bg-brand-teal text-white shadow-lg shadow-teal-900/40"
+                    : "border-white/15 bg-white/10 text-white hover:bg-white/20 focus:ring-white/20"
+                }`}
+              >
+                {isMaximized ? (
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <path d="M4 14h6v6m10-10h-6V4m0 6 7-7M10 14l-7 7" />
+                  </svg>
+                ) : (
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+                  </svg>
+                )}
+              </button>
+            </div>
+
+            {/* End Call Button */}
+            <div className="relative pl-1 sm:pl-2">
+              <button
+                type="button"
+                onClick={onEnd}
+                aria-label="End consultation"
+                title={
+                  !canEndCall && role === "doctor"
+                    ? "Consultation notes / clinical observations required before ending call"
+                    : "End consultation"
+                }
+                className={`grid h-12 w-12 sm:h-14 sm:w-14 place-items-center rounded-full transition focus:outline-none focus:ring-4 cursor-pointer ${
+                  !canEndCall && role === "doctor"
+                    ? "bg-amber-600 hover:bg-amber-700 text-white shadow-lg shadow-amber-950/40 ring-2 ring-amber-400/50 focus:ring-amber-300"
+                    : "bg-brand-red text-white shadow-lg shadow-red-950/40 hover:bg-red-700 focus:ring-red-300"
+                }`}
+              >
+                <PhoneDownIcon />
+              </button>
+              {!canEndCall && role === "doctor" && (
+                <span
+                  className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 text-slate-950 font-black text-[10px] shadow border border-amber-300 animate-pulse"
+                  title="Clinical notes required before call can be ended"
+                >
+                  !
+                </span>
+              )}
+            </div>
+          </footer>
+        </div>
+      </section>
+
+      {/* ── Tabbed Companion Panel (Clinical Documentation, Chat, Transcript) ── */}
+      {!isMaximized && (
+        <aside className="xl:col-span-4 2xl:col-span-3 flex flex-col gap-3">
+          {/* Tab Navigation Header */}
+          <div className={`flex items-center rounded-2xl border p-1.5 shadow-sm ${
+            isDark ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"
+          }`}>
+            {documentation && (
+              <button
+                type="button"
+                onClick={() => setActiveCompanionTab("documentation")}
+                className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 px-2 text-xs font-black uppercase tracking-wider transition cursor-pointer ${
+                  activeCompanionTab === "documentation"
+                    ? "bg-brand-teal text-white shadow-xs"
+                    : isDark ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                </svg>
+                <span className="truncate">{role === "doctor" ? "Notes & Rx" : "Record"}</span>
+                {!canEndCall && role === "doctor" && (
+                  <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
+                )}
+              </button>
+            )}
+
             <button
-              type="submit"
-              disabled={!quickRemark.trim()}
-              className="rounded-lg bg-brand-teal px-3 py-1.5 text-xs font-black text-white hover:bg-teal-600 transition disabled:opacity-40 shrink-0"
+              type="button"
+              onClick={() => setActiveCompanionTab("chat")}
+              className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 px-2 text-xs font-black uppercase tracking-wider transition cursor-pointer ${
+                activeCompanionTab === "chat"
+                  ? "bg-brand-teal text-white shadow-xs"
+                  : isDark ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900"
+              }`}
             >
-              + Add
+              <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              <span>Chat</span>
+              {messages && messages.length > 0 && (
+                <span className="rounded-full bg-white/20 dark:bg-slate-800 px-1.5 py-0.2 text-[9px] font-black">
+                  {messages.length}
+                </span>
+              )}
             </button>
-          </form>
-        </section>
-      </div>
+
+            <button
+              type="button"
+              onClick={() => setActiveCompanionTab("transcript")}
+              className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 px-2 text-xs font-black uppercase tracking-wider transition cursor-pointer ${
+                activeCompanionTab === "transcript"
+                  ? "bg-brand-teal text-white shadow-xs"
+                  : isDark ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <path d="M12 19v3" />
+              </svg>
+              <span>Speech</span>
+              <span className="rounded-full bg-brand-teal/20 text-brand-teal px-1.5 py-0.2 text-[9px] font-black">
+                {transcriptTurns.length}
+              </span>
+            </button>
+          </div>
+
+          {/* Active Tab Content Container */}
+          <div className="w-full">
+            {activeCompanionTab === "documentation" && documentation ? (
+              <div>{documentation}</div>
+            ) : activeCompanionTab === "chat" ? (
+              <div>{chat}</div>
+            ) : (
+              /* Live Speech-to-Text Transcript Companion Card */
+              <section
+                className={`rounded-2xl border p-4 shadow-sm space-y-3 min-h-[460px] flex flex-col justify-between ${
+                  isDark ? "border-slate-800 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-900"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between border-b pb-3 mb-3 border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-brand-teal animate-pulse" />
+                      <div>
+                        <h4 className="text-xs font-black uppercase tracking-wider text-brand-teal">
+                          Dialogue Transcript
+                        </h4>
+                        <p className="text-[10px] text-slate-400">{transcriptTurns.length} speech &amp; chat turns logged</p>
+                      </div>
+                    </div>
+                    {appointmentId && transcriptTurns.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void downloadConsultationTranscriptPdf({
+                            appointmentId: appointmentId || "session",
+                            patientName: patientName || counterpartName || "Patient",
+                            doctorName: doctorName || counterpartName || "Doctor",
+                            date: typeof appointmentTime === "string" ? appointmentTime : appointmentTime.toISOString(),
+                            durationMinutes: totalDurationMinutes,
+                            transcript: transcriptTurns,
+                          });
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-1 text-[10px] font-black text-slate-700 dark:text-slate-300 hover:border-brand-teal transition cursor-pointer"
+                        title="Download official PDF transcript report"
+                      >
+                        <svg className="h-3 w-3 text-brand-teal" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                          <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        <span>PDF Report</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {transcriptTurns.length === 0 ? (
+                    <div className="py-12 text-center space-y-2">
+                      <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-brand-teal/15 text-brand-teal">
+                        <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                          <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                          <path d="M12 19v3" />
+                        </svg>
+                      </div>
+                      <p className="text-xs font-bold text-slate-700 dark:text-slate-300">Awaiting Consultation Speech</p>
+                      <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
+                        Spoken remarks and in-call chat entries are automatically archived to the clinical encounter record.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+                      {transcriptTurns.map((turn) => (
+                        <div
+                          key={turn.id}
+                          className="text-xs rounded-xl p-3 bg-slate-50 dark:bg-slate-800/70 border border-slate-100 dark:border-slate-700/60 transition hover:border-slate-300 dark:hover:border-slate-600"
+                        >
+                          <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 mb-1">
+                            <span
+                              className={
+                                turn.role === "doctor"
+                                  ? "text-brand-teal font-black"
+                                  : "text-emerald-600 dark:text-emerald-400 font-black"
+                              }
+                            >
+                              {turn.speaker} ({turn.role})
+                            </span>
+                            <span>{turn.timestamp}</span>
+                          </div>
+                          <p className="text-slate-800 dark:text-slate-200 leading-relaxed font-medium">{turn.text}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Quick Dialogue Entry Form */}
+                <form
+                  onSubmit={handleAddQuickRemark}
+                  className="pt-2 border-t border-slate-100 dark:border-slate-800 flex gap-2"
+                >
+                  <input
+                    type="text"
+                    value={quickRemark}
+                    onChange={(e) => setQuickRemark(e.target.value)}
+                    placeholder={
+                      role === "doctor"
+                        ? "Log verbal observation or advice..."
+                        : "Log verbal question or symptom..."
+                    }
+                    className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-teal"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!quickRemark.trim()}
+                    className="rounded-xl bg-brand-teal px-4 py-2 text-xs font-black text-white hover:bg-teal-600 transition disabled:opacity-40 shrink-0 cursor-pointer"
+                  >
+                    + Add
+                  </button>
+                </form>
+              </section>
+            )}
+          </div>
+        </aside>
+      )}
+
+      {/* ── Slide-Over Companion Drawer (When Video is Maximized) ── */}
+      {isMaximized && showCompanionDrawer && (
+        <div
+          className="fixed inset-0 z-50 flex justify-end bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className={`w-full max-w-lg h-full p-5 overflow-y-auto shadow-2xl flex flex-col justify-between animate-in slide-in-from-right duration-300 ${
+              isDark ? "bg-slate-900 border-l border-slate-800 text-white" : "bg-white border-l border-slate-200 text-slate-900"
+            }`}
+          >
+            <div>
+              <div className="flex items-center justify-between border-b pb-4 mb-4 border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="grid h-9 w-9 place-items-center rounded-xl bg-brand-teal/15 text-brand-teal font-black">
+                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black">Consultation Companion</h3>
+                    <p className="text-xs text-slate-400">Clinical notes, chat &amp; live transcripts</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCompanionDrawer(false)}
+                  className="rounded-xl border border-slate-200 dark:border-slate-700 p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                  title="Close companion drawer"
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Tabs inside Drawer */}
+              <div className={`flex items-center rounded-2xl border p-1 mb-4 ${
+                isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-slate-50"
+              }`}>
+                {documentation && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveCompanionTab("documentation")}
+                    className={`flex-1 py-1.5 px-2 text-xs font-black uppercase tracking-wider rounded-xl transition cursor-pointer ${
+                      activeCompanionTab === "documentation"
+                        ? "bg-brand-teal text-white shadow-xs"
+                        : isDark ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    {role === "doctor" ? "Notes & Rx" : "Record"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setActiveCompanionTab("chat")}
+                  className={`flex-1 py-1.5 px-2 text-xs font-black uppercase tracking-wider rounded-xl transition cursor-pointer ${
+                    activeCompanionTab === "chat"
+                      ? "bg-brand-teal text-white shadow-xs"
+                      : isDark ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Chat ({messages?.length || 0})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveCompanionTab("transcript")}
+                  className={`flex-1 py-1.5 px-2 text-xs font-black uppercase tracking-wider rounded-xl transition cursor-pointer ${
+                    activeCompanionTab === "transcript"
+                      ? "bg-brand-teal text-white shadow-xs"
+                      : isDark ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  Transcript ({transcriptTurns.length})
+                </button>
+              </div>
+
+              {/* Content */}
+              <div>
+                {activeCompanionTab === "documentation" && documentation ? (
+                  <div>{documentation}</div>
+                ) : activeCompanionTab === "chat" ? (
+                  <div>{chat}</div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                      {transcriptTurns.map((turn) => (
+                        <div
+                          key={turn.id}
+                          className="text-xs rounded-xl p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700"
+                        >
+                          <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 mb-1">
+                            <span className={turn.role === "doctor" ? "text-brand-teal font-black" : "text-emerald-500 font-black"}>
+                              {turn.speaker} ({turn.role})
+                            </span>
+                            <span>{turn.timestamp}</span>
+                          </div>
+                          <p className="text-slate-800 dark:text-slate-200 font-medium">{turn.text}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Call Duration Warning & Extension Popup ── */}
       {showExtendModal && (
