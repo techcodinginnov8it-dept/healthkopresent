@@ -1,8 +1,8 @@
 # HealthKo Development Timeline & Update Log
 
-**Date**: September 8–16, 2026  
+**Date**: September 8–17, 2026  
 **Active Branch**: `HealthKoUpdated`  
-**Development Runtime**: ~19 hours 30 minutes  
+**Development Runtime**: ~20 hours  
 
 ---
 
@@ -10,10 +10,10 @@
 
 | Metric | Details |
 | :--- | :--- |
-| **Total Session Duration** | ~19 hours 30 minutes (Sep 8 21:15 – Sep 16 23:15 +0800) |
-| **Latest Focus** | Pet Companion Pass Database Table & Supabase Real-Time Persistence Sync |
-| **Focus of Latest Task** | Created `pet_profiles` database model & Supabase table migration, built server actions (`getPetProfileByPatientId`, `savePetProfileToDatabase`), and wired dual offline cache + Supabase sync in Patient Dashboard |
-| **Total Production Updates** | 67 documented modules / milestones |
+| **Total Session Duration** | ~20 hours (Sep 8 21:15 – Sep 17 03:20 +0800) |
+| **Latest Focus** | Live Consultation Widescreen Horizontal Layout & Video Maximization Suite |
+| **Focus of Latest Task** | Redesigned `LiveConsultationPanel` with horizontal widescreen video calling canvas, dynamic layout mode switcher (50/50 split and Focus+PiP), theater/fullscreen maximize video toggle, and compact tabbed companion drawer (Clinical Notes/Rx, Chat, Live Transcript) |
+| **Total Production Updates** | 68 documented modules / milestones |
 | **TypeScript / Build Status** | ✅ Passing (0 errors) |
 | **Remote Branch** | `origin/HealthKoUpdated` — fully synced |
 
@@ -22,7 +22,7 @@
 ## 📅 Visual Development Timeline
 
 ```text
-Sep 8 21:15 ──────────────────────────────────────────────────────── Sep 17 02:45 +0800
+Sep 8 21:15 ──────────────────────────────────────────────────────── Sep 17 03:15 +0800
   │  [Sep 8–9]
   ├─ 21:35 [35m] Multi-page PDF Pagination & Overflow Protection (744e7b5)
   ├─ 22:07 [32m] "Consultation Results" Tab & Medical Notes PDF Integration (b202526)
@@ -90,9 +90,12 @@ Sep 8 21:15 ──────────────────────�
   ├─ 21:25 [25m] Consultation Report & Medical Certificate Preview + Download Action Suite
   ├─ 21:35 [15m] Current Encounter Documents: Enterprise CRM Registry & 5-Item Scroll View
   ├─ 23:30 [60m] Enterprise Admin Command Center UI/UX & Management Suite (7 Modules)
+  │
+  │  [Sep 17]
   ├─ 02:25 [25m] Patient Overview Refinement: Phone Badge, Basic Details Removal & Lab Results Archive
   ├─ 02:35 [15m] Dedicated Medical Documents Hub Sidebar Module & Navigation Migration
-  └─ 02:45 [15m] ★ Pet Profile Database Model, Supabase Table & Real-Time Sync Action Suite
+  ├─ 02:45 [15m] Pet Profile Database Model, Supabase Table & Real-Time Sync Action Suite
+  └─ 03:15 [20m] ★ Live Consultation Widescreen Horizontal Layout & Video Maximization Suite
 ```
 
 ---
