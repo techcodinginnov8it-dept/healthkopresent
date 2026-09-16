@@ -14,6 +14,7 @@ import {
 } from "@/app/actions/settings";
 import { formatDate } from "@/lib/dashboard/format";
 import { downloadMedicalArchiveSamplePdf } from "@/lib/medical-archive-sample-pdf";
+import { triggerUrlDownload } from "@/lib/pdf-download-helper";
 
 type DoctorSettingsData = {
   id: string;
@@ -3627,12 +3628,7 @@ export function MedicalFilePreviewModal({
 
   const handleDownload = () => {
     if (doc.fileData) {
-      const a = document.createElement("a");
-      a.href = doc.fileData;
-      a.download = doc.fileName || `${doc.title}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      triggerUrlDownload(doc.fileData, doc.fileName || `${doc.title}.pdf`);
     } else {
       downloadMedicalArchiveSamplePdf(doc);
     }

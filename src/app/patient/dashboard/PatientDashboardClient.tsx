@@ -37,10 +37,11 @@ import { useDashboardNotifications } from "@/hooks/useDashboardNotifications";
 import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
 import { useWebRTC } from "@/hooks/useWebRTC";
 import { formatDateTime, formatDate, formatTime, toLocalDateKey, toLocalTimeKey, toUtcIsoFromLocal } from "@/lib/dashboard/format";
-import { downloadPrescriptionPdf } from "@/lib/prescription-pdf";
-import { downloadConsultationTranscriptPdf, parseNotesAndTranscript } from "@/lib/consultation-transcript-pdf";
-import { downloadConsultationReportPdf } from "@/lib/consultation-report-pdf";
-import { downloadMedicalCertificatePdf } from "@/lib/medical-certificate-pdf";
+import { downloadPrescriptionPdf, generatePrescriptionPdf } from "@/lib/prescription-pdf";
+import { downloadConsultationTranscriptPdf, generateConsultationTranscriptPdf, parseNotesAndTranscript } from "@/lib/consultation-transcript-pdf";
+import { downloadConsultationReportPdf, generateConsultationReportPdf } from "@/lib/consultation-report-pdf";
+import { downloadMedicalCertificatePdf, generateMedicalCertificatePdf } from "@/lib/medical-certificate-pdf";
+import { pdfStringToBytes } from "@/lib/pdf-download-helper";
 import { createDashboardNotification } from "@/lib/dashboard/notifications";
 import { DEFAULT_DURATION_MINUTES, getScheduleConflict, parseAvailability, isWithinDoctorAvailability, getOutsideAvailabilityMessage } from "@/lib/scheduling";
 import type {
@@ -377,6 +378,65 @@ function downloadTranscriptReport(appointment: PatientAppointment, patient?: Das
   });
 }
 
+function previewTranscriptReport(
+  appointment: PatientAppointment,
+  patient?: DashboardPatient,
+  onOpenPreview?: (doc: PatientUploadedDocument) => void
+) {
+  const patientName = patient ? `${patient.firstName} ${patient.lastName}`.trim() : "Patient";
+  const patientAge = patient?.dob
+    ? Math.floor((Date.now() - new Date(patient.dob).getTime()) / (365.25 * 24 * 3600 * 1000))
+    : "Adult";
+
+  const { clinicalNotes: cleanNotes, transcriptTurns: parsedTurns } = parseNotesAndTranscript(appointment.notes);
+  let customTranscript: any = parsedTurns.length > 0 ? parsedTurns : undefined;
+
+  if (!customTranscript && typeof window !== "undefined") {
+    try {
+      const saved = localStorage.getItem(`healthko:transcript:${appointment.id}`);
+      if (saved) customTranscript = JSON.parse(saved);
+    } catch {}
+  }
+
+  const pdfStr = generateConsultationTranscriptPdf({
+    appointmentId: appointment.id,
+    doctorName: appointment.doctor.name,
+    doctorSpecialty: appointment.doctor.specialty,
+    doctorLicense: appointment.doctor.licenseNumber,
+    doctorNpi: appointment.doctor.npi,
+    clinicName: `CLINIC OF DR. ${appointment.doctor.name.toUpperCase().replace(/^DR\.?\s+/i, "")}, MD`,
+    patientName,
+    patientAge,
+    patientGender: patient?.gender,
+    patientAddress: patient?.address ? `${patient.address}, ${patient.city || ""}` : undefined,
+    date: appointment.scheduledAt,
+    durationMinutes: appointment.duration || DEFAULT_DURATION_MINUTES,
+    reasonForVisit: appointment.reason || "Telehealth Consultation",
+    clinicalAssessment: cleanNotes || appointment.notes || "Clinical consultation and assessment completed via synchronous telehealth.",
+    clinicalPlan: appointment.prescription
+      ? `Electronic prescription issued:\n${appointment.prescription}`
+      : "Follow doctor advice and schedule follow-up as instructed.",
+    transcript: customTranscript,
+  });
+
+  const blob = new Blob([pdfStringToBytes(pdfStr)], { type: "application/pdf" });
+  const blobUrl = URL.createObjectURL(blob);
+
+  onOpenPreview?.({
+    id: `transcript-${appointment.id}`,
+    title: `Encounter Transcript - Dr. ${appointment.doctor.name}`,
+    category: "other",
+    fileName: `Call_Transcript_${appointment.id.slice(-6).toUpperCase()}.pdf`,
+    fileSize: "135 KB",
+    fileType: "application/pdf",
+    uploadedAt: new Date().toISOString(),
+    doctorOrClinic: appointment.doctor.name,
+    consultationDate: typeof appointment.scheduledAt === "string" ? appointment.scheduledAt : appointment.scheduledAt.toISOString(),
+    notes: "Official audio/video consultation dialogue transcript.",
+    fileData: blobUrl,
+  });
+}
+
 function downloadPatientCertPdf(
   cert: PatientMedicalCertificate,
   patient?: DashboardPatient
@@ -402,6 +462,173 @@ function downloadPatientCertPdf(
     restDaysFrom: cert.restDaysFrom,
     restDaysTo: cert.restDaysTo,
     issuedAt: cert.issuedAt,
+  });
+}
+
+function previewFullConsultationReport(
+  appointment: PatientAppointment,
+  patient?: DashboardPatient,
+  onOpenPreview?: (doc: PatientUploadedDocument) => void
+) {
+  const patientName = patient ? `${patient.firstName} ${patient.lastName}`.trim() : "Patient";
+  const patientAge = patient?.dob
+    ? Math.floor((Date.now() - new Date(patient.dob).getTime()) / (365.25 * 24 * 3600 * 1000))
+    : "Adult";
+
+  const { clinicalNotes: cleanNotes } = parseNotesAndTranscript(appointment.notes);
+
+  const reportData = {
+    doctorName: appointment.doctor.name,
+    doctorSpecialty: appointment.doctor.specialty,
+    doctorLicense: appointment.doctor.licenseNumber,
+    doctorNpi: appointment.doctor.npi,
+    clinicName: `CLINIC OF DR. ${appointment.doctor.name.toUpperCase().replace(/^DR\.?\s+/i, "")}, MD`,
+    patientName,
+    patientAge,
+    patientDob: patient?.dob ? String(patient.dob).slice(0, 10) : undefined,
+    patientGender: patient?.gender,
+    patientAddress: patient?.address ? `${patient.address}, ${patient.city || ""}` : undefined,
+    patientPhone: patient?.phone || undefined,
+    bloodPressure: appointment.bloodPressure || "120/80",
+    heartRate: appointment.heartRate ? `${appointment.heartRate}` : "72",
+    bodyTemperature: appointment.bodyTemperature ? `${appointment.bodyTemperature}` : "36.6",
+    oxygenSaturation: "98%",
+    weight: patient?.weight ? `${patient.weight} kg` : undefined,
+    height: patient?.height ? `${patient.height} cm` : undefined,
+    appointmentId: appointment.id,
+    date: appointment.scheduledAt,
+    durationMinutes: appointment.duration || DEFAULT_DURATION_MINUTES,
+    reasonForVisit: appointment.reason || "Telehealth Consultation",
+    chiefComplaint: appointment.reason || "General medical consultation and clinical evaluation",
+    clinicalAssessment: cleanNotes || appointment.notes || "Clinical consultation and assessment completed via synchronous telehealth.",
+    diagnosis: appointment.reason || "Telehealth Clinical Encounter",
+    carePlan: appointment.prescription
+      ? `Electronic prescription issued. Adhere strictly to dosage regimen and follow-up guidance.`
+      : (cleanNotes || "Continue supportive measures and monitor symptoms as discussed."),
+    prescriptionSummary: appointment.prescription || "No prescription issued for this encounter.",
+    followUpDate: "As clinically indicated / In 2 to 4 weeks",
+    monitoringInstructions: "If acute chest pain, shortness of breath, or severe symptoms occur, proceed to emergency medical care.",
+  };
+
+  const pdfStr = generateConsultationReportPdf(reportData);
+  const blob = new Blob([pdfStringToBytes(pdfStr)], { type: "application/pdf" });
+  const blobUrl = URL.createObjectURL(blob);
+
+  onOpenPreview?.({
+    id: `rpt-${appointment.id}`,
+    title: `Consultation Report - Encounter #${appointment.id.slice(-6).toUpperCase()}`,
+    category: "other",
+    fileName: `Consultation_Report_${appointment.id.slice(-6).toUpperCase()}.pdf`,
+    fileSize: "145 KB",
+    fileType: "application/pdf",
+    uploadedAt: new Date().toISOString(),
+    doctorOrClinic: appointment.doctor.name,
+    consultationDate: typeof appointment.scheduledAt === "string" ? appointment.scheduledAt : appointment.scheduledAt.toISOString(),
+    notes: cleanNotes || appointment.notes || appointment.reason || "Official clinical consultation encounter report.",
+    fileData: blobUrl,
+  });
+}
+
+function previewPatientCertPdf(
+  cert: PatientMedicalCertificate,
+  patient?: DashboardPatient,
+  onOpenPreview?: (doc: PatientUploadedDocument) => void
+) {
+  const patientName = patient ? `${patient.firstName} ${patient.lastName}`.trim() : "Patient";
+  const patientAge = patient?.dob
+    ? Math.floor((Date.now() - new Date(patient.dob).getTime()) / (365.25 * 24 * 3600 * 1000))
+    : "Adult";
+
+  const certData = {
+    certNumber: cert.certNumber,
+    doctorName: cert.doctor.name,
+    doctorSpecialty: cert.doctor.specialty,
+    doctorLicense: cert.doctor.licenseNumber,
+    doctorNpi: cert.doctor.npi,
+    patientName,
+    patientAge,
+    patientGender: patient?.gender,
+    patientAddress: patient?.address ? `${patient.address}, ${patient.city || ""}` : undefined,
+    purpose: cert.purpose as "sick_leave" | "fitness_to_work" | "school" | "other",
+    diagnosis: cert.diagnosis,
+    remarks: cert.remarks,
+    restDaysFrom: cert.restDaysFrom,
+    restDaysTo: cert.restDaysTo,
+    issuedAt: cert.issuedAt,
+  };
+
+  const pdfStr = generateMedicalCertificatePdf(certData);
+  const blob = new Blob([pdfStringToBytes(pdfStr)], { type: "application/pdf" });
+  const blobUrl = URL.createObjectURL(blob);
+
+  const purposeTitle =
+    cert.purpose === "sick_leave"
+      ? "Sick Leave Certificate"
+      : cert.purpose === "fitness_to_work"
+      ? "Fitness to Work Clearance"
+      : cert.purpose === "school"
+      ? "Academic Clearance"
+      : "Medical Certificate";
+
+  onOpenPreview?.({
+    id: `cert-${cert.id}`,
+    title: `Official Medical Certificate (#${cert.certNumber})`,
+    category: "certificate",
+    fileName: `Medical_Certificate_${cert.certNumber}.pdf`,
+    fileSize: "118 KB",
+    fileType: "application/pdf",
+    uploadedAt: typeof cert.issuedAt === "string" ? cert.issuedAt : cert.issuedAt.toISOString(),
+    doctorOrClinic: cert.doctor.name,
+    consultationDate: typeof cert.issuedAt === "string" ? cert.issuedAt : cert.issuedAt.toISOString(),
+    notes: `${purposeTitle}${cert.diagnosis ? ` · Diagnosis: ${cert.diagnosis}` : ""}${cert.remarks ? ` · ${cert.remarks}` : ""}`,
+    fileData: blobUrl,
+  });
+}
+
+function previewMedicalReport(
+  appointment: PatientAppointment,
+  patient?: DashboardPatient,
+  onOpenPreview?: (doc: PatientUploadedDocument) => void
+) {
+  const patientName = patient ? `${patient.firstName} ${patient.lastName}`.trim() : "Patient";
+  const patientAge = patient?.dob
+    ? Math.floor((Date.now() - new Date(patient.dob).getTime()) / (365.25 * 24 * 3600 * 1000))
+    : "Adult";
+
+  const rxData = {
+    appointmentId: appointment.id,
+    doctorName: appointment.doctor.name,
+    doctorSpecialty: appointment.doctor.specialty,
+    doctorLicense: appointment.doctor.licenseNumber,
+    doctorNpi: appointment.doctor.npi,
+    clinicName: `CLINIC OF DR. ${appointment.doctor.name.toUpperCase().replace(/^DR\.?\s+/i, "")}, MD`,
+    patientName,
+    patientAge,
+    patientGender: patient?.gender,
+    patientAddress: patient?.address ? `${patient.address}, ${patient.city || ""}` : undefined,
+    date: appointment.scheduledAt,
+    diagnosis: appointment.reason,
+    prescription:
+      appointment.prescription ||
+      (appointment.notes ? `Clinical Assessment & Plan:\n${appointment.notes}` : "Consultation completed - No prescription issued."),
+  };
+
+  const pdfStr = generatePrescriptionPdf(rxData);
+  const blob = new Blob([pdfStringToBytes(pdfStr)], { type: "application/pdf" });
+  const blobUrl = URL.createObjectURL(blob);
+
+  onOpenPreview?.({
+    id: `rx-${appointment.id}`,
+    title: `Digital Prescription - Dr. ${appointment.doctor.name}`,
+    category: "prescription",
+    fileName: `Prescription_${appointment.id.slice(-6).toUpperCase()}.pdf`,
+    fileSize: "112 KB",
+    fileType: "application/pdf",
+    uploadedAt: new Date().toISOString(),
+    doctorOrClinic: appointment.doctor.name,
+    consultationDate: typeof appointment.scheduledAt === "string" ? appointment.scheduledAt : appointment.scheduledAt.toISOString(),
+    notes: appointment.prescription || "Digital electronic prescription order.",
+    fileData: blobUrl,
   });
 }
 
@@ -3048,18 +3275,31 @@ export default function PatientDashboardClient({
                                   Dr. {rx.doctor.name} · {formatDate(rx.scheduledAt)}
                                 </p>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => downloadMedicalReport(rx, patient)}
-                                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-purple-200 bg-white px-2.5 py-1.5 text-xs font-bold text-purple-700 shadow-2xs hover:bg-purple-50 transition"
-                              >
-                                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M12 3v10" />
-                                  <path d="m7 8 5 5 5-5" />
-                                  <path d="M5 19h14" />
-                                </svg>
-                                Download Rx PDF
-                              </button>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => previewMedicalReport(rx, patient, setPreviewMedicalDoc)}
+                                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-purple-200 bg-white px-2.5 py-1.5 text-xs font-bold text-purple-700 shadow-2xs hover:bg-purple-50 transition"
+                                >
+                                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                                    <circle cx="12" cy="12" r="3" />
+                                  </svg>
+                                  Preview
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => downloadMedicalReport(rx, patient)}
+                                  className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-purple-700 px-2.5 py-1.5 text-xs font-bold text-white shadow-2xs hover:bg-purple-800 transition"
+                                >
+                                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M12 3v10" />
+                                    <path d="m7 8 5 5 5-5" />
+                                    <path d="M5 19h14" />
+                                  </svg>
+                                  Download Rx
+                                </button>
+                              </div>
                             </div>
                           ))
                         ) : (
@@ -3095,18 +3335,31 @@ export default function PatientDashboardClient({
                                   {cert.diagnosis ? ` · ${cert.diagnosis}` : ""}
                                 </p>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => downloadPatientCertPdf(cert, patient)}
-                                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 text-xs font-bold text-amber-700 shadow-2xs hover:bg-amber-50 transition"
-                              >
-                                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M12 3v10" />
-                                  <path d="m7 8 5 5 5-5" />
-                                  <path d="M5 19h14" />
-                                </svg>
-                                Download Cert PDF
-                              </button>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => previewPatientCertPdf(cert, patient, setPreviewMedicalDoc)}
+                                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 text-xs font-bold text-amber-700 shadow-2xs hover:bg-amber-50 transition"
+                                >
+                                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                                    <circle cx="12" cy="12" r="3" />
+                                  </svg>
+                                  Preview
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => downloadPatientCertPdf(cert, patient)}
+                                  className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-amber-600 px-2.5 py-1.5 text-xs font-bold text-white shadow-2xs hover:bg-amber-700 transition"
+                                >
+                                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M12 3v10" />
+                                    <path d="m7 8 5 5 5-5" />
+                                    <path d="M5 19h14" />
+                                  </svg>
+                                  Download Cert
+                                </button>
+                              </div>
                             </div>
                           ))
                         ) : (
@@ -4479,18 +4732,31 @@ export default function PatientDashboardClient({
                                         {cert.purpose === "sick_leave" ? "Sick Leave / Medical Rest" : cert.purpose === "fitness_to_work" ? "Fitness to Return to Work" : cert.purpose === "school" ? "Academic Clearance" : "Medical Certificate"}
                                       </span>
                                     </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => downloadPatientCertPdf(cert, patient)}
-                                      className="inline-flex items-center gap-1.5 rounded-lg bg-brand-teal px-3 py-1.5 text-xs font-black text-white hover:bg-teal-600 transition"
-                                    >
-                                      <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                        <polyline points="7 10 12 15 17 10" />
-                                        <line x1="12" y1="15" x2="12" y2="3" />
-                                      </svg>
-                                      Download PDF
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => previewPatientCertPdf(cert, patient, setPreviewMedicalDoc)}
+                                        className="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 bg-white px-3 py-1.5 text-xs font-bold text-teal-800 hover:bg-teal-50 transition"
+                                      >
+                                        <svg className="h-3.5 w-3.5 text-teal-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                          <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                                          <circle cx="12" cy="12" r="3" />
+                                        </svg>
+                                        Preview
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => downloadPatientCertPdf(cert, patient)}
+                                        className="inline-flex items-center gap-1.5 rounded-lg bg-brand-teal px-3 py-1.5 text-xs font-black text-white hover:bg-teal-600 transition"
+                                      >
+                                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                          <polyline points="7 10 12 15 17 10" />
+                                          <line x1="12" y1="15" x2="12" y2="3" />
+                                        </svg>
+                                        Download PDF
+                                      </button>
+                                    </div>
                                   </div>
                                   {cert.diagnosis && (
                                     <p className="text-xs text-slate-700"><strong>Diagnosis:</strong> {cert.diagnosis}</p>
@@ -4504,61 +4770,114 @@ export default function PatientDashboardClient({
                           </div>
                         )}
                         {consultationHubTab === "documents" && (
-                          <div className="space-y-6">
-                            {/* Current Appointment Documents */}
-                            <div>
-                              <div className="mb-3 flex items-center justify-between">
-                                <h4 className="text-xs font-black uppercase tracking-wider text-slate-500">
-                                  Current Encounter Documents
-                                </h4>
-                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">
-                                  Appointment #{selectedAppointment.id.slice(-6).toUpperCase()}
-                                </span>
-                              </div>
-                              <div className="grid gap-3 md:grid-cols-2">
-                                {/* Consultation Report PDF */}
-                                <button
-                                  type="button"
-                                  onClick={() => downloadFullConsultationReport(selectedAppointment, patient)}
-                                  className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-left transition hover:border-slate-300 hover:bg-white"
-                                >
-                                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-900 text-white">
-                                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                      <polyline points="14 2 14 8 20 8" />
-                                      <line x1="16" y1="13" x2="8" y2="13" />
-                                      <line x1="16" y1="17" x2="8" y2="17" />
-                                      <polyline points="10 9 9 9 8 9" />
-                                    </svg>
-                                  </span>
-                                  <div>
-                                    <p className="text-sm font-black text-slate-950">Consultation Report (PDF)</p>
-                                    <p className="mt-0.5 text-[10px] font-semibold text-slate-500">Full clinical notes, vitals, assessment &amp; plan</p>
+                          <div className="space-y-4">
+                            {/* CRM-Style Encounter Documents Registry */}
+                            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
+                              {/* CRM Header Bar */}
+                              <div className="border-b border-slate-200 bg-slate-50/80 px-4 py-3.5 sm:px-5">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="grid h-8 w-8 place-items-center rounded-lg bg-teal-500/10 text-brand-teal">
+                                      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                        <polyline points="14 2 14 8 20 8" />
+                                        <line x1="16" y1="13" x2="8" y2="13" />
+                                        <line x1="16" y1="17" x2="8" y2="17" />
+                                        <polyline points="10 9 9 9 8 9" />
+                                      </svg>
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center gap-2">
+                                        <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                                          Encounter Document Registry
+                                        </h4>
+                                        <span className="rounded-full bg-brand-teal/10 px-2 py-0.5 text-[10px] font-black text-brand-teal">
+                                          Official Records
+                                        </span>
+                                      </div>
+                                      <p className="text-[11px] font-medium text-slate-500">
+                                        Validated clinical encounter reports, digital prescriptions, certificates, and recordings.
+                                      </p>
+                                    </div>
                                   </div>
-                                </button>
+                                  <div className="flex items-center gap-2">
+                                    <span className="rounded-lg bg-slate-200/80 px-2.5 py-1 text-[11px] font-black text-slate-700">
+                                      Appointment #{selectedAppointment.id.slice(-6).toUpperCase()}
+                                    </span>
+                                  </div>
+                                </div>
 
-                                {/* Prescription PDF if available */}
-                                {selectedAppointment.prescription ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => downloadMedicalReport(selectedAppointment, patient)}
-                                    className="flex items-center gap-3 rounded-xl border border-teal-200 bg-teal-50 p-4 text-left transition hover:border-teal-300 hover:bg-teal-100/60"
-                                  >
-                                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-teal text-white">
-                                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                {/* Desktop Table Header */}
+                                <div className="hidden sm:grid grid-cols-12 gap-3 border-t border-slate-200/80 mt-3 pt-2 text-[10px] font-black uppercase tracking-wider text-slate-500">
+                                  <div className="col-span-5">Document &amp; Description</div>
+                                  <div className="col-span-2">Classification</div>
+                                  <div className="col-span-2">Physician / Date</div>
+                                  <div className="col-span-3 text-right">Actions</div>
+                                </div>
+                              </div>
+
+                              {/* CRM Document Rows */}
+                              <div className="divide-y divide-slate-100">
+                                {/* 1. Consultation Report PDF */}
+                                <div className="group flex flex-col sm:grid sm:grid-cols-12 gap-3 p-4 sm:items-center hover:bg-slate-50/70 transition">
+                                  <div className="col-span-5 flex items-center gap-3 min-w-0">
+                                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-900 text-white shadow-2xs">
+                                      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                        <polyline points="14 2 14 8 20 8" />
+                                        <line x1="16" y1="13" x2="8" y2="13" />
+                                        <line x1="16" y1="17" x2="8" y2="17" />
+                                        <polyline points="10 9 9 9 8 9" />
+                                      </svg>
+                                    </div>
+                                    <div className="min-w-0">
+                                      <p className="text-xs font-black text-slate-950 truncate">Consultation Encounter Report</p>
+                                      <p className="mt-0.5 text-[10px] font-medium text-slate-500 line-clamp-1">
+                                        Clinical notes, vitals summary, assessment &amp; treatment plan
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <div className="col-span-2">
+                                    <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-700">
+                                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                      Clinical Report
+                                    </span>
+                                  </div>
+
+                                  <div className="col-span-2 text-xs text-slate-600">
+                                    <p className="font-bold text-slate-800 truncate">Dr. {selectedAppointment.doctor.name}</p>
+                                    <p className="text-[10px] text-slate-400">{formatDate(selectedAppointment.scheduledAt)}</p>
+                                  </div>
+
+                                  <div className="col-span-3 flex items-center justify-start sm:justify-end gap-2 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => previewFullConsultationReport(selectedAppointment, patient, setPreviewMedicalDoc)}
+                                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:border-slate-300 hover:bg-slate-50 shadow-2xs transition"
+                                    >
+                                      <svg className="h-3.5 w-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                                        <circle cx="12" cy="12" r="3" />
+                                      </svg>
+                                      Preview
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => downloadFullConsultationReport(selectedAppointment, patient)}
+                                      className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-black text-white hover:bg-slate-800 shadow-2xs transition"
+                                    >
+                                      <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                                         <polyline points="7 10 12 15 17 10" />
                                         <line x1="12" y1="15" x2="12" y2="3" />
                                       </svg>
-                                    </span>
-                                    <div>
-                                      <p className="text-sm font-black text-teal-900">Official E-Prescription PDF</p>
-                                      <p className="mt-0.5 text-[10px] font-semibold text-teal-700">E-Signed · DOH / FDA compliant</p>
-                                    </div>
-                                  </button>
-                                ) : null}
+                                      Download PDF
+                                    </button>
+                                  </div>
+                                </div>
 
-                                {/* Medical Certificate PDF if available */}
+                                {/* 2. Official Medical Certificate PDF (if available) */}
                                 {(() => {
                                   const cert = [...(patient.medicalCertificates || [])]
                                     .sort((a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime())
@@ -4567,65 +4886,223 @@ export default function PatientDashboardClient({
                                     );
                                   if (!cert) return null;
                                   return (
-                                    <button
-                                      type="button"
-                                      onClick={() => downloadPatientCertPdf(cert, patient)}
-                                      className="flex items-center gap-3 rounded-xl border border-teal-200 bg-teal-50 p-4 text-left transition hover:border-teal-300 hover:bg-teal-100/60"
-                                    >
-                                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-teal text-white">
-                                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                                          <path d="m9 12 2 2 4-4" />
-                                        </svg>
-                                      </span>
-                                      <div>
-                                        <p className="text-sm font-black text-teal-900">Official Medical Certificate PDF</p>
-                                        <p className="mt-0.5 text-[10px] font-semibold text-teal-700">{cert.certNumber} · {cert.purpose === "sick_leave" ? "Sick Leave" : "Medical Cert"}</p>
+                                    <div className="group flex flex-col sm:grid sm:grid-cols-12 gap-3 p-4 sm:items-center bg-teal-50/30 hover:bg-teal-50/60 transition">
+                                      <div className="col-span-5 flex items-center gap-3 min-w-0">
+                                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-teal text-white shadow-2xs">
+                                          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                                            <path d="m9 12 2 2 4-4" />
+                                          </svg>
+                                        </div>
+                                        <div className="min-w-0">
+                                          <p className="text-xs font-black text-teal-950 truncate">Official Medical Certificate</p>
+                                          <p className="mt-0.5 text-[10px] font-medium text-teal-700 line-clamp-1">
+                                            {cert.certNumber} · {cert.purpose === "sick_leave" ? "Sick Leave / Rest" : cert.purpose === "fitness_to_work" ? "Fitness Clearance" : cert.purpose === "school" ? "Academic Clearance" : "Medical Certificate"}{cert.diagnosis ? ` (${cert.diagnosis})` : ""}
+                                          </p>
+                                        </div>
                                       </div>
-                                    </button>
+
+                                      <div className="col-span-2">
+                                        <span className="inline-flex items-center gap-1 rounded-md bg-teal-100/80 border border-teal-200 px-2 py-0.5 text-[10px] font-bold text-teal-800">
+                                          <span className="h-1.5 w-1.5 rounded-full bg-teal-600" />
+                                          Medical Cert
+                                        </span>
+                                      </div>
+
+                                      <div className="col-span-2 text-xs text-slate-600">
+                                        <p className="font-bold text-slate-800 truncate">Dr. {cert.doctor.name}</p>
+                                        <p className="text-[10px] text-slate-400">{formatDate(cert.issuedAt)}</p>
+                                      </div>
+
+                                      <div className="col-span-3 flex items-center justify-start sm:justify-end gap-2 shrink-0">
+                                        <button
+                                          type="button"
+                                          onClick={() => previewPatientCertPdf(cert, patient, setPreviewMedicalDoc)}
+                                          className="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 bg-white px-2.5 py-1.5 text-xs font-bold text-teal-800 hover:bg-teal-50 shadow-2xs transition"
+                                        >
+                                          <svg className="h-3.5 w-3.5 text-teal-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                                            <circle cx="12" cy="12" r="3" />
+                                          </svg>
+                                          Preview
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => downloadPatientCertPdf(cert, patient)}
+                                          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-teal px-2.5 py-1.5 text-xs font-black text-white hover:bg-teal-600 shadow-2xs transition"
+                                        >
+                                          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                            <polyline points="7 10 12 15 17 10" />
+                                            <line x1="12" y1="15" x2="12" y2="3" />
+                                          </svg>
+                                          Download PDF
+                                        </button>
+                                      </div>
+                                    </div>
                                   );
                                 })()}
 
-                                {/* Documents from Previous Consultations & Medical Documents */}
+                                {/* 3. Official E-Prescription PDF (if available) */}
+                                {selectedAppointment.prescription ? (
+                                  <div className="group flex flex-col sm:grid sm:grid-cols-12 gap-3 p-4 sm:items-center bg-purple-50/30 hover:bg-purple-50/60 transition">
+                                    <div className="col-span-5 flex items-center gap-3 min-w-0">
+                                      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-purple-700 text-white shadow-2xs">
+                                        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                          <polyline points="7 10 12 15 17 10" />
+                                          <line x1="12" y1="15" x2="12" y2="3" />
+                                        </svg>
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-black text-purple-950 truncate">Official E-Prescription (Rx)</p>
+                                        <p className="mt-0.5 text-[10px] font-medium text-purple-700 line-clamp-1">
+                                          E-Signed · DOH &amp; FDA compliant electronic prescription
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    <div className="col-span-2">
+                                      <span className="inline-flex items-center gap-1 rounded-md bg-purple-100 border border-purple-200 px-2 py-0.5 text-[10px] font-bold text-purple-800">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-purple-600" />
+                                        Digital Rx
+                                      </span>
+                                    </div>
+
+                                    <div className="col-span-2 text-xs text-slate-600">
+                                      <p className="font-bold text-slate-800 truncate">Dr. {selectedAppointment.doctor.name}</p>
+                                      <p className="text-[10px] text-slate-400">{formatDate(selectedAppointment.scheduledAt)}</p>
+                                    </div>
+
+                                    <div className="col-span-3 flex items-center justify-start sm:justify-end gap-2 shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={() => previewMedicalReport(selectedAppointment, patient, setPreviewMedicalDoc)}
+                                        className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-white px-2.5 py-1.5 text-xs font-bold text-purple-800 hover:bg-purple-50 shadow-2xs transition"
+                                      >
+                                        <svg className="h-3.5 w-3.5 text-purple-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                          <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                                          <circle cx="12" cy="12" r="3" />
+                                        </svg>
+                                        Preview
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => downloadMedicalReport(selectedAppointment, patient)}
+                                        className="inline-flex items-center gap-1.5 rounded-lg bg-purple-700 px-2.5 py-1.5 text-xs font-black text-white hover:bg-purple-800 shadow-2xs transition"
+                                      >
+                                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                          <polyline points="7 10 12 15 17 10" />
+                                          <line x1="12" y1="15" x2="12" y2="3" />
+                                        </svg>
+                                        Download Rx
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : null}
+
+                                {/* 4. Consultation Dialogue Transcript PDF */}
+                                <div className="group flex flex-col sm:grid sm:grid-cols-12 gap-3 p-4 sm:items-center hover:bg-slate-50/70 transition">
+                                  <div className="col-span-5 flex items-center gap-3 min-w-0">
+                                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-sky-700 text-white shadow-2xs">
+                                      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                                        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                                        <line x1="12" y1="19" x2="12" y2="23" />
+                                        <line x1="8" y1="23" x2="16" y2="23" />
+                                      </svg>
+                                    </div>
+                                    <div className="min-w-0">
+                                      <p className="text-xs font-black text-slate-950 truncate">Call Speech Transcript</p>
+                                      <p className="mt-0.5 text-[10px] font-medium text-slate-500 line-clamp-1">
+                                        Synchronous audio/video dialogue transcription with speaker turn logs
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <div className="col-span-2">
+                                    <span className="inline-flex items-center gap-1 rounded-md bg-sky-50 border border-sky-200 px-2 py-0.5 text-[10px] font-bold text-sky-800">
+                                      <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+                                      Call Transcript
+                                    </span>
+                                  </div>
+
+                                  <div className="col-span-2 text-xs text-slate-600">
+                                    <p className="font-bold text-slate-800 truncate">Dr. {selectedAppointment.doctor.name}</p>
+                                    <p className="text-[10px] text-slate-400">{formatDate(selectedAppointment.scheduledAt)}</p>
+                                  </div>
+
+                                  <div className="col-span-3 flex items-center justify-start sm:justify-end gap-2 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => previewTranscriptReport(selectedAppointment, patient, setPreviewMedicalDoc)}
+                                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:border-slate-300 hover:bg-slate-50 shadow-2xs transition"
+                                    >
+                                      <svg className="h-3.5 w-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                                        <circle cx="12" cy="12" r="3" />
+                                      </svg>
+                                      Preview
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => downloadTranscriptReport(selectedAppointment, patient)}
+                                      className="inline-flex items-center gap-1.5 rounded-lg bg-sky-700 px-2.5 py-1.5 text-xs font-black text-white hover:bg-sky-800 shadow-2xs transition"
+                                    >
+                                      <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                        <polyline points="7 10 12 15 17 10" />
+                                        <line x1="12" y1="15" x2="12" y2="3" />
+                                      </svg>
+                                      Download PDF
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* 5. Previous / Uploaded Medical Documents */}
                                 {medicalDocuments.map((doc) => {
                                   const catCfg = CATEGORY_CONFIG[doc.category] || CATEGORY_CONFIG.other;
                                   return (
                                     <div
                                       key={doc.id}
-                                      className="group flex flex-col justify-between rounded-xl border border-slate-200 bg-slate-50/70 p-4 transition hover:border-brand-teal/40 hover:bg-white hover:shadow-xs"
+                                      className="group flex flex-col sm:grid sm:grid-cols-12 gap-3 p-4 sm:items-center hover:bg-slate-50/70 transition"
                                     >
-                                      <div className="flex items-start justify-between gap-2.5">
-                                        <div className="flex items-start gap-3 min-w-0">
-                                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-teal-900/10 text-brand-teal">
-                                            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                              <polyline points="14 2 14 8 20 8" />
-                                              <line x1="16" y1="13" x2="8" y2="13" />
-                                              <line x1="16" y1="17" x2="8" y2="17" />
-                                            </svg>
-                                          </span>
-                                          <div className="min-w-0">
-                                            <span className={`inline-block rounded-md border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${catCfg.badgeClass}`}>
-                                              {catCfg.label}
-                                            </span>
-                                            <p className="mt-1 truncate text-sm font-black text-slate-950 group-hover:text-brand-teal transition-colors">
-                                              {doc.title}
-                                            </p>
-                                            <p className="mt-0.5 truncate text-[10px] font-medium text-slate-500">
-                                              {doc.doctorOrClinic ? `${doc.doctorOrClinic} · ` : ""}{formatDocDate(doc.consultationDate)}
-                                            </p>
-                                          </div>
+                                      <div className="col-span-5 flex items-center gap-3 min-w-0">
+                                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-teal-500/10 text-brand-teal shadow-2xs">
+                                          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                            <polyline points="14 2 14 8 20 8" />
+                                            <line x1="16" y1="13" x2="8" y2="13" />
+                                            <line x1="16" y1="17" x2="8" y2="17" />
+                                          </svg>
                                         </div>
-                                        <span className="shrink-0 text-[10px] font-bold text-slate-400">
-                                          {doc.fileSize}
+                                        <div className="min-w-0">
+                                          <p className="text-xs font-black text-slate-950 truncate group-hover:text-brand-teal transition-colors">
+                                            {doc.title}
+                                          </p>
+                                          <p className="mt-0.5 text-[10px] font-medium text-slate-500 line-clamp-1">
+                                            {doc.notes || "Archived patient clinical document"}
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      <div className="col-span-2">
+                                        <span className={`inline-block rounded-md border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${catCfg.badgeClass}`}>
+                                          {catCfg.label}
                                         </span>
                                       </div>
 
-                                      <div className="mt-3.5 flex items-center justify-end gap-2 border-t border-slate-100 pt-2.5">
+                                      <div className="col-span-2 text-xs text-slate-600">
+                                        <p className="font-bold text-slate-800 truncate">{doc.doctorOrClinic || "External Provider"}</p>
+                                        <p className="text-[10px] text-slate-400">{formatDocDate(doc.consultationDate)} · {doc.fileSize}</p>
+                                      </div>
+
+                                      <div className="col-span-3 flex items-center justify-start sm:justify-end gap-2 shrink-0">
                                         <button
                                           type="button"
                                           onClick={() => setPreviewMedicalDoc(doc)}
-                                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition"
+                                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:border-slate-300 hover:bg-slate-50 shadow-2xs transition"
                                         >
                                           <svg className="h-3.5 w-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                             <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
@@ -4647,7 +5124,7 @@ export default function PatientDashboardClient({
                                               downloadMedicalArchiveSamplePdf(doc);
                                             }
                                           }}
-                                          className="inline-flex items-center gap-1 rounded-lg bg-brand-teal px-2.5 py-1 text-[11px] font-bold text-white hover:bg-teal-600 transition"
+                                          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-teal px-2.5 py-1.5 text-xs font-black text-white hover:bg-teal-600 shadow-2xs transition"
                                         >
                                           <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -5085,18 +5562,31 @@ export default function PatientDashboardClient({
                                   </div>
                                   <p className="mt-1 text-[11px] text-slate-500">Issued: {formatDate(cert.issuedAt)} · Dr. {cert.doctor.name}</p>
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={() => downloadPatientCertPdf(cert, patient)}
-                                  className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-brand-teal px-3 py-2 text-xs font-black text-white hover:bg-teal-600 transition"
-                                >
-                                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                    <polyline points="7 10 12 15 17 10" />
-                                    <line x1="12" y1="15" x2="12" y2="3" />
-                                  </svg>
-                                  Download PDF
-                                </button>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => previewPatientCertPdf(cert, patient, setPreviewMedicalDoc)}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 bg-white px-3 py-2 text-xs font-bold text-teal-800 hover:bg-teal-50 transition"
+                                  >
+                                    <svg className="h-3.5 w-3.5 text-teal-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                                      <circle cx="12" cy="12" r="3" />
+                                    </svg>
+                                    Preview
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => downloadPatientCertPdf(cert, patient)}
+                                    className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-brand-teal px-3 py-2 text-xs font-black text-white hover:bg-teal-600 transition"
+                                  >
+                                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                      <polyline points="7 10 12 15 17 10" />
+                                      <line x1="12" y1="15" x2="12" y2="3" />
+                                    </svg>
+                                    Download PDF
+                                  </button>
+                                </div>
                               </div>
                               {cert.diagnosis && (
                                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -5713,13 +6203,10 @@ export default function PatientDashboardClient({
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   {/* Document 1: Full Consultation Report */}
-                  <button
-                    type="button"
-                    onClick={() => downloadMedicalReport(medicalRecordModalAppointment, patient)}
-                    className="group flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-4 text-left transition hover:border-brand-teal/50 hover:bg-white hover:shadow-xs"
-                  >
+                  {/* Document 1: Consultation Report PDF */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 transition hover:border-brand-teal/50 hover:bg-white hover:shadow-xs">
                     <div className="flex items-center gap-3">
-                      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-900 text-white group-hover:bg-brand-teal transition-colors">
+                      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-900 text-white shadow-2xs">
                         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                           <polyline points="14 2 14 8 20 8" />
@@ -5733,24 +6220,38 @@ export default function PatientDashboardClient({
                         <p className="text-[10px] font-semibold text-slate-500">PDF · Assessment &amp; Clinical Summary</p>
                       </div>
                     </div>
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white border border-slate-200 text-slate-700 group-hover:border-brand-teal group-hover:text-brand-teal transition">
-                      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                        <polyline points="7 10 12 15 17 10" />
-                        <line x1="12" y1="15" x2="12" y2="3" />
-                      </svg>
-                    </span>
-                  </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => previewFullConsultationReport(medicalRecordModalAppointment, patient, setPreviewMedicalDoc)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:border-slate-300 hover:bg-slate-50 shadow-2xs transition"
+                      >
+                        <svg className="h-3.5 w-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                        Preview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadFullConsultationReport(medicalRecordModalAppointment, patient)}
+                        className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-black text-white hover:bg-slate-800 shadow-2xs transition"
+                      >
+                        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                          <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        Download
+                      </button>
+                    </div>
+                  </div>
 
                   {/* Document 2: Official Prescription PDF */}
                   {medicalRecordModalAppointment.prescription ? (
-                    <button
-                      type="button"
-                      onClick={() => downloadMedicalReport(medicalRecordModalAppointment, patient)}
-                      className="group flex items-center justify-between rounded-xl border border-teal-200 bg-teal-50/50 p-4 text-left transition hover:border-brand-teal hover:bg-white hover:shadow-xs"
-                    >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-purple-200 bg-purple-50/50 p-4 transition hover:border-purple-300 hover:bg-white hover:shadow-xs">
                       <div className="flex items-center gap-3">
-                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-teal text-white">
+                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-purple-700 text-white shadow-2xs">
                           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                             <polyline points="7 10 12 15 17 10" />
@@ -5758,18 +6259,36 @@ export default function PatientDashboardClient({
                           </svg>
                         </div>
                         <div>
-                          <p className="text-xs font-black text-teal-950">Official E-Prescription</p>
-                          <p className="text-[10px] font-semibold text-teal-700">PDF · E-Signed &amp; Compliant</p>
+                          <p className="text-xs font-black text-purple-950">Official E-Prescription</p>
+                          <p className="text-[10px] font-semibold text-purple-700">PDF · E-Signed &amp; Compliant</p>
                         </div>
                       </div>
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-teal text-white shadow-xs">
-                        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                          <polyline points="7 10 12 15 17 10" />
-                          <line x1="12" y1="15" x2="12" y2="3" />
-                        </svg>
-                      </span>
-                    </button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => previewMedicalReport(medicalRecordModalAppointment, patient, setPreviewMedicalDoc)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-purple-200 bg-white px-2.5 py-1.5 text-xs font-bold text-purple-800 hover:bg-purple-50 shadow-2xs transition"
+                        >
+                          <svg className="h-3.5 w-3.5 text-purple-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                          Preview
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => downloadMedicalReport(medicalRecordModalAppointment, patient)}
+                          className="inline-flex items-center gap-1 rounded-lg bg-purple-700 px-2.5 py-1.5 text-xs font-black text-white hover:bg-purple-800 shadow-2xs transition"
+                        >
+                          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                          </svg>
+                          Download
+                        </button>
+                      </div>
+                    </div>
                   ) : null}
 
                   {/* Document 3: Medical Certificates */}
@@ -5780,13 +6299,9 @@ export default function PatientDashboardClient({
                     if (!cert) return null;
 
                     return (
-                      <button
-                        type="button"
-                        onClick={() => downloadPatientCertPdf(cert, patient)}
-                        className="group flex items-center justify-between rounded-xl border border-teal-200 bg-teal-50/50 p-4 text-left transition hover:border-brand-teal hover:bg-white hover:shadow-xs"
-                      >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50/50 p-4 transition hover:border-brand-teal hover:bg-white hover:shadow-xs">
                         <div className="flex items-center gap-3">
-                          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-teal text-white">
+                          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-teal text-white shadow-2xs">
                             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                               <path d="m9 12 2 2 4-4" />
@@ -5797,25 +6312,39 @@ export default function PatientDashboardClient({
                             <p className="text-[10px] font-semibold text-teal-700">{cert.certNumber} · {cert.purpose === "sick_leave" ? "Sick Leave" : "Clearance"}</p>
                           </div>
                         </div>
-                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-teal text-white shadow-xs">
-                          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                            <polyline points="7 10 12 15 17 10" />
-                            <line x1="12" y1="15" x2="12" y2="3" />
-                          </svg>
-                        </span>
-                      </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => previewPatientCertPdf(cert, patient, setPreviewMedicalDoc)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-teal-200 bg-white px-2.5 py-1.5 text-xs font-bold text-teal-800 hover:bg-teal-50 shadow-2xs transition"
+                          >
+                            <svg className="h-3.5 w-3.5 text-teal-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                              <circle cx="12" cy="12" r="3" />
+                            </svg>
+                            Preview
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => downloadPatientCertPdf(cert, patient)}
+                            className="inline-flex items-center gap-1 rounded-lg bg-brand-teal px-2.5 py-1.5 text-xs font-black text-white hover:bg-teal-600 shadow-2xs transition"
+                          >
+                            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                              <polyline points="7 10 12 15 17 10" />
+                              <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            Download
+                          </button>
+                        </div>
+                      </div>
                     );
                   })()}
 
                   {/* Document 4: Consultation Transcript */}
-                  <button
-                    type="button"
-                    onClick={() => downloadTranscriptReport(medicalRecordModalAppointment, patient)}
-                    className="group flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-4 text-left transition hover:border-brand-teal/50 hover:bg-white hover:shadow-xs"
-                  >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 transition hover:border-brand-teal/50 hover:bg-white hover:shadow-xs">
                     <div className="flex items-center gap-3">
-                      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-800 text-white group-hover:bg-brand-teal transition-colors">
+                      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-800 text-white group-hover:bg-brand-teal transition-colors shadow-2xs">
                         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
                           <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
@@ -5828,14 +6357,32 @@ export default function PatientDashboardClient({
                         <p className="text-[10px] font-semibold text-slate-500">PDF · Speech-to-text transcript</p>
                       </div>
                     </div>
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white border border-slate-200 text-slate-700 group-hover:border-brand-teal group-hover:text-brand-teal transition">
-                      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                        <polyline points="7 10 12 15 17 10" />
-                        <line x1="12" y1="15" x2="12" y2="3" />
-                      </svg>
-                    </span>
-                  </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => previewTranscriptReport(medicalRecordModalAppointment, patient, setPreviewMedicalDoc)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:border-slate-300 hover:bg-slate-50 shadow-2xs transition"
+                      >
+                        <svg className="h-3.5 w-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                        Preview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadTranscriptReport(medicalRecordModalAppointment, patient)}
+                        className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-black text-white hover:bg-slate-800 shadow-2xs transition"
+                      >
+                        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                          <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        Download
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

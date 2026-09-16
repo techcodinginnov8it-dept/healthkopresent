@@ -55,7 +55,37 @@ export function triggerBlobDownload(blob: Blob, filename: string): void {
 
   // Small delay before cleanup so Chrome has time to queue the download
   setTimeout(() => {
-    document.body.removeChild(link);
+    if (link.parentNode) {
+      document.body.removeChild(link);
+    }
     URL.revokeObjectURL(url);
+  }, 2000);
+}
+
+/**
+ * Download a file from an existing URL (e.g. data URL or external blob URL)
+ */
+export function triggerUrlDownload(url: string, filename: string): void {
+  const link = document.createElement("a");
+  link.style.position = "fixed";
+  link.style.top = "-9999px";
+  link.style.left = "-9999px";
+  link.href = url;
+  link.download = filename;
+
+  document.body.appendChild(link);
+
+  link.dispatchEvent(
+    new MouseEvent("click", {
+      bubbles: false,
+      cancelable: true,
+      view: window,
+    })
+  );
+
+  setTimeout(() => {
+    if (link.parentNode) {
+      document.body.removeChild(link);
+    }
   }, 2000);
 }
