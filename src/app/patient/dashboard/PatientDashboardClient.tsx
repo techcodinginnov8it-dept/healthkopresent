@@ -4816,8 +4816,8 @@ export default function PatientDashboardClient({
                                 </div>
                               </div>
 
-                              {/* CRM Document Rows */}
-                              <div className="divide-y divide-slate-100">
+                              {/* CRM Document Rows with initial view of 5 items and vertical scroll */}
+                              <div className="max-h-[380px] overflow-y-auto divide-y divide-slate-100">
                                 {/* 1. Consultation Report PDF */}
                                 <div className="group flex flex-col sm:grid sm:grid-cols-12 gap-3 p-4 sm:items-center hover:bg-slate-50/70 transition">
                                   <div className="col-span-5 flex items-center gap-3 min-w-0">
