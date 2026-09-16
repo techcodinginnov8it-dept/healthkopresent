@@ -10,6 +10,8 @@ import {
   prepareSignatureForPdf,
   type PdfSignatureImage,
 } from "./signature-pdf-helper";
+import { pdfStringToBytes, triggerBlobDownload } from "./pdf-download-helper";
+
 
 export interface TranscriptTurn {
   id?: string;
@@ -695,31 +697,34 @@ export async function downloadConsultationTranscriptPdf(
 ): Promise<void> {
   if (typeof window === "undefined") return;
 
-  // Automatically attach active doctor signature from Settings if not already provided
-  let preparedSig = data.signatureImage;
-  if (!preparedSig) {
-    const rawSig = data.signatureDataUrl || getStoredDoctorSignature(data.doctorId);
-    if (rawSig) {
-      preparedSig = (await prepareSignatureForPdf(rawSig)) || undefined;
+  try {
+    // Automatically attach active doctor signature from Settings if not already provided
+    let preparedSig = data.signatureImage;
+    if (!preparedSig) {
+      const rawSig = data.signatureDataUrl || getStoredDoctorSignature(data.doctorId);
+      if (rawSig) {
+        try {
+          preparedSig = (await prepareSignatureForPdf(rawSig)) || undefined;
+        } catch {
+          // Signature processing failed — proceed without signature
+          preparedSig = undefined;
+        }
+      }
     }
+
+    const pdfString = generateConsultationTranscriptPdf({
+      ...data,
+      signatureImage: preparedSig,
+    });
+
+    const safePatient = (data.patientName || "patient").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const filename =
+      customFilename || `healthko-transcript-${safePatient}-${data.appointmentId || "encounter"}.pdf`;
+
+    // Use Uint8Array encoding (avoids UTF-16 corruption) + MouseEvent dispatch (Chrome-safe)
+    const blob = new Blob([pdfStringToBytes(pdfString)], { type: "application/pdf" });
+    triggerBlobDownload(blob, filename);
+  } catch (err) {
+    console.error("downloadConsultationTranscriptPdf failed:", err);
   }
-
-  const pdfString = generateConsultationTranscriptPdf({
-    ...data,
-    signatureImage: preparedSig,
-  });
-  const blob = new Blob([pdfString], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-
-  const safePatient = (data.patientName || "patient").toLowerCase().replace(/[^a-z0-9]+/g, "-");
-  const filename =
-    customFilename || `healthko-transcript-${safePatient}-${data.appointmentId || "encounter"}.pdf`;
-
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
 }

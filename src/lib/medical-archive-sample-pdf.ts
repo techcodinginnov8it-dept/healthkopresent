@@ -1,15 +1,22 @@
 /**
  * HealthKo Telehealth – Medical Archive Sample PDF Generators
- * Generates official formatted PDF files for seed documents in the
+ * Generates official clinic-grade PDF files for seed documents in the
  * Previous Consultations & Medical Documents hub:
  * 1. Previous Outpatient Consultation Summary (Clinical Encounter Record)
  * 2. Annual Comprehensive Metabolic & CBC Panel (Diagnostic Lab Report)
+ * 3. Historical Prescription (Pharmaceutical Record)
+ * 4. Hospital Discharge & Clinical Referral Summary (Handover Record)
+ * 5. Official Medical Certificate & Fitness to Work Clearance
+ * 6. Diagnostic Radiology & Imaging Report (X-Ray / Ultrasound / CT)
  */
+
+import { pdfStringToBytes, triggerBlobDownload } from "./pdf-download-helper";
 
 const PAGE_W = 612;
 const PAGE_H = 792;
 const L = 46;
 const R = 566;
+const BODY_W = 520;
 
 function esc(v?: string | number | null): string {
   if (v === undefined || v === null) return "";
@@ -25,7 +32,7 @@ function esc(v?: string | number | null): string {
     .trim();
 }
 
-function wrap(text: string, maxChars = 78): string[] {
+function wrap(text: string, maxChars = 75): string[] {
   if (!text) return [];
   const words = text.split(/\s+/);
   const lines: string[] = [];
@@ -102,79 +109,83 @@ export function generateConsultationSummaryPdf(doc?: {
     "Routine cardiology review. ECG normal sinus rhythm. Continued on lifestyle modifications and preventive lipid management. Follow-up in 6 months.";
 
   const cmds: string[] = [
-    // Top Brand Banner (Slate/Teal)
-    `0.05 0.38 0.45 rg 0 740 ${PAGE_W} 52 re f`,
-    `BT /F2 16 Tf 1 1 1 rg ${L} 765 Td (HEALTHKO CLINICAL ARCHIVE) Tj ET`,
-    `BT /F1 8.5 Tf 0.82 0.94 0.95 rg ${L} 750 Td (PREVIOUS CONSULTATION ENCOUNTER SUMMARY · OFFICIAL ARCHIVED RECORD) Tj ET`,
+    // Outer border
+    `0.85 0.90 0.94 RG 1 w 28 28 556 736 re S`,
 
-    // Clinic / Provider Header
-    `0.96 0.98 0.99 rg ${L} 670 520 54 re f`,
-    `0.85 0.9 0.94 RG 0.5 w ${L} 670 520 54 re S`,
-    `BT /F2 11 Tf 0.08 0.15 0.22 rg ${L + 12} 708 Td (${esc(doctor)}) Tj ET`,
-    `BT /F1 8 Tf 0.4 0.48 0.55 rg ${L + 12} 694 Td (Outpatient Clinical Encounter · Archived Medical Record) Tj ET`,
-    `BT /F1 8 Tf 0.4 0.48 0.55 rg ${L + 12} 680 Td (Encounter Date: ${esc(date)} · Record Status: Archived / Verified) Tj ET`,
+    // Top Brand Banner (Slate/Teal)
+    `0.05 0.38 0.45 rg 28 726 556 38 re f`,
+    `BT /F2 13 Tf 1 1 1 rg ${L} 746 Td (HEALTHKO CLINICAL ARCHIVE) Tj ET`,
+    `BT /F1 7.5 Tf 0.85 0.95 0.98 rg ${L} 734 Td (PREVIOUS CONSULTATION ENCOUNTER SUMMARY  |  OFFICIAL ARCHIVED RECORD) Tj ET`,
+
+    // Clinic / Provider Header Box
+    `0.96 0.98 0.99 rg ${L} 658 ${BODY_W} 54 re f`,
+    `0.85 0.90 0.94 RG 0.5 w ${L} 658 ${BODY_W} 54 re S`,
+    `BT /F2 10.5 Tf 0.08 0.15 0.22 rg ${L + 12} 694 Td (${esc(doctor)}) Tj ET`,
+    `BT /F1 8 Tf 0.40 0.48 0.55 rg ${L + 12} 680 Td (Outpatient Clinical Encounter  |  Archived Medical Record) Tj ET`,
+    `BT /F1 8 Tf 0.40 0.48 0.55 rg ${L + 12} 667 Td (Encounter Date: ${esc(date)}  |  Record Status: Verified & Archived) Tj ET`,
 
     // Metadata Bar
-    `0.93 0.95 0.97 rg ${L} 632 520 26 re f`,
-    `0.8 0.85 0.9 RG 0.5 w ${L} 632 520 26 re S`,
-    `BT /F2 7.5 Tf 0.3 0.4 0.48 rg ${L + 10} 643 Td (DOCUMENT TYPE: ENCOUNTER SUMMARY) Tj ET`,
-    `BT /F2 7.5 Tf 0.3 0.4 0.48 rg ${L + 210} 643 Td (CLASSIFICATION: AMBULATORY OUTPATIENT) Tj ET`,
-    `BT /F2 7.5 Tf 0.3 0.4 0.48 rg ${L + 420} 643 Td (CONFIDENTIALITY: LEVEL 2) Tj ET`,
+    `0.92 0.95 0.97 rg ${L} 624 ${BODY_W} 24 re f`,
+    `0.80 0.85 0.90 RG 0.5 w ${L} 624 ${BODY_W} 24 re S`,
+    `BT /F2 7 Tf 0.30 0.40 0.48 rg ${L + 10} 633 Td (DOCUMENT TYPE: ENCOUNTER SUMMARY) Tj ET`,
+    `BT /F2 7 Tf 0.30 0.40 0.48 rg ${L + 200} 633 Td (CLASSIFICATION: AMBULATORY OUTPATIENT) Tj ET`,
+    `BT /F2 7 Tf 0.30 0.40 0.48 rg ${L + 395} 633 Td (CONFIDENTIALITY: LEVEL 2) Tj ET`,
 
     // Section 1: Encounter Details
-    `0.05 0.38 0.45 rg ${L} 606 520 14 re f`,
-    `BT /F2 8 Tf 1 1 1 rg ${L + 6} 610 Td (1. ENCOUNTER DETAILS & REASON FOR CONSULTATION) Tj ET`,
-    `BT /F2 8 Tf 0.3 0.38 0.46 rg ${L} 586 Td (Service Type:) Tj ET`,
-    `BT /F1 8.5 Tf 0.1 0.15 0.2 rg ${L + 100} 586 Td (Outpatient Cardiology Comprehensive Follow-up) Tj ET`,
-    `BT /F2 8 Tf 0.3 0.38 0.46 rg ${L} 572 Td (Chief Complaint:) Tj ET`,
-    `BT /F1 8.5 Tf 0.1 0.15 0.2 rg ${L + 100} 572 Td (Semi-annual cardiovascular health assessment and routine wellness screening) Tj ET`,
-    `BT /F2 8 Tf 0.3 0.38 0.46 rg ${L} 558 Td (Clinical Status:) Tj ET`,
-    `BT /F1 8.5 Tf 0.1 0.15 0.2 rg ${L + 100} 558 Td (Clinically stable, asymptomatic, no orthopnea or dyspnea on exertion) Tj ET`,
+    `0.05 0.38 0.45 rg ${L} 596 ${BODY_W} 15 re f`,
+    `BT /F2 7.5 Tf 1 1 1 rg ${L + 8} 600 Td (1. ENCOUNTER DETAILS & REASON FOR CONSULTATION) Tj ET`,
+    `BT /F2 8 Tf 0.30 0.38 0.46 rg ${L + 8} 578 Td (Service Type:) Tj ET`,
+    `BT /F1 8 Tf 0.10 0.15 0.20 rg ${L + 95} 578 Td (Outpatient Cardiology Comprehensive Follow-up) Tj ET`,
+    `BT /F2 8 Tf 0.30 0.38 0.46 rg ${L + 8} 563 Td (Chief Complaint:) Tj ET`,
+    `BT /F1 8 Tf 0.10 0.15 0.20 rg ${L + 95} 563 Td (Cardiovascular health assessment and preventive lipid optimization screening) Tj ET`,
+    `BT /F2 8 Tf 0.30 0.38 0.46 rg ${L + 8} 548 Td (Clinical Status:) Tj ET`,
+    `BT /F1 8 Tf 0.10 0.15 0.20 rg ${L + 95} 548 Td (Clinically stable, asymptomatic, no orthopnea or dyspnea on exertion) Tj ET`,
 
     // Section 2: Vitals Recorded
-    `0.05 0.38 0.45 rg ${L} 534 520 14 re f`,
-    `BT /F2 8 Tf 1 1 1 rg ${L + 6} 538 Td (2. VITAL SIGNS AT ENCOUNTER) Tj ET`,
-    // Vitals grid boxes
-    `0.96 0.98 0.99 rg ${L} 492 120 32 re f`,
-    `0.85 0.9 0.94 RG 0.5 w ${L} 492 120 32 re S`,
-    `BT /F2 7 Tf 0.35 0.45 0.52 rg ${L + 6} 516 Td (BLOOD PRESSURE) Tj ET`,
-    `BT /F2 11 Tf 0.05 0.38 0.45 rg ${L + 6} 502 Td (118/78) Tj ET`,
-    `BT /F1 7 Tf 0.45 0.5 0.55 rg ${L + 50} 502 Td (mmHg) Tj ET`,
+    `0.05 0.38 0.45 rg ${L} 522 ${BODY_W} 15 re f`,
+    `BT /F2 7.5 Tf 1 1 1 rg ${L + 8} 526 Td (2. VITAL SIGNS AT ENCOUNTER) Tj ET`,
 
-    `0.96 0.98 0.99 rg ${L + 130} 492 120 32 re f`,
-    `0.85 0.9 0.94 RG 0.5 w ${L + 130} 492 120 32 re S`,
-    `BT /F2 7 Tf 0.35 0.45 0.52 rg ${L + 136} 516 Td (HEART RATE) Tj ET`,
-    `BT /F2 11 Tf 0.05 0.38 0.45 rg ${L + 136} 502 Td (72) Tj ET`,
-    `BT /F1 7 Tf 0.45 0.5 0.55 rg ${L + 160} 502 Td (bpm regular) Tj ET`,
+    // Vitals 4-column cards
+    `0.96 0.98 0.99 rg ${L} 478 122 34 re f`,
+    `0.85 0.90 0.94 RG 0.5 w ${L} 478 122 34 re S`,
+    `BT /F2 6.5 Tf 0.35 0.45 0.52 rg ${L + 8} 502 Td (BLOOD PRESSURE) Tj ET`,
+    `BT /F2 10.5 Tf 0.05 0.38 0.45 rg ${L + 8} 488 Td (118/78) Tj ET`,
+    `BT /F1 7 Tf 0.45 0.50 0.55 rg ${L + 56} 488 Td (mmHg) Tj ET`,
 
-    `0.96 0.98 0.99 rg ${L + 260} 492 120 32 re f`,
-    `0.85 0.9 0.94 RG 0.5 w ${L + 260} 492 120 32 re S`,
-    `BT /F2 7 Tf 0.35 0.45 0.52 rg ${L + 266} 516 Td (BODY TEMP) Tj ET`,
-    `BT /F2 11 Tf 0.05 0.38 0.45 rg ${L + 266} 502 Td (36.6) Tj ET`,
-    `BT /F1 7 Tf 0.45 0.5 0.55 rg ${L + 295} 502 Td (deg C) Tj ET`,
+    `0.96 0.98 0.99 rg ${L + 130} 478 122 34 re f`,
+    `0.85 0.90 0.94 RG 0.5 w ${L + 130} 478 122 34 re S`,
+    `BT /F2 6.5 Tf 0.35 0.45 0.52 rg ${L + 138} 502 Td (HEART RATE) Tj ET`,
+    `BT /F2 10.5 Tf 0.05 0.38 0.45 rg ${L + 138} 488 Td (72) Tj ET`,
+    `BT /F1 7 Tf 0.45 0.50 0.55 rg ${L + 160} 488 Td (bpm) Tj ET`,
 
-    `0.96 0.98 0.99 rg ${L + 390} 492 130 32 re f`,
-    `0.85 0.9 0.94 RG 0.5 w ${L + 390} 492 130 32 re S`,
-    `BT /F2 7 Tf 0.35 0.45 0.52 rg ${L + 396} 516 Td (O2 SATURATION) Tj ET`,
-    `BT /F2 11 Tf 0.05 0.38 0.45 rg ${L + 396} 502 Td (99%) Tj ET`,
-    `BT /F1 7 Tf 0.45 0.5 0.55 rg ${L + 430} 502 Td (room air) Tj ET`,
+    `0.96 0.98 0.99 rg ${L + 260} 478 122 34 re f`,
+    `0.85 0.90 0.94 RG 0.5 w ${L + 260} 478 122 34 re S`,
+    `BT /F2 6.5 Tf 0.35 0.45 0.52 rg ${L + 268} 502 Td (BODY TEMP) Tj ET`,
+    `BT /F2 10.5 Tf 0.05 0.38 0.45 rg ${L + 268} 488 Td (36.6) Tj ET`,
+    `BT /F1 7 Tf 0.45 0.50 0.55 rg ${L + 296} 488 Td (deg C) Tj ET`,
+
+    `0.96 0.98 0.99 rg ${L + 390} 478 130 34 re f`,
+    `0.85 0.90 0.94 RG 0.5 w ${L + 390} 478 130 34 re S`,
+    `BT /F2 6.5 Tf 0.35 0.45 0.52 rg ${L + 398} 502 Td (O2 SATURATION) Tj ET`,
+    `BT /F2 10.5 Tf 0.05 0.38 0.45 rg ${L + 398} 488 Td (99%) Tj ET`,
+    `BT /F1 7 Tf 0.45 0.50 0.55 rg ${L + 430} 488 Td (room air) Tj ET`,
 
     // Section 3: Diagnostic Findings & Notes
-    `0.05 0.38 0.45 rg ${L} 464 520 14 re f`,
-    `BT /F2 8 Tf 1 1 1 rg ${L + 6} 468 Td (3. CLINICAL ASSESSMENT & ATTENDING NOTES) Tj ET`,
+    `0.05 0.38 0.45 rg ${L} 448 ${BODY_W} 15 re f`,
+    `BT /F2 7.5 Tf 1 1 1 rg ${L + 8} 452 Td (3. CLINICAL ASSESSMENT & ATTENDING NOTES) Tj ET`,
   ];
 
-  let curY = 444;
+  let curY = 428;
   const wrappedNotes = wrap(notes, 75);
   for (const line of wrappedNotes) {
-    cmds.push(`BT /F1 8.5 Tf 0.1 0.15 0.2 rg ${L} ${curY} Td (${esc(line)}) Tj ET`);
-    curY -= 12;
+    cmds.push(`BT /F1 8 Tf 0.10 0.15 0.20 rg ${L + 8} ${curY} Td (${esc(line)}) Tj ET`);
+    curY -= 13;
   }
 
   // Section 4: Care Directives & Prescriptions
-  curY -= 6;
-  cmds.push(`0.05 0.38 0.45 rg ${L} ${curY} 520 14 re f`);
-  cmds.push(`BT /F2 8 Tf 1 1 1 rg ${L + 6} ${curY + 4} Td (4. CARE PLAN & PRESCRIBED REGIMEN) Tj ET`);
+  curY -= 8;
+  cmds.push(`0.05 0.38 0.45 rg ${L} ${curY} ${BODY_W} 15 re f`);
+  cmds.push(`BT /F2 7.5 Tf 1 1 1 rg ${L + 8} ${curY + 4} Td (4. CARE PLAN & PRESCRIBED REGIMEN) Tj ET`);
   curY -= 18;
 
   const planLines = [
@@ -185,17 +196,17 @@ export function generateConsultationSummaryPdf(doc?: {
     "* Annual lipid profile and liver enzymes panel in 6 months prior to next visit.",
   ];
   for (const p of planLines) {
-    cmds.push(`BT /F1 8 Tf 0.12 0.18 0.25 rg ${L + 6} ${curY} Td (${esc(p)}) Tj ET`);
+    cmds.push(`BT /F1 8 Tf 0.12 0.18 0.25 rg ${L + 8} ${curY} Td (${esc(p)}) Tj ET`);
     curY -= 13;
   }
 
   // Verification Seal / Footer
   cmds.push(
-    `0.92 0.94 0.96 RG 0.5 w ${L} 120 520 0 re S`,
-    `BT /F2 8 Tf 0.2 0.3 0.4 rg ${L} 104 Td (ATTENDING CLINICIAN VERIFICATION) Tj ET`,
-    `BT /F1 7.5 Tf 0.4 0.48 0.55 rg ${L} 92 Td (Verified electronically in HealthKo Patient Portal. Encrypted cryptographic clinical record.) Tj ET`,
-    `BT /F1 7 Tf 0.5 0.55 0.6 rg ${L} 60 Td (CONFIDENTIAL MEDICAL RECORD - HEALTHKO TELEHEALTH PLATFORM - PRODUCED FOR PATIENT ARCHIVE) Tj ET`,
-    `BT /F2 7 Tf 0.05 0.38 0.45 rg ${R - 90} 60 Td (HEALTHKO ARCHIVE) Tj ET`
+    `0.88 0.92 0.95 RG 0.5 w ${L} 115 ${BODY_W} 0 re S`,
+    `BT /F2 8 Tf 0.20 0.30 0.40 rg ${L} 98 Td (ATTENDING CLINICIAN VERIFICATION) Tj ET`,
+    `BT /F1 7 Tf 0.40 0.48 0.55 rg ${L} 85 Td (Verified electronically in HealthKo Patient Portal. Cryptographically signed clinical encounter copy.) Tj ET`,
+    `BT /F1 6.5 Tf 0.50 0.55 0.60 rg ${L} 52 Td (CONFIDENTIAL MEDICAL RECORD - HEALTHKO TELEHEALTH PLATFORM - ARCHIVED RECORD) Tj ET`,
+    `BT /F2 6.5 Tf 0.05 0.38 0.45 rg ${R - 85} 52 Td (HEALTHKO ARCHIVE) Tj ET`
   );
 
   return buildPdfString(cmds.join("\n"));
@@ -217,24 +228,27 @@ export function generateLabReportPdf(doc?: {
     "Fasting blood glucose normal (88 mg/dL). HbA1c 5.4%. Lipid panel shows optimal HDL (58 mg/dL) and LDL (92 mg/dL). Renal and liver function within normal reference limits.";
 
   const cmds: string[] = [
+    // Outer border
+    `0.85 0.88 0.92 RG 1 w 28 28 556 736 re S`,
+
     // Top Diagnostic Banner (Dark Slate Blue)
-    `0.1 0.2 0.32 rg 0 740 ${PAGE_W} 52 re f`,
-    `BT /F2 15 Tf 1 1 1 rg ${L} 765 Td (DIAGNOSTIC LABORATORY EXAMINATION REPORT) Tj ET`,
-    `BT /F1 8.5 Tf 0.8 0.88 0.95 rg ${L} 750 Td (CLINICAL PATHOLOGY & BIOCHEMISTRY · ACCREDITED REFERENCE LABORATORY) Tj ET`,
+    `0.10 0.20 0.32 rg 28 726 556 38 re f`,
+    `BT /F2 13 Tf 1 1 1 rg ${L} 746 Td (DIAGNOSTIC LABORATORY EXAMINATION REPORT) Tj ET`,
+    `BT /F1 7.5 Tf 0.80 0.88 0.95 rg ${L} 734 Td (CLINICAL PATHOLOGY & BIOCHEMISTRY  |  ACCREDITED REFERENCE LABORATORY) Tj ET`,
 
     // Facility Info Header
-    `0.97 0.98 0.99 rg ${L} 672 520 52 re f`,
-    `0.85 0.88 0.92 RG 0.5 w ${L} 672 520 52 re S`,
-    `BT /F2 10.5 Tf 0.1 0.18 0.28 rg ${L + 12} 708 Td (${esc(facility)}) Tj ET`,
-    `BT /F1 7.5 Tf 0.4 0.48 0.55 rg ${L + 12} 694 Td (Specimen: Venous Whole Blood & Serum · Fasting: 10 hours · Specimen ID: #LAB-2025-0820-891) Tj ET`,
-    `BT /F1 7.5 Tf 0.4 0.48 0.55 rg ${L + 12} 680 Td (Report Released: ${esc(date)} · Clinical Pathologist: Dr. R. Santos, MD, FPSP) Tj ET`,
+    `0.97 0.98 0.99 rg ${L} 658 ${BODY_W} 54 re f`,
+    `0.85 0.88 0.92 RG 0.5 w ${L} 658 ${BODY_W} 54 re S`,
+    `BT /F2 10.5 Tf 0.10 0.18 0.28 rg ${L + 12} 694 Td (${esc(facility)}) Tj ET`,
+    `BT /F1 7.5 Tf 0.40 0.48 0.55 rg ${L + 12} 680 Td (Specimen: Venous Whole Blood & Serum  |  Fasting: 10 hrs  |  Accession #LAB-2025-0820-891) Tj ET`,
+    `BT /F1 7.5 Tf 0.40 0.48 0.55 rg ${L + 12} 667 Td (Report Released: ${esc(date)}  |  Clinical Pathologist: Dr. R. Santos, MD, FPSP) Tj ET`,
 
-    // Section 1: Chemistry & Metabolic Panel Table Header
-    `0.1 0.2 0.32 rg ${L} 642 520 15 re f`,
-    `BT /F2 7.5 Tf 1 1 1 rg ${L + 6} 646 Td (TEST / ANALYTE) Tj ET`,
-    `BT /F2 7.5 Tf 1 1 1 rg ${L + 190} 646 Td (RESULT) Tj ET`,
-    `BT /F2 7.5 Tf 1 1 1 rg ${L + 280} 646 Td (REFERENCE RANGE) Tj ET`,
-    `BT /F2 7.5 Tf 1 1 1 rg ${L + 420} 646 Td (FLAG / STATUS) Tj ET`,
+    // Chemistry & Metabolic Panel Table Header
+    `0.10 0.20 0.32 rg ${L} 632 ${BODY_W} 15 re f`,
+    `BT /F2 7 Tf 1 1 1 rg ${L + 8} 636 Td (TEST / ANALYTE) Tj ET`,
+    `BT /F2 7 Tf 1 1 1 rg ${L + 185} 636 Td (RESULT) Tj ET`,
+    `BT /F2 7 Tf 1 1 1 rg ${L + 275} 636 Td (REFERENCE RANGE) Tj ET`,
+    `BT /F2 7 Tf 1 1 1 rg ${L + 415} 636 Td (FLAG / STATUS) Tj ET`,
   ];
 
   // Lab Table Rows
@@ -255,40 +269,40 @@ export function generateLabReportPdf(doc?: {
     { test: "Platelet Count", val: "265 x10^9/L", ref: "150 - 450 x10^9/L", flag: "NORMAL" },
   ];
 
-  let rY = 626;
+  let rY = 616;
   labRows.forEach((row, idx) => {
     const isEven = idx % 2 === 0;
     if (isEven) {
-      cmds.push(`0.97 0.98 0.99 rg ${L} ${rY - 3} 520 14 re f`);
+      cmds.push(`0.97 0.98 0.99 rg ${L} ${rY - 3} ${BODY_W} 13 re f`);
     }
     cmds.push(
-      `BT /F2 7.5 Tf 0.15 0.22 0.3 rg ${L + 6} ${rY} Td (${esc(row.test)}) Tj ET`,
-      `BT /F2 7.5 Tf 0.05 0.4 0.35 rg ${L + 190} ${rY} Td (${esc(row.val)}) Tj ET`,
-      `BT /F1 7.5 Tf 0.38 0.44 0.5 rg ${L + 280} ${rY} Td (${esc(row.ref)}) Tj ET`,
-      `BT /F2 7 Tf 0.1 0.55 0.35 rg ${L + 420} ${rY} Td (${esc(row.flag)}) Tj ET`
+      `BT /F2 7 Tf 0.15 0.22 0.30 rg ${L + 8} ${rY} Td (${esc(row.test)}) Tj ET`,
+      `BT /F2 7 Tf 0.05 0.40 0.35 rg ${L + 185} ${rY} Td (${esc(row.val)}) Tj ET`,
+      `BT /F1 7 Tf 0.38 0.44 0.50 rg ${L + 275} ${rY} Td (${esc(row.ref)}) Tj ET`,
+      `BT /F2 6.5 Tf 0.10 0.55 0.35 rg ${L + 415} ${rY} Td (${esc(row.flag)}) Tj ET`
     );
-    rY -= 14;
+    rY -= 13;
   });
 
   // Section 2: Clinical Impression
-  rY -= 8;
+  rY -= 6;
   cmds.push(
-    `0.1 0.2 0.32 rg ${L} ${rY} 520 15 re f`,
-    `BT /F2 7.5 Tf 1 1 1 rg ${L + 6} ${rY + 4} Td (PATHOLOGIST CLINICAL IMPRESSION & INTERPRETATION) Tj ET`
+    `0.10 0.20 0.32 rg ${L} ${rY} ${BODY_W} 15 re f`,
+    `BT /F2 7.5 Tf 1 1 1 rg ${L + 8} ${rY + 4} Td (PATHOLOGIST CLINICAL IMPRESSION & INTERPRETATION) Tj ET`
   );
-  rY -= 16;
+  rY -= 15;
   const wrappedNotes = wrap(notes, 75);
   for (const line of wrappedNotes) {
-    cmds.push(`BT /F1 8 Tf 0.15 0.2 0.26 rg ${L + 6} ${rY} Td (${esc(line)}) Tj ET`);
+    cmds.push(`BT /F1 7.5 Tf 0.15 0.20 0.26 rg ${L + 8} ${rY} Td (${esc(line)}) Tj ET`);
     rY -= 12;
   }
 
   // Footer & Certification
   cmds.push(
-    `0.9 0.92 0.95 RG 0.5 w ${L} 95 520 0 re S`,
-    `BT /F2 8 Tf 0.15 0.25 0.35 rg ${L} 82 Td (ELECTRONICALLY SIGNED AND CERTIFIED) Tj ET`,
-    `BT /F1 7 Tf 0.4 0.48 0.55 rg ${L} 70 Td (Certified by Medical Technologist & Pathologist on duty. Archived to patient HealthKo electronic vault.) Tj ET`,
-    `BT /F1 6.5 Tf 0.55 0.6 0.65 rg ${L} 45 Td (HEALTHKO ARCHIVED RECORD · DOH ACCREDITED FACILITY · CONFIDENTIAL MEDICAL INFORMATION) Tj ET`
+    `0.88 0.90 0.94 RG 0.5 w ${L} 95 ${BODY_W} 0 re S`,
+    `BT /F2 7.5 Tf 0.15 0.25 0.35 rg ${L} 80 Td (ELECTRONICALLY SIGNED AND CERTIFIED BY LABORATORY) Tj ET`,
+    `BT /F1 7 Tf 0.40 0.48 0.55 rg ${L} 68 Td (Certified by Medical Technologist & Pathologist on duty. Archived to HealthKo electronic vault.) Tj ET`,
+    `BT /F1 6.5 Tf 0.55 0.60 0.65 rg ${L} 48 Td (HEALTHKO ARCHIVED RECORD  |  DOH ACCREDITED FACILITY  |  CONFIDENTIAL MEDICAL INFORMATION) Tj ET`
   );
 
   return buildPdfString(cmds.join("\n"));
@@ -310,67 +324,70 @@ export function generatePrescriptionSamplePdf(doc?: {
     "Prescribed: Cetirizine 10mg tab once daily at bedtime (14 days), Fluticasone furoate nasal spray 27.5mcg (1 spray each nostril daily for 30 days).";
 
   const cmds: string[] = [
+    // Outer border
+    `0.88 0.84 0.92 RG 1 w 28 28 556 736 re S`,
+
     // Brand Banner (Purple / Indigo)
-    `0.35 0.18 0.55 rg 0 740 ${PAGE_W} 52 re f`,
-    `BT /F2 16 Tf 1 1 1 rg ${L} 765 Td (HEALTHKO ARCHIVED PRESCRIPTION RECORD) Tj ET`,
-    `BT /F1 8.5 Tf 0.9 0.85 0.95 rg ${L} 750 Td (ELECTRONIC MEDICAL ARCHIVE · HISTORICAL PHARMACEUTICAL ORDERS) Tj ET`,
+    `0.35 0.18 0.55 rg 28 726 556 38 re f`,
+    `BT /F2 13 Tf 1 1 1 rg ${L} 746 Td (HEALTHKO ARCHIVED PRESCRIPTION RECORD) Tj ET`,
+    `BT /F1 7.5 Tf 0.90 0.85 0.95 rg ${L} 734 Td (ELECTRONIC MEDICAL ARCHIVE  |  HISTORICAL PHARMACEUTICAL ORDERS) Tj ET`,
 
     // Doctor & Clinic Header
-    `0.98 0.96 0.99 rg ${L} 670 520 54 re f`,
-    `0.88 0.82 0.92 RG 0.5 w ${L} 670 520 54 re S`,
-    `BT /F2 11 Tf 0.2 0.1 0.35 rg ${L + 12} 708 Td (${esc(doctor)}) Tj ET`,
-    `BT /F1 8 Tf 0.45 0.4 0.5 rg ${L + 12} 694 Td (Internal Medicine & Clinical Immunology · PRC License #0098741 · S2 #87124) Tj ET`,
-    `BT /F1 8 Tf 0.45 0.4 0.5 rg ${L + 12} 680 Td (Prescribed Date: ${esc(date)} · Status: Dispensed & Archived) Tj ET`,
+    `0.98 0.96 0.99 rg ${L} 658 ${BODY_W} 54 re f`,
+    `0.88 0.82 0.92 RG 0.5 w ${L} 658 ${BODY_W} 54 re S`,
+    `BT /F2 10.5 Tf 0.20 0.10 0.35 rg ${L + 12} 694 Td (${esc(doctor)}) Tj ET`,
+    `BT /F1 7.5 Tf 0.45 0.40 0.50 rg ${L + 12} 680 Td (Internal Medicine & Immunology  |  PRC Lic #0098741  |  S2 Lic #87124) Tj ET`,
+    `BT /F1 7.5 Tf 0.45 0.40 0.50 rg ${L + 12} 667 Td (Prescribed Date: ${esc(date)}  |  Status: Dispensed & Archived) Tj ET`,
 
-    // Rx Symbol & Watermark Box
-    `0.35 0.18 0.55 rg ${L} 632 520 26 re f`,
-    `BT /F2 12 Tf 1 1 1 rg ${L + 10} 640 Td (Rx  -  OFFICIAL HISTORICAL PRESCRIPTION) Tj ET`,
+    // Rx Symbol Bar
+    `0.35 0.18 0.55 rg ${L} 624 ${BODY_W} 24 re f`,
+    `BT /F2 10.5 Tf 1 1 1 rg ${L + 10} 632 Td (Rx   -   OFFICIAL HISTORICAL PRESCRIPTION) Tj ET`,
 
     // Medications Table Header
-    `0.92 0.88 0.95 rg ${L} 606 520 16 re f`,
-    `BT /F2 7.5 Tf 0.25 0.15 0.35 rg ${L + 8} 611 Td (MEDICATION / BRAND / FORM) Tj ET`,
-    `BT /F2 7.5 Tf 0.25 0.15 0.35 rg ${L + 200} 611 Td (DOSAGE & FREQUENCY) Tj ET`,
-    `BT /F2 7.5 Tf 0.25 0.15 0.35 rg ${L + 360} 611 Td (DURATION / QTY) Tj ET`,
+    `0.92 0.88 0.95 rg ${L} 598 ${BODY_W} 16 re f`,
+    `BT /F2 7 Tf 0.25 0.15 0.35 rg ${L + 10} 603 Td (MEDICATION / BRAND / FORM) Tj ET`,
+    `BT /F2 7 Tf 0.25 0.15 0.35 rg ${L + 205} 603 Td (DOSAGE & FREQUENCY) Tj ET`,
+    `BT /F2 7 Tf 0.25 0.15 0.35 rg ${L + 385} 603 Td (DURATION / QTY) Tj ET`,
   ];
 
   const rxItems = [
     { name: "Cetirizine 10mg Film-Coated Tablet", dose: "1 tablet once daily at bedtime", dur: "14 days (#14 tabs)" },
-    { name: "Fluticasone Furoate 27.5mcg Nasal Spray", dose: "1 spray in each nostril once daily", dur: "30 days (1 bottle)" },
+    { name: "Fluticasone Furoate 27.5mcg Nasal Spray", dose: "1 spray each nostril once daily", dur: "30 days (1 bottle)" },
     { name: "Saline Nasal Irrigation Wash", dose: "Flush nasal cavities twice daily as needed", dur: "As needed" },
   ];
 
-  let curY = 588;
+  let curY = 580;
   rxItems.forEach((rx, idx) => {
     if (idx % 2 === 0) {
-      cmds.push(`0.98 0.96 0.99 rg ${L} ${curY - 4} 520 18 re f`);
+      cmds.push(`0.98 0.96 0.99 rg ${L} ${curY - 4} ${BODY_W} 16 re f`);
     }
     cmds.push(
-      `BT /F2 8 Tf 0.15 0.1 0.25 rg ${L + 8} ${curY} Td (${esc(rx.name)}) Tj ET`,
-      `BT /F1 8 Tf 0.25 0.2 0.35 rg ${L + 200} ${curY} Td (${esc(rx.dose)}) Tj ET`,
-      `BT /F2 7.5 Tf 0.35 0.18 0.55 rg ${L + 360} ${curY} Td (${esc(rx.dur)}) Tj ET`
+      `BT /F2 7.5 Tf 0.15 0.10 0.25 rg ${L + 10} ${curY} Td (${esc(rx.name)}) Tj ET`,
+      `BT /F1 7.5 Tf 0.25 0.20 0.35 rg ${L + 205} ${curY} Td (${esc(rx.dose)}) Tj ET`,
+      `BT /F2 7 Tf 0.35 0.18 0.55 rg ${L + 385} ${curY} Td (${esc(rx.dur)}) Tj ET`
     );
-    curY -= 20;
+    curY -= 18;
   });
 
   // Instructions & Notes
-  curY -= 10;
+  curY -= 8;
   cmds.push(
-    `0.35 0.18 0.55 rg ${L} ${curY} 520 14 re f`,
-    `BT /F2 8 Tf 1 1 1 rg ${L + 6} ${curY + 4} Td (PRESCRIBER CLINICAL DIRECTIVES & SPECIAL INSTRUCTIONS) Tj ET`
+    `0.35 0.18 0.55 rg ${L} ${curY} ${BODY_W} 15 re f`,
+    `BT /F2 7.5 Tf 1 1 1 rg ${L + 8} ${curY + 4} Td (PRESCRIBER CLINICAL DIRECTIVES & SPECIAL INSTRUCTIONS) Tj ET`
   );
   curY -= 16;
   const wrappedNotes = wrap(notes, 75);
   for (const line of wrappedNotes) {
-    cmds.push(`BT /F1 8 Tf 0.2 0.15 0.25 rg ${L + 6} ${curY} Td (${esc(line)}) Tj ET`);
-    curY -= 12;
+    cmds.push(`BT /F1 8 Tf 0.20 0.15 0.25 rg ${L + 8} ${curY} Td (${esc(line)}) Tj ET`);
+    curY -= 13;
   }
 
   // Footer
   cmds.push(
-    `0.9 0.85 0.92 RG 0.5 w ${L} 100 520 0 re S`,
-    `BT /F2 8 Tf 0.3 0.15 0.4 rg ${L} 85 Td (VALIDATED HISTORICAL RECORD · FDA & DOH COMPLIANT ARCHIVE) Tj ET`,
-    `BT /F1 7 Tf 0.45 0.4 0.5 rg ${L} 72 Td (This archived electronic copy reflects prescriptions originally validated and signed on HealthKo Telehealth platform.) Tj ET`,
-    `BT /F1 6.5 Tf 0.5 0.5 0.55 rg ${L} 50 Td (HEALTHKO ARCHIVE · CONFIDENTIAL PATIENT PHARMACEUTICAL RECORD) Tj ET`
+    `0.88 0.84 0.92 RG 0.5 w ${L} 100 ${BODY_W} 0 re S`,
+    `BT /F2 7.5 Tf 0.30 0.15 0.40 rg ${L} 84 Td (VALIDATED HISTORICAL RECORD  |  FDA & DOH COMPLIANT ARCHIVE) Tj ET`,
+    `BT /F1 7 Tf 0.45 0.40 0.50 rg ${L} 70 Td (This archived electronic copy reflects prescriptions originally validated and signed on HealthKo Telehealth platform.) Tj ET`,
+    `BT /F1 6.5 Tf 0.50 0.50 0.55 rg ${L} 48 Td (HEALTHKO ARCHIVE  |  CONFIDENTIAL PATIENT PHARMACEUTICAL RECORD) Tj ET`
   );
 
   return buildPdfString(cmds.join("\n"));
@@ -385,47 +402,50 @@ export function generateDischargeSamplePdf(doc?: {
   consultationDate?: string;
   notes?: string;
 }): string {
-  const facility = doc?.doctorOrClinic || "Cardinal Santos Medical Center · Department of Cardiology";
+  const facility = doc?.doctorOrClinic || "Cardinal Santos Medical Center - Department of Cardiology";
   const date = doc?.consultationDate || "2026-04-10";
   const notes =
     doc?.notes ||
     "Patient presented for acute chest tightness evaluation. Coronary angiogram negative for critical stenosis. Discharge in stable condition with referral to outpatient cardiology for lifestyle optimization.";
 
   const cmds: string[] = [
+    // Outer border
+    `0.85 0.90 0.96 RG 1 w 28 28 556 736 re S`,
+
     // Blue Brand Banner
-    `0.12 0.32 0.58 rg 0 740 ${PAGE_W} 52 re f`,
-    `BT /F2 16 Tf 1 1 1 rg ${L} 765 Td (HOSPITAL DISCHARGE & CLINICAL REFERRAL SUMMARY) Tj ET`,
-    `BT /F1 8.5 Tf 0.85 0.92 0.98 rg ${L} 750 Td (DEPARTMENT OF CARDIOLOGY & INPATIENT SERVICES · CLINICAL HANDOVER) Tj ET`,
+    `0.12 0.32 0.58 rg 28 726 556 38 re f`,
+    `BT /F2 13 Tf 1 1 1 rg ${L} 746 Td (HOSPITAL DISCHARGE & CLINICAL REFERRAL SUMMARY) Tj ET`,
+    `BT /F1 7.5 Tf 0.85 0.92 0.98 rg ${L} 734 Td (DEPARTMENT OF CARDIOLOGY & INPATIENT SERVICES  |  CLINICAL HANDOVER) Tj ET`,
 
     // Facility Info
-    `0.96 0.98 1 rg ${L} 670 520 54 re f`,
-    `0.85 0.9 0.95 RG 0.5 w ${L} 670 520 54 re S`,
-    `BT /F2 11 Tf 0.1 0.2 0.4 rg ${L + 12} 708 Td (${esc(facility)}) Tj ET`,
-    `BT /F1 8 Tf 0.4 0.48 0.55 rg ${L + 12} 694 Td (Hospital Admission #CSMC-2026-4401 · Attending Physician: Dr. Roberto Garcia, MD, FPCP, FPCC) Tj ET`,
-    `BT /F1 8 Tf 0.4 0.48 0.55 rg ${L + 12} 680 Td (Discharge Date: ${esc(date)} · Disposition: Discharged Home, Clinically Stable) Tj ET`,
+    `0.96 0.98 1.00 rg ${L} 658 ${BODY_W} 54 re f`,
+    `0.85 0.90 0.95 RG 0.5 w ${L} 658 ${BODY_W} 54 re S`,
+    `BT /F2 10.5 Tf 0.10 0.20 0.40 rg ${L + 12} 694 Td (${esc(facility)}) Tj ET`,
+    `BT /F1 7.5 Tf 0.40 0.48 0.55 rg ${L + 12} 680 Td (Admission #CSMC-2026-4401  |  Attending: Dr. Roberto Garcia, MD, FPCP, FPCC) Tj ET`,
+    `BT /F1 7.5 Tf 0.40 0.48 0.55 rg ${L + 12} 667 Td (Discharge Date: ${esc(date)}  |  Disposition: Discharged Home, Clinically Stable) Tj ET`,
 
     // Discharge Details Box
-    `0.12 0.32 0.58 rg ${L} 632 520 26 re f`,
-    `BT /F2 8 Tf 1 1 1 rg ${L + 10} 643 Td (ADMISSION DIAGNOSIS: NON-CARDIAC CHEST DISCOMFORT) Tj ET`,
-    `BT /F2 8 Tf 1 1 1 rg ${L + 300} 643 Td (FINAL DISCHARGE STATUS: RESOLVED / STABLE) Tj ET`,
+    `0.12 0.32 0.58 rg ${L} 624 ${BODY_W} 24 re f`,
+    `BT /F2 7.5 Tf 1 1 1 rg ${L + 10} 633 Td (ADMISSION DIAGNOSIS: NON-CARDIAC CHEST DISCOMFORT) Tj ET`,
+    `BT /F2 7.5 Tf 1 1 1 rg ${L + 280} 633 Td (FINAL STATUS: RESOLVED / STABLE) Tj ET`,
 
     // Section 1: Hospital Course & Summary
-    `0.12 0.32 0.58 rg ${L} 606 520 14 re f`,
-    `BT /F2 8 Tf 1 1 1 rg ${L + 6} 610 Td (1. CLINICAL COURSE & INPATIENT SUMMARY) Tj ET`,
+    `0.12 0.32 0.58 rg ${L} 598 ${BODY_W} 15 re f`,
+    `BT /F2 7.5 Tf 1 1 1 rg ${L + 8} 602 Td (1. CLINICAL COURSE & INPATIENT SUMMARY) Tj ET`,
   ];
 
-  let curY = 586;
+  let curY = 578;
   const wrappedNotes = wrap(notes, 75);
   for (const line of wrappedNotes) {
-    cmds.push(`BT /F1 8.5 Tf 0.1 0.15 0.25 rg ${L} ${curY} Td (${esc(line)}) Tj ET`);
-    curY -= 12;
+    cmds.push(`BT /F1 8 Tf 0.10 0.15 0.25 rg ${L + 8} ${curY} Td (${esc(line)}) Tj ET`);
+    curY -= 13;
   }
 
   // Section 2: Referral Directives
-  curY -= 6;
+  curY -= 8;
   cmds.push(
-    `0.12 0.32 0.58 rg ${L} ${curY} 520 14 re f`,
-    `BT /F2 8 Tf 1 1 1 rg ${L + 6} ${curY + 4} Td (2. OUTPATIENT REFERRAL & FOLLOW-UP INSTRUCTIONS) Tj ET`
+    `0.12 0.32 0.58 rg ${L} ${curY} ${BODY_W} 15 re f`,
+    `BT /F2 7.5 Tf 1 1 1 rg ${L + 8} ${curY + 4} Td (2. OUTPATIENT REFERRAL & FOLLOW-UP INSTRUCTIONS) Tj ET`
   );
   curY -= 16;
   const referralLines = [
@@ -435,16 +455,16 @@ export function generateDischargeSamplePdf(doc?: {
     "* Red flag symptoms discussed: severe crushing chest pain radiating to jaw or left arm requires immediate emergency admission.",
   ];
   for (const p of referralLines) {
-    cmds.push(`BT /F1 8 Tf 0.12 0.18 0.25 rg ${L + 6} ${curY} Td (${esc(p)}) Tj ET`);
+    cmds.push(`BT /F1 8 Tf 0.12 0.18 0.25 rg ${L + 8} ${curY} Td (${esc(p)}) Tj ET`);
     curY -= 13;
   }
 
   // Footer
   cmds.push(
-    `0.88 0.92 0.96 RG 0.5 w ${L} 100 520 0 re S`,
-    `BT /F2 8 Tf 0.15 0.25 0.4 rg ${L} 85 Td (OFFICIAL HOSPITAL DISCHARGE CLEARANCE · CERTIFIED COPY) Tj ET`,
-    `BT /F1 7 Tf 0.4 0.48 0.55 rg ${L} 72 Td (Produced electronically for patient health record. Medical record department copy archived.) Tj ET`,
-    `BT /F1 6.5 Tf 0.5 0.55 0.6 rg ${L} 50 Td (CONFIDENTIAL MEDICAL INFORMATION · HEALTHKO HEALTH ARCHIVE SYSTEM) Tj ET`
+    `0.88 0.92 0.96 RG 0.5 w ${L} 100 ${BODY_W} 0 re S`,
+    `BT /F2 7.5 Tf 0.15 0.25 0.40 rg ${L} 84 Td (OFFICIAL HOSPITAL DISCHARGE CLEARANCE  |  CERTIFIED COPY) Tj ET`,
+    `BT /F1 7 Tf 0.40 0.48 0.55 rg ${L} 70 Td (Produced electronically for patient health record. Medical records department copy archived.) Tj ET`,
+    `BT /F1 6.5 Tf 0.50 0.55 0.60 rg ${L} 48 Td (CONFIDENTIAL MEDICAL INFORMATION  |  HEALTHKO HEALTH ARCHIVE SYSTEM) Tj ET`
   );
 
   return buildPdfString(cmds.join("\n"));
@@ -466,35 +486,38 @@ export function generateCertificateSamplePdf(doc?: {
     "To Whom It May Concern: This certifies that the patient was examined and diagnosed with Acute Upper Respiratory Tract Infection and is advised medical leave of absence for 3 days.";
 
   const cmds: string[] = [
-    // Rose / Crimson Banner
-    `0.62 0.15 0.25 rg 0 740 ${PAGE_W} 52 re f`,
-    `BT /F2 16 Tf 1 1 1 rg ${L} 765 Td (OFFICIAL MEDICAL CERTIFICATE & FIT-TO-WORK CLEARANCE) Tj ET`,
-    `BT /F1 8.5 Tf 0.98 0.88 0.9 rg ${L} 750 Td (CERTIFIED CLINICAL DOCUMENT · PRC & DOH ACCREDITED TELEHEALTH PHYSICIAN) Tj ET`,
+    // Outer border
+    `0.92 0.82 0.86 RG 1 w 28 28 556 736 re S`,
 
-    // Header
-    `0.99 0.96 0.97 rg ${L} 670 520 54 re f`,
-    `0.92 0.82 0.86 RG 0.5 w ${L} 670 520 54 re S`,
-    `BT /F2 11 Tf 0.4 0.1 0.18 rg ${L + 12} 708 Td (${esc(doctor)}) Tj ET`,
-    `BT /F1 8 Tf 0.48 0.4 0.44 rg ${L + 12} 694 Td (PRC Board Certified Specialist · License #0098741 · Professional PTR #441209) Tj ET`,
-    `BT /F1 8 Tf 0.48 0.4 0.44 rg ${L + 12} 680 Td (Certificate Date: ${esc(date)} · Certificate Reference: #MC-2026-0618-912) Tj ET`,
+    // Rose / Crimson Banner
+    `0.62 0.15 0.25 rg 28 726 556 38 re f`,
+    `BT /F2 12.5 Tf 1 1 1 rg ${L} 746 Td (OFFICIAL MEDICAL CERTIFICATE & CLEARANCE) Tj ET`,
+    `BT /F1 7.5 Tf 0.98 0.88 0.90 rg ${L} 734 Td (CERTIFIED CLINICAL DOCUMENT  |  PRC & DOH ACCREDITED TELEHEALTH PHYSICIAN) Tj ET`,
+
+    // Header Box
+    `0.99 0.96 0.97 rg ${L} 658 ${BODY_W} 54 re f`,
+    `0.92 0.82 0.86 RG 0.5 w ${L} 658 ${BODY_W} 54 re S`,
+    `BT /F2 10.5 Tf 0.40 0.10 0.18 rg ${L + 12} 694 Td (${esc(doctor)}) Tj ET`,
+    `BT /F1 7.5 Tf 0.48 0.40 0.44 rg ${L + 12} 680 Td (PRC Board Certified Specialist  |  License #0098741  |  PTR #441209) Tj ET`,
+    `BT /F1 7.5 Tf 0.48 0.40 0.44 rg ${L + 12} 667 Td (Certificate Date: ${esc(date)}  |  Reference: #MC-2026-0618-912) Tj ET`,
 
     // Certificate Box
-    `0.62 0.15 0.25 rg ${L} 632 520 26 re f`,
-    `BT /F2 9.5 Tf 1 1 1 rg ${L + 10} 643 Td (CERTIFICATION: MEDICAL SICK LEAVE & FITNESS STATUS) Tj ET`,
+    `0.62 0.15 0.25 rg ${L} 624 ${BODY_W} 24 re f`,
+    `BT /F2 8.5 Tf 1 1 1 rg ${L + 10} 633 Td (CERTIFICATION: MEDICAL SICK LEAVE & FITNESS STATUS) Tj ET`,
   ];
 
-  let curY = 590;
+  let curY = 598;
   const wrappedNotes = wrap(notes, 75);
   for (const line of wrappedNotes) {
-    cmds.push(`BT /F1 8.5 Tf 0.15 0.1 0.15 rg ${L + 6} ${curY} Td (${esc(line)}) Tj ET`);
-    curY -= 13;
+    cmds.push(`BT /F1 8.5 Tf 0.15 0.10 0.15 rg ${L + 8} ${curY} Td (${esc(line)}) Tj ET`);
+    curY -= 14;
   }
 
   // Recommendations
   curY -= 10;
   cmds.push(
-    `0.62 0.15 0.25 rg ${L} ${curY} 520 14 re f`,
-    `BT /F2 8 Tf 1 1 1 rg ${L + 6} ${curY + 4} Td (RECOMMENDED PERIOD OF REST & RESTRICTIONS) Tj ET`
+    `0.62 0.15 0.25 rg ${L} ${curY} ${BODY_W} 15 re f`,
+    `BT /F2 7.5 Tf 1 1 1 rg ${L + 8} ${curY + 4} Td (RECOMMENDED PERIOD OF REST & RESTRICTIONS) Tj ET`
   );
   curY -= 16;
   const certBullets = [
@@ -504,16 +527,16 @@ export function generateCertificateSamplePdf(doc?: {
     "* Re-evaluation indicated if fever persists beyond 72 hours.",
   ];
   for (const p of certBullets) {
-    cmds.push(`BT /F1 8 Tf 0.15 0.1 0.15 rg ${L + 6} ${curY} Td (${esc(p)}) Tj ET`);
+    cmds.push(`BT /F1 8 Tf 0.15 0.10 0.15 rg ${L + 8} ${curY} Td (${esc(p)}) Tj ET`);
     curY -= 13;
   }
 
   // Attending Signature Footer
   cmds.push(
-    `0.92 0.85 0.88 RG 0.5 w ${L} 100 520 0 re S`,
-    `BT /F2 8 Tf 0.4 0.15 0.22 rg ${L} 85 Td (ATTENDING CLINICIAN ELECTRONIC SIGNATURE & VERIFICATION) Tj ET`,
-    `BT /F1 7 Tf 0.45 0.4 0.45 rg ${L} 72 Td (Verified electronically through HealthKo Medical Portal. Security Hash: #SHA256-MC912-VERIFIED.) Tj ET`,
-    `BT /F1 6.5 Tf 0.5 0.5 0.55 rg ${L} 50 Td (HEALTHKO ARCHIVED DOCUMENT · NOT VALID AS MEDICO-LEGAL EXPERT WITNESS TESTIMONY) Tj ET`
+    `0.92 0.85 0.88 RG 0.5 w ${L} 100 ${BODY_W} 0 re S`,
+    `BT /F2 7.5 Tf 0.40 0.15 0.22 rg ${L} 84 Td (ATTENDING CLINICIAN ELECTRONIC SIGNATURE & VERIFICATION) Tj ET`,
+    `BT /F1 7 Tf 0.45 0.40 0.45 rg ${L} 70 Td (Verified electronically through HealthKo Medical Portal. Security Hash: #SHA256-MC912-VERIFIED.) Tj ET`,
+    `BT /F1 6.5 Tf 0.50 0.50 0.55 rg ${L} 48 Td (HEALTHKO ARCHIVED DOCUMENT  |  NOT VALID AS MEDICO-LEGAL EXPERT WITNESS TESTIMONY) Tj ET`
   );
 
   return buildPdfString(cmds.join("\n"));
@@ -535,40 +558,43 @@ export function generateImagingSamplePdf(doc?: {
     "Examination: 2-View Chest Radiograph (PA & Lateral). Lungs are clear without active infiltrates, consolidation, or pleural effusion. Cardiothoracic ratio is normal (0.46). Bony thorax and diaphragm intact.";
 
   const cmds: string[] = [
+    // Outer border
+    `0.85 0.92 0.95 RG 1 w 28 28 556 736 re S`,
+
     // Cyan / Teal Banner
-    `0.08 0.42 0.48 rg 0 740 ${PAGE_W} 52 re f`,
-    `BT /F2 16 Tf 1 1 1 rg ${L} 765 Td (DIAGNOSTIC RADIOLOGY & IMAGING REPORT) Tj ET`,
-    `BT /F1 8.5 Tf 0.85 0.95 0.98 rg ${L} 750 Td (DIGITAL RADIOGRAPHY & MEDICAL IMAGING · ACCREDITED IMAGING FACILITY) Tj ET`,
+    `0.08 0.42 0.48 rg 28 726 556 38 re f`,
+    `BT /F2 13 Tf 1 1 1 rg ${L} 746 Td (DIAGNOSTIC RADIOLOGY & IMAGING REPORT) Tj ET`,
+    `BT /F1 7.5 Tf 0.85 0.95 0.98 rg ${L} 734 Td (DIGITAL RADIOGRAPHY & MEDICAL IMAGING  |  ACCREDITED IMAGING FACILITY) Tj ET`,
 
     // Facility & Scan Header
-    `0.96 0.99 1 rg ${L} 670 520 54 re f`,
-    `0.85 0.92 0.95 RG 0.5 w ${L} 670 520 54 re S`,
-    `BT /F2 11 Tf 0.05 0.25 0.32 rg ${L + 12} 708 Td (${esc(facility)}) Tj ET`,
-    `BT /F1 8 Tf 0.35 0.48 0.52 rg ${L + 12} 694 Td (Modality: Digital Radiography (X-Ray) · Accession #IMG-2026-0305-182) Tj ET`,
-    `BT /F1 8 Tf 0.35 0.48 0.52 rg ${L + 12} 680 Td (Exam Date: ${esc(date)} · Radiologist: Dr. Alexander Tan, MD, FPCR) Tj ET`,
+    `0.96 0.99 1.00 rg ${L} 658 ${BODY_W} 54 re f`,
+    `0.85 0.92 0.95 RG 0.5 w ${L} 658 ${BODY_W} 54 re S`,
+    `BT /F2 10.5 Tf 0.05 0.25 0.32 rg ${L + 12} 694 Td (${esc(facility)}) Tj ET`,
+    `BT /F1 7.5 Tf 0.35 0.48 0.52 rg ${L + 12} 680 Td (Modality: Digital Radiography (X-Ray)  |  Accession #IMG-2026-0305-182) Tj ET`,
+    `BT /F1 7.5 Tf 0.35 0.48 0.52 rg ${L + 12} 667 Td (Exam Date: ${esc(date)}  |  Radiologist: Dr. Alexander Tan, MD, FPCR) Tj ET`,
 
     // Modality Header Bar
-    `0.08 0.42 0.48 rg ${L} 632 520 26 re f`,
-    `BT /F2 8.5 Tf 1 1 1 rg ${L + 10} 643 Td (STUDY: CHEST 2-VIEWS (POSTEROANTERIOR & LATERAL)) Tj ET`,
-    `BT /F2 8.5 Tf 1 1 1 rg ${L + 340} 643 Td (CLINICAL STATUS: NORMAL STUDY) Tj ET`,
+    `0.08 0.42 0.48 rg ${L} 624 ${BODY_W} 24 re f`,
+    `BT /F2 7.5 Tf 1 1 1 rg ${L + 10} 633 Td (STUDY: CHEST 2-VIEWS (POSTEROANTERIOR & LATERAL)) Tj ET`,
+    `BT /F2 7.5 Tf 1 1 1 rg ${L + 340} 633 Td (CLINICAL STATUS: NORMAL STUDY) Tj ET`,
 
     // Section 1: Technique & Findings
-    `0.08 0.42 0.48 rg ${L} 606 520 14 re f`,
-    `BT /F2 8 Tf 1 1 1 rg ${L + 6} 610 Td (1. RADIOLOGICAL OBSERVATIONS & FINDINGS) Tj ET`,
+    `0.08 0.42 0.48 rg ${L} 598 ${BODY_W} 15 re f`,
+    `BT /F2 7.5 Tf 1 1 1 rg ${L + 8} 602 Td (1. RADIOLOGICAL OBSERVATIONS & FINDINGS) Tj ET`,
   ];
 
-  let curY = 586;
+  let curY = 578;
   const wrappedNotes = wrap(notes, 75);
   for (const line of wrappedNotes) {
-    cmds.push(`BT /F1 8.5 Tf 0.1 0.18 0.22 rg ${L} ${curY} Td (${esc(line)}) Tj ET`);
-    curY -= 12;
+    cmds.push(`BT /F1 8 Tf 0.10 0.18 0.22 rg ${L + 8} ${curY} Td (${esc(line)}) Tj ET`);
+    curY -= 13;
   }
 
   // Section 2: Detailed Organ Findings Table
   curY -= 8;
   cmds.push(
-    `0.08 0.42 0.48 rg ${L} ${curY} 520 14 re f`,
-    `BT /F2 8 Tf 1 1 1 rg ${L + 6} ${curY + 4} Td (2. DETAILED ANATOMICAL STRUCTURE EVALUATION) Tj ET`
+    `0.08 0.42 0.48 rg ${L} ${curY} ${BODY_W} 15 re f`,
+    `BT /F2 7.5 Tf 1 1 1 rg ${L + 8} ${curY + 4} Td (2. DETAILED ANATOMICAL STRUCTURE EVALUATION) Tj ET`
   );
   curY -= 16;
   const findings = [
@@ -580,11 +606,11 @@ export function generateImagingSamplePdf(doc?: {
   ];
   findings.forEach((item, idx) => {
     if (idx % 2 === 0) {
-      cmds.push(`0.96 0.98 0.99 rg ${L} ${curY - 3} 520 14 re f`);
+      cmds.push(`0.96 0.98 0.99 rg ${L} ${curY - 3} ${BODY_W} 14 re f`);
     }
     cmds.push(
-      `BT /F2 7.5 Tf 0.08 0.35 0.4 rg ${L + 6} ${curY} Td (${esc(item.area)}) Tj ET`,
-      `BT /F1 7.5 Tf 0.2 0.28 0.35 rg ${L + 160} ${curY} Td (${esc(item.status)}) Tj ET`
+      `BT /F2 7 Tf 0.08 0.35 0.40 rg ${L + 8} ${curY} Td (${esc(item.area)}) Tj ET`,
+      `BT /F1 7 Tf 0.20 0.28 0.35 rg ${L + 160} ${curY} Td (${esc(item.status)}) Tj ET`
     );
     curY -= 14;
   });
@@ -592,18 +618,18 @@ export function generateImagingSamplePdf(doc?: {
   // Impression
   curY -= 6;
   cmds.push(
-    `0.08 0.42 0.48 rg ${L} ${curY} 520 14 re f`,
-    `BT /F2 8 Tf 1 1 1 rg ${L + 6} ${curY + 4} Td (3. FINAL RADIOLOGIST IMPRESSION) Tj ET`
+    `0.08 0.42 0.48 rg ${L} ${curY} ${BODY_W} 15 re f`,
+    `BT /F2 7.5 Tf 1 1 1 rg ${L + 8} ${curY + 4} Td (3. FINAL RADIOLOGIST IMPRESSION) Tj ET`
   );
   curY -= 16;
-  cmds.push(`BT /F2 9 Tf 0.1 0.45 0.35 rg ${L + 6} ${curY} Td (IMPRESSION: NO ACUTE CARDIOPULMONARY ABNORMALITY DETECTED.) Tj ET`);
+  cmds.push(`BT /F2 8.5 Tf 0.10 0.45 0.35 rg ${L + 8} ${curY} Td (IMPRESSION: NO ACUTE CARDIOPULMONARY ABNORMALITY DETECTED.) Tj ET`);
 
   // Footer
   cmds.push(
-    `0.88 0.92 0.94 RG 0.5 w ${L} 100 520 0 re S`,
-    `BT /F2 8 Tf 0.15 0.3 0.35 rg ${L} 85 Td (BOARD CERTIFIED RADIOLOGIST ELECTRONIC SIGN-OFF) Tj ET`,
-    `BT /F1 7 Tf 0.4 0.48 0.52 rg ${L} 72 Td (Report digitally transmitted via PACS and archived to patient HealthKo Medical Cloud.) Tj ET`,
-    `BT /F1 6.5 Tf 0.5 0.55 0.6 rg ${L} 50 Td (HEALTHKO ARCHIVED MEDICAL IMAGING · PROTECTED HEALTH INFORMATION) Tj ET`
+    `0.88 0.92 0.94 RG 0.5 w ${L} 100 ${BODY_W} 0 re S`,
+    `BT /F2 7.5 Tf 0.15 0.30 0.35 rg ${L} 84 Td (BOARD CERTIFIED RADIOLOGIST ELECTRONIC SIGN-OFF) Tj ET`,
+    `BT /F1 7 Tf 0.40 0.48 0.52 rg ${L} 70 Td (Report digitally transmitted via PACS and archived to patient HealthKo Medical Cloud.) Tj ET`,
+    `BT /F1 6.5 Tf 0.50 0.55 0.60 rg ${L} 48 Td (HEALTHKO ARCHIVED MEDICAL IMAGING  |  PROTECTED HEALTH INFORMATION) Tj ET`
   );
 
   return buildPdfString(cmds.join("\n"));
@@ -622,45 +648,43 @@ export async function downloadMedicalArchiveSamplePdf(doc: {
 }): Promise<void> {
   if (typeof window === "undefined") return;
 
-  const cat = doc.category || "";
-  const title = (doc.title || "").toLowerCase();
-  const file = (doc.fileName || "").toLowerCase();
+  try {
+    const cat = doc.category || "";
+    const title = (doc.title || "").toLowerCase();
+    const file = (doc.fileName || "").toLowerCase();
 
-  let pdfString: string;
-  let fallbackName: string;
+    let pdfString: string;
+    let fallbackName: string;
 
-  if (cat === "lab" || title.includes("lab") || title.includes("cbc") || title.includes("metabolic") || file.includes("lab")) {
-    pdfString = generateLabReportPdf(doc);
-    fallbackName = "Diagnostic_Lab_Report.pdf";
-  } else if (cat === "prescription" || title.includes("prescription") || file.includes("prescription") || title.includes("rx")) {
-    pdfString = generatePrescriptionSamplePdf(doc);
-    fallbackName = "Archived_Prescription.pdf";
-  } else if (cat === "discharge" || title.includes("discharge") || title.includes("referral") || file.includes("discharge")) {
-    pdfString = generateDischargeSamplePdf(doc);
-    fallbackName = "Discharge_Referral_Summary.pdf";
-  } else if (cat === "certificate" || title.includes("certificate") || file.includes("certificate") || title.includes("leave")) {
-    pdfString = generateCertificateSamplePdf(doc);
-    fallbackName = "Medical_Certificate.pdf";
-  } else if (cat === "imaging" || title.includes("x-ray") || title.includes("scan") || title.includes("ultrasound") || title.includes("mri") || file.includes("imaging")) {
-    pdfString = generateImagingSamplePdf(doc);
-    fallbackName = "Diagnostic_Imaging_Report.pdf";
-  } else {
-    // Default consultation or other clinical encounter record
-    pdfString = generateConsultationSummaryPdf(doc);
-    fallbackName = "Consultation_Summary.pdf";
+    if (cat === "lab" || title.includes("lab") || title.includes("cbc") || title.includes("metabolic") || file.includes("lab")) {
+      pdfString = generateLabReportPdf(doc);
+      fallbackName = "Diagnostic_Lab_Report.pdf";
+    } else if (cat === "prescription" || title.includes("prescription") || file.includes("prescription") || title.includes("rx")) {
+      pdfString = generatePrescriptionSamplePdf(doc);
+      fallbackName = "Archived_Prescription.pdf";
+    } else if (cat === "discharge" || title.includes("discharge") || title.includes("referral") || file.includes("discharge")) {
+      pdfString = generateDischargeSamplePdf(doc);
+      fallbackName = "Discharge_Referral_Summary.pdf";
+    } else if (cat === "certificate" || title.includes("certificate") || file.includes("certificate") || title.includes("leave")) {
+      pdfString = generateCertificateSamplePdf(doc);
+      fallbackName = "Medical_Certificate.pdf";
+    } else if (cat === "imaging" || title.includes("x-ray") || title.includes("scan") || title.includes("ultrasound") || title.includes("mri") || file.includes("imaging")) {
+      pdfString = generateImagingSamplePdf(doc);
+      fallbackName = "Diagnostic_Imaging_Report.pdf";
+    } else {
+      // Default consultation or other clinical encounter record
+      pdfString = generateConsultationSummaryPdf(doc);
+      fallbackName = "Consultation_Summary.pdf";
+    }
+
+    const name = doc.fileName?.toLowerCase().endsWith(".pdf")
+      ? doc.fileName
+      : `${(doc.fileName || fallbackName).replace(/\.[^/.]+$/, "")}.pdf`;
+
+    // Use Uint8Array encoding (avoids UTF-16 corruption) + MouseEvent dispatch (Chrome-safe)
+    const blob = new Blob([pdfStringToBytes(pdfString)], { type: "application/pdf" });
+    triggerBlobDownload(blob, name);
+  } catch (err) {
+    console.error("downloadMedicalArchiveSamplePdf failed:", err);
   }
-
-  const blob = new Blob([pdfString], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  const name = doc.fileName?.toLowerCase().endsWith(".pdf")
-    ? doc.fileName
-    : `${(doc.fileName || fallbackName).replace(/\.[^/.]+$/, "")}.pdf`;
-  a.href = url;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }
-

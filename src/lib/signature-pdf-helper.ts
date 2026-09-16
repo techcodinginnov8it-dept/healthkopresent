@@ -65,10 +65,18 @@ export async function prepareSignatureForPdf(
   if (!dataUrl || typeof window === "undefined") return null;
 
   return new Promise((resolve) => {
+    // Safety timeout — if Image never fires onload (e.g. browser CORS/data-URL quirks),
+    // resolve with null after 3 s so the PDF download is never silently blocked.
+    const timeoutId = setTimeout(() => {
+      console.warn("prepareSignatureForPdf: timed out waiting for image load — skipping signature.");
+      resolve(null);
+    }, 3000);
+
     try {
       const img = new Image();
       img.crossOrigin = "anonymous";
       img.onload = () => {
+        clearTimeout(timeoutId);
         try {
           const natW = img.naturalWidth || 320;
           const natH = img.naturalHeight || 90;
@@ -155,13 +163,15 @@ export async function prepareSignatureForPdf(
             maskLength: maskHex.length,
           });
         } catch (err) {
+          clearTimeout(timeoutId);
           console.warn("Failed to process signature for PDF:", err);
           resolve(null);
         }
       };
-      img.onerror = () => resolve(null);
+      img.onerror = () => { clearTimeout(timeoutId); resolve(null); };
       img.src = dataUrl;
     } catch {
+      clearTimeout(timeoutId);
       resolve(null);
     }
   });

@@ -6,6 +6,8 @@
  * Distinct from consultation-transcript-pdf.ts (which handles dialogue/transcript).
  */
 
+import { pdfStringToBytes, triggerBlobDownload } from "./pdf-download-helper";
+
 const PAGE_W = 612;
 const PAGE_H = 792;
 const L = 46; // left margin
@@ -405,20 +407,19 @@ export async function downloadConsultationReportPdf(
   customFilename?: string
 ): Promise<void> {
   if (typeof window === "undefined") return;
-  const pdfString = generateConsultationReportPdf(data);
-  const blob = new Blob([pdfString], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  const safePatient = (data.patientName || "patient")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-");
-  a.href = url;
-  a.download =
-    customFilename ||
-    `healthko-report-${safePatient}-${data.appointmentId || Date.now()}.pdf`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  try {
+    const pdfString = generateConsultationReportPdf(data);
+    const safePatient = (data.patientName || "patient")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-");
+    const filename =
+      customFilename ||
+      `healthko-report-${safePatient}-${data.appointmentId || Date.now()}.pdf`;
+    // Use Uint8Array encoding (avoids UTF-16 corruption) + MouseEvent dispatch (Chrome-safe)
+    const blob = new Blob([pdfStringToBytes(pdfString)], { type: "application/pdf" });
+    triggerBlobDownload(blob, filename);
+  } catch (err) {
+    console.error("downloadConsultationReportPdf failed:", err);
+  }
 }
 
