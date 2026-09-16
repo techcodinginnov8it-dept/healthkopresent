@@ -2,7 +2,7 @@
 
 **Date**: September 8–16, 2026  
 **Active Branch**: `HealthKoUpdated`  
-**Development Runtime**: ~18 hours 0 minutes  
+**Development Runtime**: ~19 hours 30 minutes  
 
 ---
 
@@ -10,10 +10,10 @@
 
 | Metric | Details |
 | :--- | :--- |
-| **Total Session Duration** | ~18 hours 0 minutes (Sep 8 21:15 – Sep 16 01:25 +0800) |
-| **Latest Focus** | Patient Dashboard UX Refinement: Online Consultation Rename, Horizontal Layout & List Timeline |
-| **Focus of Latest Task** | Patient-facing consultation module redesign: horizontal header, compact list-type timeline, removed "Patient Consultation Dashboard" label |
-| **Total Production Updates** | 49 documented modules / milestones |
+| **Total Session Duration** | ~19 hours 30 minutes (Sep 8 21:15 – Sep 16 23:15 +0800) |
+| **Latest Focus** | PDF Engine Stabilization, Preview/Download Actions & CRM Document Registry with 5-Item View |
+| **Focus of Latest Task** | Added dual Preview and Download buttons for Consultation Reports and Medical Certificates, and transformed Current Encounter Documents into an enterprise CRM-style list with 5-item scroll view |
+| **Total Production Updates** | 63 documented modules / milestones |
 | **TypeScript / Build Status** | ✅ Passing (0 errors) |
 | **Remote Branch** | `origin/HealthKoUpdated` — fully synced |
 
@@ -81,7 +81,14 @@ Sep 8 21:15 ──────────────────────�
   ├─ 17:00 [20m] Development Timeline Sync — Milestones 43–45 documented
   ├─ 01:00 [15m] Online Consultation Nav Rename (Consultations → Online Consultation)
   ├─ 01:10 [10m] Horizontal Live Consultation Hub Header — Removed "Patient Consultation Dashboard" label
-  └─ 01:25 [15m] ★ My Timeline Redesign — Compact List-Type Consultation Timeline
+  ├─ 01:25 [15m] My Timeline Redesign — Compact List-Type Consultation Timeline
+  ├─ 04:40 [20m] Consultation Report PDF Generator (`consultation-report-pdf.ts`)
+  ├─ 05:00 [15m] Medical Archive Real PDF Sample Generators (`medical-archive-sample-pdf.ts`)
+  ├─ 05:15 [20m] Current Encounter Documents Integration in Online Consultation
+  ├─ 05:35 [10m] Comprehensive Sample PDFs for All Uploadable Medical Document Categories
+  ├─ 21:00 [30m] PDF Download Binary Fix & Cross-Browser Safe Trigger Engine (`pdf-download-helper.ts`)
+  ├─ 21:25 [25m] Consultation Report & Medical Certificate Preview + Download Action Suite
+  └─ 21:35 [15m] ★ Current Encounter Documents: Enterprise CRM Registry & 5-Item Scroll View
 ```
 
 ---
@@ -943,5 +950,39 @@ Sep 8 21:15 ──────────────────────�
     6. *Official Medical Sick Leave Certificate* (`certificate`) — Certified doctor's clearance advising medical leave of absence and rest directives.
     7. *Chest 2-Views Digital Radiography (X-Ray)* (`imaging`) — Digital diagnostic radiology report with structured anatomical evaluation and radiologist sign-off.
   - **Auto-Sync**: Seed documents are merged across local storage so all sample categories immediately appear in both *Settings → Patient Profile → Previous Consultations & Medical Documents* and *Online Consultation → Current Encounter Documents*.
+  - Verified with `npx tsc --noEmit` (0 errors).
+
+### 61. PDF Download Binary Fix & Cross-Browser Safe Trigger Engine
+- **Time**: Sep 16, ~21:00–21:25 +0800 · Duration: ~25 min
+- **Scope**: `src/lib/pdf-download-helper.ts`, `src/lib/consultation-report-pdf.ts`, `src/lib/medical-certificate-pdf.ts`, `src/lib/prescription-pdf.ts`, `src/lib/consultation-transcript-pdf.ts`
+- **Changes**:
+  - **Binary Encoding Preservation**: Created `pdfStringToBytes()` utility using direct `Uint8Array` char-code copying to prevent UTF-8/UTF-16 character corruption in PDF binary xref streams and trailer blocks.
+  - **Native MouseEvent Dispatch**: Implemented `triggerBlobDownload()` and `triggerUrlDownload()` using direct DOM `MouseEvent("click")` dispatches, preventing Chrome from discarding the `download` attribute or falling back to random UUID filenames.
+  - **Cross-Browser Safe Cleanup**: Scheduled delayed `URL.revokeObjectURL()` with 10-second timeout to ensure slow mobile and desktop download queues complete reliably.
+  - **Layout & Typography Polishing**: Fixed margin alignments, box wrapping, header metrics, and footer spacing across all 5 clinical document PDF generators.
+
+### 62. Consultation Report & Medical Certificate: Dual Preview + Download Action Suite
+- **Time**: Sep 16, ~21:25–21:35 +0800 · Duration: ~10 min
+- **Scope**: `PatientDashboardClient.tsx`, `SettingsModule.tsx` (`MedicalFilePreviewModal`)
+- **Changes**:
+  - **Comprehensive Action Buttons**: Added paired **[👁 Preview]** and **[⬇ Download PDF]** action buttons to Consultation Reports and Official Medical Certificates across all dashboard surfaces:
+    1. *Online Consultation → Action Hub Documents Tab* (`consultationHubTab === "documents"`)
+    2. *Online Consultation → Medical Certificate Tab* (`consultationHubTab === "certificates"`)
+    3. *Dashboard Overview → Recent Prescriptions & Medical Certificates Cards*
+    4. *Medical Access → Medical Certificates Tab* (`medicalAccessTab === "certificates"`)
+    5. *Medical Record History Modal Dialog* (`medicalRecordModalAppointment`)
+  - **Live Preview Integration**: Wired `previewFullConsultationReport`, `previewPatientCertPdf`, `previewMedicalReport`, and `previewTranscriptReport` helpers to dynamically create Blob URLs and display interactive document previews inside [`MedicalFilePreviewModal`](file:///C:/Users/Admin/Desktop/healthkonew/src/components/dashboard/SettingsModule.tsx) complete with zoom, fullscreen, and download capabilities.
+
+### 63. Current Encounter Documents: Enterprise CRM-Style Registry with 5-Item Scroll View
+- **Time**: Sep 16, ~21:35–21:45 +0800 · Duration: ~10 min
+- **Scope**: `PatientDashboardClient.tsx` — Online Consultation action hub (`consultationHubTab === "documents"`)
+- **Changes**:
+  - **Enterprise CRM Registry Design**: Replaced previous scattered card layout with a high-density, structured CRM tabular registry.
+  - **Structured Column Schema**:
+    - *Document & Description* (Col 5): Stylized category icon (Slate for Report, Emerald for Certificate, Purple for Rx, Sky for Transcript, Teal for Archive), bold title, and clinical description.
+    - *Classification* (Col 2): Color-coded badges (`Clinical Report`, `Medical Cert`, `Digital Rx`, `Call Transcript`, `Archived Record`).
+    - *Physician / Date* (Col 2): Attending doctor and encounter date.
+    - *Actions* (Col 3): Paired `[👁 Preview]` and `[⬇ Download PDF]` action buttons.
+  - **Initial 5-Item View with Scrollbar**: Configured document rows container with `max-h-[380px] overflow-y-auto divide-y divide-slate-100`, showing an initial clean view of **5 items** while enabling smooth vertical scrolling for additional records.
   - Verified with `npx tsc --noEmit` (0 errors).
 
