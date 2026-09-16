@@ -4511,9 +4511,6 @@ export function PatientSettingsModule({
               </StickyActionBar>
             </form>
           </SettingsCard>
-
-          {/* Medical Files Upload & Previous Consultations Section */}
-          <PatientMedicalDocumentsHub patientId={patient.id} onToast={showToast} />
         </div>
       );
     }

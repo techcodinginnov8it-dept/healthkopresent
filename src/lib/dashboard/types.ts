@@ -5,6 +5,7 @@ export type PatientModuleId =
   | "book"
   | "live"
   | "history"
+  | "documents"
   | "prescriptions"
   | "doctors"
   | "messages"

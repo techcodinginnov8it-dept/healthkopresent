@@ -11,9 +11,9 @@
 | Metric | Details |
 | :--- | :--- |
 | **Total Session Duration** | ~19 hours 30 minutes (Sep 8 21:15 – Sep 16 23:15 +0800) |
-| **Latest Focus** | Patient Dashboard Overview Optimization: Phone Badge, Basic Details Removal & Laboratory Archive |
-| **Focus of Latest Task** | Enhanced Welcome greeting with stylized phone badge, removed redundant Basic Details section, and added Laboratory & Diagnostic Results archive with multi-category filters, PDF preview, and download actions |
-| **Total Production Updates** | 65 documented modules / milestones |
+| **Latest Focus** | Dedicated Medical Documents Hub Sidebar Module & Navigation Migration |
+| **Focus of Latest Task** | Added dedicated Medical Documents Hub sidebar item (`documents`) on Patient Dashboard, configured DashboardShell icon/routes, and migrated Previous Consultations & Medical Documents into standalone module |
+| **Total Production Updates** | 66 documented modules / milestones |
 | **TypeScript / Build Status** | ✅ Passing (0 errors) |
 | **Remote Branch** | `origin/HealthKoUpdated` — fully synced |
 
@@ -22,7 +22,7 @@
 ## 📅 Visual Development Timeline
 
 ```text
-Sep 8 21:15 ──────────────────────────────────────────────────────── Sep 17 02:25 +0800
+Sep 8 21:15 ──────────────────────────────────────────────────────── Sep 17 02:35 +0800
   │  [Sep 8–9]
   ├─ 21:35 [35m] Multi-page PDF Pagination & Overflow Protection (744e7b5)
   ├─ 22:07 [32m] "Consultation Results" Tab & Medical Notes PDF Integration (b202526)
@@ -90,7 +90,8 @@ Sep 8 21:15 ──────────────────────�
   ├─ 21:25 [25m] Consultation Report & Medical Certificate Preview + Download Action Suite
   ├─ 21:35 [15m] Current Encounter Documents: Enterprise CRM Registry & 5-Item Scroll View
   ├─ 23:30 [60m] Enterprise Admin Command Center UI/UX & Management Suite (7 Modules)
-  └─ 02:25 [25m] ★ Patient Overview Refinement: Phone Badge, Basic Details Removal & Lab Results Archive
+  ├─ 02:25 [25m] Patient Overview Refinement: Phone Badge, Basic Details Removal & Lab Results Archive
+  └─ 02:35 [15m] ★ Dedicated Medical Documents Hub Sidebar Module & Navigation Migration
 ```
 
 ---
@@ -1015,5 +1016,15 @@ Sep 8 21:15 ──────────────────────�
     - Structured CRM document list with color-coded iconography, doctor/clinic facility tags, encounter dates, file sizes, and summary clinical notes.
     - Paired **[👁 Preview]** modal trigger (via `MedicalFilePreviewModal`) and **[⬇ Download PDF]** actions (via `downloadMedicalArchiveSamplePdf`).
     - Scrollable container configured with `max-h-[380px] overflow-y-auto divide-y divide-slate-100` for compact density.
+  - **Type Safety & Build**: Passed `npx tsc --noEmit` with 0 TypeScript compiler errors.
+
+### 66. Dedicated Medical Documents Hub Sidebar Module & Navigation Migration
+- **Time**: Sep 17, ~02:25–02:35 +0800 · Duration: ~10 min
+- **Scope**: `PatientDashboardClient.tsx`, `page.tsx`, `DashboardShell.tsx`, `SettingsModule.tsx`, `types.ts`
+- **Changes**:
+  - **Added Sidebar Navigation Item**: Introduced `"documents"` to `PatientModuleId` and registered **Medical Documents Hub** in patient `navItems` with real-time badge count of stored documents.
+  - **DashboardShell Integration**: Extended `DashboardShell` `NavIcon` with custom document & clinical records SVG icon for `case "documents"`.
+  - **Migrated Previous Consultations & Medical Documents**: Moved `PatientMedicalDocumentsHub` out of the Settings profile tab directly into its own top-level module view (`activeModule === "documents"`).
+  - **Full Document Management**: Users can now upload new external records, search, filter across 7 clinical categories, preview documents in full-screen modal, download authentic PDF files, and delete archived records right from the sidebar.
   - **Type Safety & Build**: Passed `npx tsc --noEmit` with 0 TypeScript compiler errors.
 

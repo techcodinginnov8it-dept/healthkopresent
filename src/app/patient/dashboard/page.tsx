@@ -10,6 +10,7 @@ const PATIENT_MODULES = [
   "book",
   "live",
   "history",
+  "documents",
   "prescriptions",
   "doctors",
   "messages",

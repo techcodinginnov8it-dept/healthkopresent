@@ -12,6 +12,7 @@ import { DashboardShell, type DashboardNavItem } from "@/components/dashboard/Da
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
 import {
   PatientSettingsModule,
+  PatientMedicalDocumentsHub,
   MedicalFilePreviewModal,
   INITIAL_PATIENT_MEDICAL_FILES,
   CATEGORY_CONFIG,
@@ -96,6 +97,7 @@ const PATIENT_MODULES = [
   "book",
   "live",
   "history",
+  "documents",
   "prescriptions",
   "doctors",
   "messages",
@@ -1797,6 +1799,7 @@ export default function PatientDashboardClient({
     { id: "book", label: "Consultation Appointments" },
     { id: "live", label: "Online Consultation", badge: confirmedAppointments.length || undefined },
     { id: "history", label: "Medical Access", badge: prescriptions.length || undefined },
+    { id: "documents", label: "Medical Documents Hub", badge: medicalDocuments.length || undefined },
     { id: "settings", label: "Settings" },
   ];
 
@@ -3244,7 +3247,7 @@ export default function PatientDashboardClient({
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => setActiveModule("settings")}
+                        onClick={() => setActiveModule("documents")}
                         className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-emerald-500 hover:text-emerald-700 transition shadow-2xs"
                       >
                         <span>Open Documents Hub</span>
@@ -5850,6 +5853,10 @@ export default function PatientDashboardClient({
           <h2 className="text-lg font-black">Payments & Billing</h2>
           <p className="mt-2 text-sm font-semibold text-slate-500">No outstanding patient balances. Payment records will attach to confirmed consultations.</p>
         </section>
+      )}
+
+      {activeModule === "documents" && (
+        <PatientMedicalDocumentsHub patientId={patient.id} onToast={showToast} />
       )}
 
       {activeModule === "settings" && (
