@@ -6,7 +6,6 @@ import { prisma } from "@/lib/prisma";
 import { requireDoctorSession } from "@/lib/auth/doctor-session";
 import { requirePatientSession } from "@/lib/auth/patient-session";
 import { mockDb } from "@/lib/mockDb";
-import { isValidTimeZone } from "@/lib/scheduling";
 
 type ActionResult = {
   success: boolean;
@@ -19,7 +18,6 @@ type DoctorProfilePayload = {
   image?: string;
   specialty: string;
   availability: string;
-  timeZone?: string;
   status?: string;
   licenseNumber?: string;
   licenseState?: string;
@@ -124,14 +122,13 @@ export async function updateDoctorProfile(data: DoctorProfilePayload): Promise<A
     const email = data.email.trim().toLowerCase();
     const specialty = data.specialty.trim();
     const availability = data.availability.trim();
-    const timeZone = data.timeZone?.trim() || "Asia/Manila";
-
     const status = normalizeDoctorStatus(data.status);
 
     if (!name || !email || !specialty || !availability) {
       return { success: false, error: "Name, email, specialization, and availability are required." };
     }
-if (!validateEmail(email)) {
+
+    if (!validateEmail(email)) {
       return { success: false, error: "Enter a valid email address." };
     }
 
@@ -184,7 +181,7 @@ if (!validateEmail(email)) {
       }
 
       const email = data.email.trim().toLowerCase();
-if (!validateEmail(email)) {
+      if (!validateEmail(email)) {
         return { success: false, error: "Enter a valid email address." };
       }
 
@@ -270,7 +267,8 @@ export async function updatePatientProfile(data: PatientProfilePayload): Promise
     if (!firstName || !lastName || !email || !phone || !dob) {
       return { success: false, error: "First name, last name, email, phone, and date of birth are required." };
     }
-if (!validateEmail(email)) {
+
+    if (!validateEmail(email)) {
       return { success: false, error: "Enter a valid email address." };
     }
 
@@ -327,7 +325,7 @@ if (!validateEmail(email)) {
       }
 
       const email = data.email.trim().toLowerCase();
-if (!validateEmail(email)) {
+      if (!validateEmail(email)) {
         return { success: false, error: "Enter a valid email address." };
       }
 

@@ -18,7 +18,6 @@ type DoctorSettingsData = {
   image?: string | null;
   specialty: string;
   availability: string;
-  timeZone?: string | null;
   status?: string | null;
   npi: string;
   licenseNumber?: string | null;
@@ -750,7 +749,6 @@ export function DoctorSettingsModule({
     specialty: doctor.specialty,
     phone: "",
     availability: doctor.availability,
-    timeZone: doctor.timeZone || "Asia/Manila",
     status: doctor.status || "ONLINE",
     licenseNumber: doctor.licenseNumber || "",
     licenseState: doctor.licenseState || "",

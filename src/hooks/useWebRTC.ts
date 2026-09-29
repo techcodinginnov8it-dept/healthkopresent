@@ -51,6 +51,7 @@ function getEmptyDeviceStatus(): DeviceStatus {
 export function useWebRTC({
   roomId,
   role,
+  getSocket,
   isCameraOn,
   isMicOn,
   isActive,
@@ -58,6 +59,7 @@ export function useWebRTC({
 }: {
   roomId: string;
   role: "doctor" | "patient";
+  getSocket?: () => unknown;
   isCameraOn: boolean;
   isMicOn: boolean;
   isActive: boolean;
@@ -343,10 +345,8 @@ export function useWebRTC({
 
   useEffect(() => {
     if (!isActive || !roomId) {
-      const timer = setTimeout(() => {
-        void cleanup().then(() => setError(null));
-      }, 0);
-      return () => clearTimeout(timer);
+      void cleanup().then(() => setError(null));
+      return;
     }
 
     async function getLocalMedia() {

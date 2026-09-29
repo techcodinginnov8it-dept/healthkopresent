@@ -193,7 +193,6 @@ model Doctor {
   rating         Float           @default(0.0)
   reviewCount    Int             @default(0)
   availability   String          @default("Available")
-  timeZone                   String         @default("Asia/Manila") @map("time_zone")
   status         String          @default("ONLINE")
   consultFee     Float?
   consultationDuration Int       @default(30)

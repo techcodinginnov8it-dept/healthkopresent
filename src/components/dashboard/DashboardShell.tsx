@@ -10,7 +10,7 @@ export type DashboardNavItem<TModule extends ModuleId> = {
 };
 
 function NavIcon({ id }: { id: ModuleId }) {
-  const iconClass = "h-[1.1rem] w-[1.1rem]";
+  const iconClass = "h-4 w-4";
 
   switch (id) {
     case "overview":
@@ -84,19 +84,6 @@ function CollapseIcon({ collapsed }: { collapsed: boolean }) {
   );
 }
 
-function AvatarInitials({ name, dark }: { name: string; dark?: boolean }) {
-  const initials = name.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
-  return (
-    <div
-      className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl text-xs font-black ${
-        dark ? "bg-brand-teal/20 text-brand-teal" : "bg-brand-teal/15 text-brand-teal"
-      }`}
-    >
-      {initials}
-    </div>
-  );
-}
-
 export function DashboardShell<TModule extends ModuleId>({
   role,
   theme,
@@ -138,47 +125,43 @@ export function DashboardShell<TModule extends ModuleId>({
   const isDoctor = role === "doctor";
   const shellTheme = theme ?? (isDoctor ? "dark" : "light");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-
-  const shellBg = shellTheme === "dark" ? "bg-slate-950 text-slate-100" : "bg-slate-50/80 text-slate-900";
-  const sidebarBg = shellTheme === "dark" ? "bg-slate-950 border-slate-800/80" : "bg-white border-slate-200";
+  const shellBg = shellTheme === "dark" ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900";
+  const sidebarBg = shellTheme === "dark" ? "bg-slate-950 border-slate-850" : "bg-white border-slate-200";
   const muted = shellTheme === "dark" ? "text-slate-400" : "text-slate-500";
   const sidebarWidth = collapsed ? "md:w-24 lg:w-24" : "md:w-80 lg:w-80";
   const navIdle = shellTheme === "dark"
-    ? "text-slate-400 hover:bg-slate-800/80 hover:text-white"
+    ? "text-slate-400 hover:bg-slate-900 hover:text-white"
     : "text-slate-500 hover:bg-slate-100 hover:text-slate-950";
 
   useEffect(() => {
-    if (!mobileNavOpen) return;
+    if (!mobileNavOpen) {
+      return;
+    }
+
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+
     return () => {
       document.body.style.overflow = previousOverflow;
     };
   }, [mobileNavOpen]);
 
-  const headerBg = shellTheme === "dark"
-    ? "border-slate-800/80 bg-slate-950/95"
-    : "border-slate-200/80 bg-white/95";
-
   return (
     <div className={`min-h-screen ${shellBg} font-sans lg:flex`}>
-      {/* Mobile backdrop overlay */}
       {mobileNavOpen && (
         <button
           type="button"
           aria-label="Close mobile navigation"
-          className="fixed inset-0 z-55 bg-slate-950/70 backdrop-blur-sm md:hidden"
+          className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-sm md:hidden"
           onClick={() => setMobileNavOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-60 flex w-[min(88vw,22rem)] -translate-x-full flex-col justify-between overflow-y-auto border-r transition-all duration-300 ease-in-out md:sticky md:top-0 md:z-auto md:h-screen md:translate-x-0 md:overflow-hidden ${sidebarWidth} ${mobileNavOpen ? "translate-x-0 shadow-2xl" : ""} ${sidebarBg}`}
+        className={`fixed bottom-0 left-0 top-[4.75rem] z-50 flex w-[min(86vw,22rem)] -translate-x-full flex-col justify-between overflow-y-auto border-r p-4 transition-all duration-300 md:sticky md:top-0 md:z-auto md:h-screen md:translate-x-0 md:overflow-hidden md:p-5 ${sidebarWidth} ${mobileNavOpen ? "translate-x-0" : ""} ${sidebarBg}`}
         aria-label={`${role} dashboard navigation`}
       >
-        <div className="flex flex-col gap-6 p-5">
-          {/* Sidebar header */}
+        <div className="space-y-6">
           <div className={`flex items-center gap-3 ${collapsed ? "justify-center" : "justify-between"}`}>
             <button
               type="button"
@@ -193,215 +176,134 @@ export function DashboardShell<TModule extends ModuleId>({
                 <span className="font-black text-brand-red">H</span>
                 {!collapsed && (
                   <>
-                    <span className={`font-extrabold ${shellTheme === "dark" ? "text-white" : "text-slate-950"}`}>ealth</span>
+                    <span className="font-extrabold text-slate-950">ealth</span>
                     <span className="font-black text-brand-teal">K</span>
-                    <span className={`font-extrabold ${shellTheme === "dark" ? "text-white" : "text-slate-950"}`}>o</span>
+                    <span className="font-extrabold text-slate-950">o</span>
                   </>
                 )}
               </span>
             </button>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onToggleCollapsed}
-                className={`hidden h-8 w-8 items-center justify-center rounded-lg border md:flex ${isDoctor ? "border-slate-700 text-slate-300 hover:bg-slate-800" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
-                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              >
-                <CollapseIcon collapsed={collapsed} />
-              </button>
-              {/* Mobile close button */}
-              <button
-                type="button"
-                className={`grid h-8 w-8 place-items-center rounded-lg border md:hidden ${isDoctor ? "border-slate-700 text-slate-300" : "border-slate-200 text-slate-600"}`}
-                onClick={() => setMobileNavOpen(false)}
-                aria-label="Close navigation drawer"
-              >
-                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M18 6 6 18" strokeLinecap="round" />
-                  <path d="m6 6 12 12" strokeLinecap="round" />
-                </svg>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={onToggleCollapsed}
+              className={`hidden h-8 w-8 items-center justify-center rounded-lg border md:flex ${isDoctor ? "border-slate-800 text-slate-300" : "border-slate-200 text-slate-600"}`}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              <CollapseIcon collapsed={collapsed} />
+            </button>
           </div>
 
-          {/* Profile card in sidebar (mobile only) */}
-          {!collapsed && (
-            <div className={`flex items-center gap-3 rounded-2xl border p-3 md:hidden ${isDoctor ? "border-slate-800 bg-slate-900/60" : "border-slate-100 bg-slate-50"}`}>
-              {profile.image ? (
-                <div className="h-10 w-10 shrink-0 rounded-xl bg-cover bg-center ring-2 ring-brand-teal/20" style={{ backgroundImage: `url(${profile.image})` }} role="img" aria-label={`${profile.name} profile image`} />
-              ) : (
-                <AvatarInitials name={profile.name} dark={isDoctor} />
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-black">{profile.name}</p>
-                <p className={`truncate text-xs font-medium ${muted}`}>{profile.detail}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Nav items */}
-          <nav className="space-y-0.5" aria-label="Dashboard navigation">
+          <nav className="space-y-1">
             {navItems.map((item) => {
               const isActive = activeModule === item.id;
+
               return (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => {
-                    onNavigate(item.id);
-                    setMobileNavOpen(false);
-                  }}
-                  className={`flex min-h-[2.75rem] w-full items-center rounded-xl py-2.5 text-left text-sm font-bold transition-all duration-200 ${
-                    isActive
-                      ? "bg-brand-teal text-white shadow-sm shadow-brand-teal/30"
-                      : navIdle
+                  onClick={() => onNavigate(item.id)}
+                  className={`flex min-h-11 w-full items-center rounded-xl py-2.5 text-left text-sm font-bold transition-all duration-200 ${
+                    isActive ? "bg-brand-teal text-white shadow-sm shadow-brand-teal/20" : navIdle
                   } ${collapsed ? "justify-center px-2" : "gap-3 px-3"}`}
                   aria-current={isActive ? "page" : undefined}
                   title={collapsed ? item.label : undefined}
                 >
-                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${isActive ? "bg-white/20" : "bg-current/[0.08]"}`}>
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-current/10">
                     <NavIcon id={item.id} />
                   </span>
-                  {!collapsed && (
-                    <span className="min-w-0 flex-1 leading-tight">{item.label}</span>
-                  )}
-                  {!collapsed && item.badge ? (
-                    <span className={`ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-black ${isActive ? "bg-white/30 text-white" : "bg-brand-teal/15 text-brand-teal"}`}>
-                      {item.badge}
-                    </span>
-                  ) : null}
+                  {!collapsed && <span className="min-w-0 flex-1 leading-tight">{item.label}</span>}
                 </button>
               );
             })}
           </nav>
         </div>
 
-        {/* Sidebar footer */}
-        <div className={`space-y-4 border-t p-5 ${isDoctor ? "border-slate-800" : "border-slate-200"}`}>
+        <div className={`space-y-4 border-t pt-5 ${isDoctor ? "border-slate-850" : "border-slate-200"}`}>
           {!collapsed && (
-            <div className="hidden items-start gap-3 md:flex">
+            <div className="flex items-start gap-3">
               {profile.image ? (
-                <div className="h-10 w-10 shrink-0 rounded-xl bg-cover bg-center ring-2 ring-brand-teal/20" style={{ backgroundImage: `url(${profile.image})` }} role="img" aria-label={`${profile.name} profile image`} />
+                <div className="h-10 w-10 shrink-0 rounded-lg bg-cover bg-center" style={{ backgroundImage: `url(${profile.image})` }} role="img" aria-label={`${profile.name} profile image`} />
               ) : (
-                <AvatarInitials name={profile.name} dark={isDoctor} />
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-brand-teal/10 text-xs font-black text-brand-teal">
+                  {profile.name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}
+                </div>
               )}
               <div className="min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">
                   {isDoctor ? "Clinical account" : "Patient account"}
                 </p>
                 <p className="mt-1 truncate text-sm font-black">{profile.name}</p>
-                <p className={`truncate text-xs font-medium ${muted}`}>{profile.detail}</p>
+                <p className={`truncate text-xs font-semibold ${muted}`}>{profile.detail}</p>
                 {profile.meta && <p className={`mt-1 text-[10px] font-bold ${muted}`}>{profile.meta}</p>}
               </div>
             </div>
           )}
           <div className={`flex items-center gap-2 ${collapsed ? "justify-center" : ""}`}>
             <div className={collapsed ? "w-full [&>*]:w-full" : "flex-1"}>{onLogout()}</div>
+            <button
+              type="button"
+              className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-600 md:hidden"
+              onClick={() => setMobileNavOpen(false)}
+              aria-label="Close navigation drawer"
+            >
+              <CollapseIcon collapsed={false} />
+            </button>
           </div>
         </div>
       </aside>
 
-      {/* Main content area */}
       <div className="flex min-h-screen flex-1 flex-col">
-        {/* Sticky header */}
-        <header className={`sticky top-0 z-30 border-b ${headerBg} backdrop-blur-xl`}>
-          <div className="px-4 py-3 lg:px-8">
-            <div className="flex items-center justify-between gap-3">
-              {/* Left: hamburger + brand + title */}
-              <div className="flex min-w-0 items-center gap-3">
-                <button
-                  type="button"
-                  className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl border transition-colors md:hidden ${
-                    shellTheme === "dark"
-                      ? "border-slate-700 text-slate-300 hover:bg-slate-800 active:bg-slate-700"
-                      : "border-slate-200 text-slate-700 hover:bg-slate-50 active:bg-slate-100"
-                  }`}
-                  onClick={() => setMobileNavOpen(true)}
-                  aria-label="Open mobile navigation"
-                >
-                  <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                    <path d="M4 6h16" />
-                    <path d="M4 12h16" />
-                    <path d="M4 18h10" />
-                  </svg>
-                </button>
-
-                {/* Brand wordmark on mobile */}
-                <span className="font-display text-lg tracking-tight md:hidden">
-                  <span className="font-black text-brand-red">H</span>
-                  <span className={`font-extrabold ${shellTheme === "dark" ? "text-white" : "text-slate-950"}`}>ealth</span>
-                  <span className="font-black text-brand-teal">K</span>
-                  <span className={`font-extrabold ${shellTheme === "dark" ? "text-white" : "text-slate-950"}`}>o</span>
-                </span>
-
-                {/* Title section (hidden on mobile, shown on md+) */}
-                <div className="hidden min-w-0 md:block">
-                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-brand-teal">{subtitle}</p>
-                  <h1 className="mt-0.5 font-display text-2xl font-black tracking-tight">{title}</h1>
-                </div>
-              </div>
-
-              {/* Right: status + bell + avatar */}
-              <div className="flex items-center gap-2">
-                {statusIndicator}
-                {notificationBell}
-                {/* Avatar on mobile */}
-                <div className="md:hidden">
-                  {profile.image ? (
-                    <div className="h-9 w-9 rounded-xl bg-cover bg-center ring-2 ring-brand-teal/20" style={{ backgroundImage: `url(${profile.image})` }} />
-                  ) : (
-                    <AvatarInitials name={profile.name} dark={isDoctor} />
-                  )}
-                </div>
+        <header className={`sticky top-0 z-30 border-b ${shellTheme === "dark" ? "border-slate-850 bg-slate-950/90" : "border-slate-200 bg-white/90"} px-3 py-3 backdrop-blur sm:px-4 lg:px-8`}>
+          <div className="grid grid-cols-[auto,minmax(0,1fr),auto] items-center gap-x-3 gap-y-2 md:flex md:items-center md:justify-between">
+            <div className="col-span-2 flex min-w-0 items-start gap-3 md:col-span-1">
+              <button
+                type="button"
+                className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border md:hidden ${shellTheme === "dark" ? "border-slate-800 text-slate-200" : "border-slate-200 text-slate-700"}`}
+                onClick={() => setMobileNavOpen(true)}
+                aria-label="Open mobile navigation"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <path d="M4 7h16" />
+                  <path d="M4 12h16" />
+                  <path d="M4 17h16" />
+                </svg>
+              </button>
+              <div className="min-w-0">
+                <p className="text-[9px] font-black uppercase tracking-[0.22em] text-brand-teal sm:text-[10px] sm:tracking-[0.25em]">
+                  {subtitle}
+                </p>
+                <h1 className="mt-1 truncate font-display text-[1.35rem] font-black tracking-tight sm:text-2xl">{title}</h1>
               </div>
             </div>
-
-            {/* Page title on mobile (below the top bar) */}
-            <div className="mt-2 md:hidden">
-              <p className="text-[9px] font-black uppercase tracking-[0.28em] text-brand-teal">{subtitle}</p>
-              <h1 className="mt-0.5 font-display text-xl font-black tracking-tight">{title}</h1>
+            <div className="col-start-3 row-start-1 flex items-center gap-2 md:col-auto">
+              {statusIndicator}
+              {notificationBell}
             </div>
+          </div>
 
-            {/* Connection status */}
-            {connectionState !== "connected" && (
-              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800" role="status">
-                Live updates are reconnecting. Your current work is still visible.
-              </div>
-            )}
+          {connectionState !== "connected" && (
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800" role="status">
+              Live updates are reconnecting. Your current work is still visible.
+            </div>
+          )}
 
-            {/* Mobile tab nav strip */}
-            <nav
-              className={`mt-3 flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5 md:hidden`}
-              aria-label="Mobile module navigation"
-            >
-              {navItems.map((item) => {
-                const isActive = activeModule === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      onNavigate(item.id);
-                    }}
-                    className={`relative flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-black transition-all active:scale-[0.97] ${
-                      isActive
-                        ? "bg-brand-teal text-white shadow-sm shadow-brand-teal/30"
-                        : isDoctor
-                          ? "bg-slate-800/90 text-slate-300 hover:bg-slate-700 hover:text-white"
-                          : "bg-slate-100/90 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900"
-                    }`}
-                  >
-                    <NavIcon id={item.id} />
-                    <span>{item.label}</span>
-                    {item.badge ? (
-                      <span className={`rounded-full px-1 text-[9px] font-black ${isActive ? "bg-white/30" : "bg-brand-teal/20 text-brand-teal"}`}>
-                        {item.badge}
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </nav>
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1 md:hidden" aria-label="Mobile module navigation">
+            {navItems.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  onNavigate(item.id);
+                  setMobileNavOpen(false);
+                }}
+                className={`flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-xs font-black ${
+                  activeModule === item.id ? "bg-brand-teal text-white" : isDoctor ? "bg-slate-900 text-slate-300" : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                <NavIcon id={item.id} />
+                {item.label}
+              </button>
+            ))}
           </div>
         </header>
 
@@ -410,3 +312,4 @@ export function DashboardShell<TModule extends ModuleId>({
     </div>
   );
 }
+

@@ -2,12 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 import { loginPatient } from "../actions/auth";
 
 export default function SignInPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -31,8 +29,8 @@ export default function SignInPage() {
         return;
       }
 
-      setInfo(res.message || "");
-      router.push("/patient/dashboard");
+      setInfo("Redirecting to your dashboard...");
+      window.location.href = "/patient/dashboard";
     } catch {
       setLoading(false);
       setError("A network error occurred. Please verify your connection.");
