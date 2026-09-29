@@ -24,7 +24,6 @@ type DoctorSettingsData = {
   image?: string | null;
   specialty: string;
   availability: string;
-  timeZone?: string | null;
   status?: string | null;
   npi: string;
   licenseNumber?: string | null;
@@ -110,7 +109,6 @@ type DoctorProfileFormState = {
   specialty: string;
   phone: string;
   availability: string;
-  timeZone: string;
   status: string;
   licenseNumber: string;
   licenseState: string;
@@ -2950,7 +2948,6 @@ export function DoctorSettingsModule({
     specialty: doctor.specialty,
     phone: "",
     availability: doctor.availability,
-    timeZone: doctor.timeZone || "Asia/Manila",
     status: doctor.status || "ONLINE",
     licenseNumber: doctor.licenseNumber || "",
     licenseState: doctor.licenseState || "",
@@ -3248,13 +3245,6 @@ export function DoctorSettingsModule({
               <WorkingHoursTimeSelector
                 value={form.availability}
                 onChange={(value) => setField("availability", value)}
-              />
-              <Field
-                label="Practice time zone"
-                value={form.timeZone}
-                onChange={(value) => setField("timeZone", value)}
-                helperText="Use an IANA time zone, for example Asia/Manila or Australia/Sydney. Patient slots are converted automatically."
-                required
               />
               <SelectField
                 label="Availability Status"

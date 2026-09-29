@@ -707,6 +707,7 @@ function getSmartSchedulingSuggestions({
 
 function getDoctorAvailableTimeSlots(doctor?: DashboardDoctor, dateStr?: string): { time: string; label: string }[] {
   if (!doctor || !dateStr) return [];
+  const parsed = parseAvailability(doctor.availability);
 
   // parse "YYYY-MM-DD"
   const parts = dateStr.split("-").map(Number);
@@ -716,9 +717,12 @@ function getDoctorAvailableTimeSlots(doctor?: DashboardDoctor, dateStr?: string)
   if (Number.isNaN(dayDate.getTime())) return [];
   const dayOfWeek = dayDate.getDay();
 
+  if (parsed && !parsed.days.includes(dayOfWeek)) {
+    return [];
+  }
 
-  const startMinutes = 0;
-  const endMinutes = 24 * 60;
+  const startMinutes = parsed ? parsed.startMinutes : 9 * 60;
+  const endMinutes = parsed ? parsed.endMinutes : 17 * 60;
   const duration = doctor.consultationDuration || DEFAULT_DURATION_MINUTES;
 
   const slots: { time: string; label: string }[] = [];
@@ -1775,7 +1779,7 @@ export default function PatientDashboardClient({
     ? hasPatientScheduleConflict(appointments, requestedDateTime)
     : false;
   const isDoctorAvailableForSlot = requestedDateTime && !Number.isNaN(requestedDateTime.getTime()) && selectedDoctor
-    ? isWithinDoctorAvailability(requestedDateTime, DEFAULT_DURATION_MINUTES, { availability: selectedDoctor.availability, timeZone: selectedDoctor.timeZone })
+    ? isWithinDoctorAvailability(requestedDateTime, DEFAULT_DURATION_MINUTES, { availability: selectedDoctor.availability })
     : true;
   const notificationSeed = useMemo<DashboardNotification[]>(
     () => [

@@ -100,7 +100,6 @@ export default async function DoctorDashboardPage({
       return rawNum || 30;
     })(),
     consultationDurationUnit: "minutes",
-    timeZone: (doctor as any)?.timeZone || "Asia/Manila",
   };
 
   const doctors = (doctorsRes.success ? doctorsRes.doctors || [] : [])

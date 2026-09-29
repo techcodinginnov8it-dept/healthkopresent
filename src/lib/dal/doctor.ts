@@ -29,7 +29,6 @@ export const getDoctorDashboardData = cache(async () => {
       rating: true,
       reviewCount: true,
       availability: true,
-      timeZone: true,
       status: true,
       isVerified: true,
       createdAt: true,
