@@ -721,6 +721,11 @@ export function AppointmentCalendar({
 }) {
   const resolvedAnchorDate = startOfDay(anchorDate || new Date());
   const [selectedEntry, setSelectedEntry] = useState<{ appointment: CalendarAppointment; rect: DOMRect } | null>(null);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
   const days = getCalendarDays(viewMode, resolvedAnchorDate);
   const availabilityWindow = getEffectiveAvailabilityWindow(availability);
 
@@ -1065,7 +1070,7 @@ export function AppointmentCalendar({
                           )}
 
                           {/* Slot capacity badge */}
-                          {slotAvailable && (
+                          {isHydrated && slotAvailable && (
                             <span
                               className={`absolute top-1 right-1 z-10 rounded px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider border ${
                                 slotFull

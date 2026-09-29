@@ -1,13 +1,7 @@
 export function safeTimeZone(): string {
-  try {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (tz && tz !== "UTC") return tz;
-    return typeof window === "undefined"
-      ? (process.env.NEXT_PUBLIC_DEFAULT_TIMEZONE || "Asia/Manila")
-      : (tz || "Asia/Manila");
-  } catch {
-    return "Asia/Manila";
-  }
+  // This runs during SSR and the first browser render, so it must not depend
+  // on the browser's timezone or hydration can produce different text.
+  return process.env.NEXT_PUBLIC_DEFAULT_TIMEZONE || "Asia/Manila";
 }
 
 export function formatDate(dateInput: Date | string) {

@@ -45,7 +45,7 @@ import { downloadConsultationReportPdf, generateConsultationReportPdf } from "@/
 import { downloadMedicalCertificatePdf, generateMedicalCertificatePdf } from "@/lib/medical-certificate-pdf";
 import { pdfStringToBytes } from "@/lib/pdf-download-helper";
 import { createDashboardNotification } from "@/lib/dashboard/notifications";
-import { DEFAULT_DURATION_MINUTES, getScheduleConflict, parseAvailability, isWithinDoctorAvailability, getOutsideAvailabilityMessage } from "@/lib/scheduling";
+import { DEFAULT_DURATION_MINUTES, getScheduleConflict, isWithinDoctorAvailability, getOutsideAvailabilityMessage } from "@/lib/scheduling";
 import type {
   DashboardNotification,
   DashboardDoctor,
@@ -167,6 +167,22 @@ function formatAppointmentFeedDate(value: Date | string) {
 
 function formatAppointmentFeedTime(value: Date | string) {
   return formatTime(value);
+}
+
+function formatInTimeZone(value: Date | string, timeZone: string, options: Intl.DateTimeFormatOptions) {
+  try {
+    return new Intl.DateTimeFormat("en-US", { ...options, timeZone }).format(new Date(value));
+  } catch {
+    return new Intl.DateTimeFormat("en-US", { ...options, timeZone: "Asia/Manila" }).format(new Date(value));
+  }
+}
+
+function formatSuggestedPatientTime(value: Date | string, timeZone: string) {
+  return formatInTimeZone(value, timeZone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function formatSuggestedDoctorTime(value: Date | string, timeZone: string) {
+  return formatInTimeZone(value, timeZone, { hour: "numeric", minute: "2-digit", timeZoneName: "short" });
 }
 
 function formatPhilippinePeso(value?: number | null) {
@@ -658,6 +674,18 @@ function hasPatientScheduleConflict(appointments: PatientAppointment[], schedule
   });
 }
 
+function getPatientLocalTimeValue(value: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(value);
+  const hour = parts.find((part) => part.type === "hour")?.value || "00";
+  const minute = parts.find((part) => part.type === "minute")?.value || "00";
+  return `${hour}:${minute}`;
+}
+
 function getSmartSchedulingSuggestions({
   doctor,
   appointments,
@@ -667,36 +695,25 @@ function getSmartSchedulingSuggestions({
   appointments: PatientAppointment[];
   referenceDate: Date;
 }) {
-  const availability = parseAvailability(doctor?.availability);
   const suggestions: Date[] = [];
-  const startHour = availability ? Math.ceil(availability.startMinutes / 60) : 9;
-  const endHour = availability ? Math.floor((availability.endMinutes - DEFAULT_DURATION_MINUTES) / 60) : 16;
+  const duration = doctor?.consultationDuration || DEFAULT_DURATION_MINUTES;
   const confirmedAppointments = appointments.filter((appointment) => appointment.status === "CONFIRMED");
 
+  // Candidates are absolute instants. Each one is checked in the doctor's
+  // configured timezone, then later rendered in the patient's browser timezone.
   for (let dayOffset = 0; dayOffset < 21 && suggestions.length < 5; dayOffset += 1) {
     const day = new Date(referenceDate);
     day.setDate(referenceDate.getDate() + dayOffset);
-    day.setMinutes(0, 0, 0);
+    day.setHours(0, 0, 0, 0);
 
-    if (availability && !availability.days.includes(day.getDay())) {
-      continue;
-    }
-
-    for (let hour = startHour; hour <= endHour && suggestions.length < 5; hour += 1) {
+    for (let minutes = 0; minutes < 24 * 60 && suggestions.length < 5; minutes += duration) {
       const slot = new Date(day);
-      slot.setHours(hour, 0, 0, 0);
+      slot.setMinutes(minutes, 0, 0);
 
-      if (slot <= referenceDate) {
-        continue;
-      }
-
-      if (hasPatientScheduleConflict(appointments, slot)) {
-        continue;
-      }
-
-      if (getScheduleConflict(confirmedAppointments, slot, DEFAULT_DURATION_MINUTES)) {
-        continue;
-      }
+      if (slot <= referenceDate) continue;
+      if (!isWithinDoctorAvailability(slot, duration, doctor || {}, "Asia/Manila")) continue;
+      if (hasPatientScheduleConflict(appointments, slot)) continue;
+      if (getScheduleConflict(confirmedAppointments, slot, duration)) continue;
 
       suggestions.push(slot);
     }
@@ -705,37 +722,30 @@ function getSmartSchedulingSuggestions({
   return suggestions;
 }
 
-function getDoctorAvailableTimeSlots(doctor?: DashboardDoctor, dateStr?: string): { time: string; label: string }[] {
+function getDoctorAvailableTimeSlots(
+  doctor?: DashboardDoctor,
+  dateStr?: string,
+  patientTimeZone = "Asia/Manila"
+): { time: string; label: string }[] {
   if (!doctor || !dateStr) return [];
-  const parsed = parseAvailability(doctor.availability);
 
-  // parse "YYYY-MM-DD"
-  const parts = dateStr.split("-").map(Number);
-  if (parts.length !== 3) return [];
-  const [y, m, d] = parts;
-  const dayDate = new Date(y, m - 1, d);
-  if (Number.isNaN(dayDate.getTime())) return [];
-  const dayOfWeek = dayDate.getDay();
+  const [year, month, day] = dateStr.split("-").map(Number);
+  if (!year || !month || !day) return [];
 
-  if (parsed && !parsed.days.includes(dayOfWeek)) {
-    return [];
-  }
+  const startOfPatientDay = new Date(year, month - 1, day, 0, 0, 0, 0);
+  if (Number.isNaN(startOfPatientDay.getTime())) return [];
 
-  const startMinutes = parsed ? parsed.startMinutes : 9 * 60;
-  const endMinutes = parsed ? parsed.endMinutes : 17 * 60;
   const duration = doctor.consultationDuration || DEFAULT_DURATION_MINUTES;
-
   const slots: { time: string; label: string }[] = [];
-  for (let mins = startMinutes; mins + duration <= endMinutes; mins += duration) {
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    const hh = h.toString().padStart(2, "0");
-    const mm = m.toString().padStart(2, "0");
-    const timeValue = `${hh}:${mm}`;
-    const ampm = h >= 12 ? "PM" : "AM";
-    const displayH = h % 12 === 0 ? 12 : h % 12;
-    const label = `${displayH}:${mm} ${ampm}`;
-    slots.push({ time: timeValue, label });
+  for (let minutes = 0; minutes < 24 * 60; minutes += duration) {
+    const slot = new Date(startOfPatientDay);
+    slot.setMinutes(minutes, 0, 0);
+    if (!isWithinDoctorAvailability(slot, duration, doctor, "Asia/Manila")) continue;
+
+    slots.push({
+      time: getPatientLocalTimeValue(slot, patientTimeZone),
+      label: `${formatInTimeZone(slot, patientTimeZone, { hour: "numeric", minute: "2-digit" })} (your time)`,
+    });
   }
 
   return slots;
@@ -1159,6 +1169,14 @@ export default function PatientDashboardClient({
   const [selectedDoctorId, setSelectedDoctorId] = useState((doctors.find((d) => d.isVerified) ?? doctors[0])?.id || "");
   const [appointmentDate, setAppointmentDate] = useState("");
   const [appointmentTime, setAppointmentTime] = useState("");
+  const [patientTimeZone, setPatientTimeZone] = useState("Asia/Manila");
+
+  useEffect(() => {
+    try {
+      const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (browserTimeZone) setPatientTimeZone(browserTimeZone);
+    } catch {}
+  }, []);
   const [reason, setReason] = useState("");
   const [patientNotes, setPatientNotes] = useState("");
   const [authorizedRooms, setAuthorizedRooms] = useState<Record<string, string>>({});
@@ -1746,9 +1764,10 @@ export default function PatientDashboardClient({
     () => doctors.find((doctor) => doctor.id === selectedDoctorId),
     [doctors, selectedDoctorId]
   );
+  const selectedDoctorTimeZone = "Asia/Manila";
   const availableDoctorTimeSlots = useMemo(
-    () => getDoctorAvailableTimeSlots(selectedDoctor, appointmentDate),
-    [selectedDoctor, appointmentDate]
+    () => getDoctorAvailableTimeSlots(selectedDoctor, appointmentDate, patientTimeZone),
+    [selectedDoctor, appointmentDate, patientTimeZone]
   );
   const calendarAppointments = useMemo<CalendarAppointment[]>(() => {
     return appointments.map((booking) => ({
@@ -2784,8 +2803,11 @@ export default function PatientDashboardClient({
                   </div>
                 )}
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Suggested Slots</p>
-                  <div className="mt-2.5 flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-teal">Suggested Slots</p>
+                    <span className="text-[10px] font-bold text-slate-500">Shown in your time: {patientTimeZone}</span>
+                  </div>
+                  <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
                     {schedulingSuggestions.length ? schedulingSuggestions.map((slot) => (
                       <button
                         key={slot.toISOString()}
@@ -2794,9 +2816,12 @@ export default function PatientDashboardClient({
                           setAppointmentDate(toDateKey(slot));
                           setAppointmentTime(toTimeValue(slot));
                         }}
-                        className="shrink-0 rounded-xl border border-slate-200 bg-white px-4 py-2 text-[11px] font-black text-slate-700 hover:border-brand-teal hover:text-brand-teal transition-colors"
+                        className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-[11px] font-black text-slate-700 transition-colors hover:border-brand-teal hover:text-brand-teal"
                       >
-                        {formatDateTime(slot)}
+                        <span className="block">{formatSuggestedPatientTime(slot, patientTimeZone)}</span>
+                        <span className="mt-0.5 block truncate text-[9px] font-semibold text-slate-500" title={`Doctor time: ${formatSuggestedDoctorTime(slot, selectedDoctorTimeZone)}`}>
+                          Doctor · {formatSuggestedDoctorTime(slot, selectedDoctorTimeZone)}
+                        </span>
                       </button>
                     )) : (
                       <span className="text-xs font-medium text-slate-500">No suggestions available for this doctor yet.</span>

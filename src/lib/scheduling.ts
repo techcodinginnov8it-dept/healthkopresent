@@ -154,13 +154,18 @@ export function isWithinDoctorAvailability(
   const window = getEffectiveAvailabilityWindow(doctor.availability);
 
   const { day, minutes: startMinutes } = getLocalDayAndMinutes(scheduledAt, timeZone);
-  const endMinutes = startMinutes + durationMinutes;
 
-  return (
-    window.days.includes(day) &&
-    startMinutes >= window.startMinutes &&
-    endMinutes <= window.endMinutes
-  );
+  if (window.startMinutes < window.endMinutes) {
+    return window.days.includes(day) && startMinutes >= window.startMinutes && startMinutes + durationMinutes <= window.endMinutes;
+  }
+
+  // Overnight hours (for example, 9 PM-1 AM) belong to the date they start.
+  if (window.days.includes(day) && startMinutes >= window.startMinutes) {
+    return durationMinutes <= (24 * 60 - startMinutes) + window.endMinutes;
+  }
+
+  const previousDay = (day + 6) % 7;
+  return window.days.includes(previousDay) && startMinutes < window.endMinutes && startMinutes + durationMinutes <= window.endMinutes;
 }
 
 export function getScheduleConflict(
