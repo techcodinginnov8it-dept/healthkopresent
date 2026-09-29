@@ -1,3 +1,4 @@
+// Scheduling utilities.
 type ScheduleDoctor = {
   availability?: string | null;
 };
