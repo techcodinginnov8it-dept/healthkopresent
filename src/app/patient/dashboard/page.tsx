@@ -70,6 +70,7 @@ export default async function PatientDashboardPage({
     bio: doc.bio,
     image: doc.image,
     availability: doc.availability,
+    timeZone: doc.timeZone,
     status: doc.status,
     consultFee: doc.consultFee !== null ? Number(doc.consultFee) : null,
     rating: doc.rating,

@@ -58,6 +58,7 @@ export type DashboardDoctor = {
   npi?: string;
   specialty: string;
   availability: string;
+  timeZone?: string | null;
   status?: string | null;
   consultFee?: number | null;
   consultationDuration?: number | null;

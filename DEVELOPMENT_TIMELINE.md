@@ -1055,3 +1055,14 @@ Sep 8 21:15 ──────────────────────�
   - **Type Safety & Build**: Passed `npx tsc --noEmit` with 0 TypeScript compiler errors.
 
 
+
+### 69. Global Doctor/Patient Timezone-Aware Consultation Scheduling
+- **Time**: Sep 29, 2026 � Duration: ~90 min
+- **Scope**: `prisma/schema.prisma`, `src/lib/scheduling.ts`, patient/doctor booking actions and dashboard settings
+- **Changes**:
+  - Added a persisted IANA timezone per doctor (`doctors.time_zone`), defaulting existing doctors to `Asia/Manila`.
+  - Availability validation now interprets each appointment in the doctor�s own timezone, supporting any country and DST-aware IANA zone such as `America/New_York`, `Europe/London`, `Asia/Tokyo`, or `Australia/Sydney`.
+  - Preserved UTC instants for appointment storage and conflict detection while allowing patient-facing local-time selection across timezone boundaries.
+  - Added overnight availability handling and doctor timezone settings validation.
+  - Added additive migration: `prisma/20260929_add_doctor_time_zone.sql`.
+  - Verified Prisma generation, root TypeScript validation, mirror Prisma generation, mirror TypeScript validation, and `git diff --check`.

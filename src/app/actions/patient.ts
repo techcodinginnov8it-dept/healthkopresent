@@ -26,6 +26,7 @@ export async function getDoctorsList() {
         image: true,
         availability: true,
         status: true,
+        timeZone: true,
         consultFee: true,
         rating: true,
         reviewCount: true,
@@ -73,7 +74,7 @@ export async function bookAppointment(data: BookAppointmentPayload) {
 
     const doctor = await prisma.doctor.findUnique({
       where: { id: doctorId },
-      select: { isActive: true, isVerified: true, availability: true, consultationDuration: true },
+      select: { isActive: true, isVerified: true, availability: true, timeZone: true, consultationDuration: true },
     });
 
     if (!doctor || !doctor.isActive || !doctor.isVerified) {
@@ -202,7 +203,7 @@ export async function requestFollowUpReschedule(data: FollowUpReschedulePayload)
         notes: true,
         doctorId: true,
         doctor: {
-          select: { availability: true }
+          select: { availability: true, timeZone: true }
         }
       },
     });

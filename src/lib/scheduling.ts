@@ -1,5 +1,6 @@
 type ScheduleDoctor = {
   availability?: string | null;
+  timeZone?: string | null;
 };
 
 type ScheduleAppointment = {
@@ -26,6 +27,7 @@ const DAY_INDEX: Record<string, number> = {
 };
 
 const DEFAULT_DURATION_MINUTES = 30;
+export const DEFAULT_DOCTOR_TIME_ZONE = 'Asia/Manila';
 
 function parseTimeToMinutes(value: string) {
   const match = value.trim().toLowerCase().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/);
@@ -87,7 +89,7 @@ export function parseAvailability(availability?: string | null): AvailabilityWin
     endDay === undefined ||
     startMinutes === null ||
     endMinutes === null ||
-    startMinutes >= endMinutes
+    startMinutes === endMinutes
   ) {
     return null;
   }
@@ -132,6 +134,19 @@ function getLocalDayAndMinutes(date: Date, timeZone = "Asia/Manila") {
   }
 }
 
+export function isValidTimeZone(value?: string | null) {
+  if (!value) return false;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function getDoctorTimeZone(doctor: ScheduleDoctor) {
+  return isValidTimeZone(doctor.timeZone) ? doctor.timeZone! : DEFAULT_DOCTOR_TIME_ZONE;
+}
 export const DEFAULT_AVAILABILITY_STRING = "Mon - Fri, 09:00 AM - 05:00 PM";
 
 export const DEFAULT_AVAILABILITY_WINDOW: AvailabilityWindow = {
@@ -147,21 +162,23 @@ export function getEffectiveAvailabilityWindow(availability?: string | null): Av
 export function isWithinDoctorAvailability(
   scheduledAt: Date,
   durationMinutes: number,
-  doctor: ScheduleDoctor,
-  timeZone = "Asia/Manila"
+  doctor: ScheduleDoctor
 ) {
   const window = getEffectiveAvailabilityWindow(doctor.availability);
+  const { day, minutes: startMinutes } = getLocalDayAndMinutes(scheduledAt, getDoctorTimeZone(doctor));
 
-  const { day, minutes: startMinutes } = getLocalDayAndMinutes(scheduledAt, timeZone);
-  const endMinutes = startMinutes + durationMinutes;
+  if (window.startMinutes < window.endMinutes) {
+    return window.days.includes(day) && startMinutes >= window.startMinutes && startMinutes + durationMinutes <= window.endMinutes;
+  }
 
-  return (
-    window.days.includes(day) &&
-    startMinutes >= window.startMinutes &&
-    endMinutes <= window.endMinutes
-  );
+  // Overnight hours (for example, 9 PM–1 AM) belong to the date they start.
+  if (window.days.includes(day) && startMinutes >= window.startMinutes) {
+    return durationMinutes <= (24 * 60 - startMinutes) + window.endMinutes;
+  }
+
+  const previousDay = (day + 6) % 7;
+  return window.days.includes(previousDay) && startMinutes < window.endMinutes && startMinutes + durationMinutes <= window.endMinutes;
 }
-
 export function getScheduleConflict(
   appointments: ScheduleAppointment[],
   scheduledAt: Date,
