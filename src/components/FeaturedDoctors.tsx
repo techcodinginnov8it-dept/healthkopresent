@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface Doctor {
   id: string;
@@ -83,6 +83,17 @@ export default function FeaturedDoctors() {
       setSymptoms("");
     }, 4500);
   };
+
+  useEffect(() => {
+    if (selectedDoctor) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [selectedDoctor]);
 
   return (
     <section id="featured-doctors" className="py-24 bg-white relative overflow-hidden">

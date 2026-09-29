@@ -30,6 +30,7 @@ export async function getDoctorsList() {
         bio: true,
         image: true,
         availability: true,
+        timeZone: true,
         status: true,
         consultFee: true,
         rating: true,
@@ -155,7 +156,7 @@ export async function bookAppointment(data: BookAppointmentPayload) {
 
     const doctor = await prisma.doctor.findUnique({
       where: { id: doctorId },
-      select: { isActive: true, isVerified: true, availability: true },
+      select: { isActive: true, isVerified: true, availability: true, timeZone: true },
     });
 
     if (!doctor) {

@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 type PatientOtpModalProps = {
   open: boolean;
   title: string;
@@ -33,6 +35,17 @@ export default function PatientOtpModal({
   onClose,
   onClear,
 }: PatientOtpModalProps) {
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+
   if (!open) {
     return null;
   }

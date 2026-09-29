@@ -14,7 +14,7 @@ export const getDoctorDashboardData = cache(async () => {
     return getMockDoctorDashboardData(session);
   }
 
-  let doctor: any = null;
+  let doctor: Record<string, unknown> | null = null;
 
   try {
     doctor = await prisma.doctor.findUnique({

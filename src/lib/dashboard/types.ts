@@ -44,6 +44,8 @@ export type DashboardDoctor = {
   npi?: string;
   specialty: string;
   availability: string;
+
+  timeZone?: string | null;
   status?: string | null;
   consultFee?: number | null;
   consultationDuration?: number | null;
@@ -102,7 +104,6 @@ export type PatientAppointment = {
     id?: string;
     name: string;
     specialty: string;
-    image?: string | null;
   };
   videoSession?: {
     roomId: string;
@@ -171,6 +172,8 @@ export type RealtimeEvent =
       actorRole: "doctor";
       doctorId: string;
       availability: string;
+    
+  timeZone?: string | null;
       status?: string;
       title?: string;
       body?: string;

@@ -90,7 +90,7 @@ export function NotificationBell({
 
       {open && (
         <div
-          className={`absolute right-0 z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-xl border shadow-2xl ${
+          className={`absolute right-0 z-30 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-xl border shadow-2xl ${
             isDoctor ? "border-slate-800 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-950"
           }`}
         >

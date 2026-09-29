@@ -1,5 +1,6 @@
 type ScheduleDoctor = {
   availability?: string | null;
+  timeZone?: string | null;
 };
 
 type ScheduleAppointment = {
@@ -26,6 +27,7 @@ const DAY_INDEX: Record<string, number> = {
 };
 
 const DEFAULT_DURATION_MINUTES = 30;
+export const DEFAULT_DOCTOR_TIME_ZONE = 'Asia/Manila';
 
 function parseTimeToMinutes(value: string) {
   const match = value.trim().toLowerCase().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/);
@@ -87,7 +89,7 @@ export function parseAvailability(availability?: string | null): AvailabilityWin
     endDay === undefined ||
     startMinutes === null ||
     endMinutes === null ||
-    startMinutes >= endMinutes
+    startMinutes === endMinutes
   ) {
     return null;
   }
@@ -99,27 +101,84 @@ export function parseAvailability(availability?: string | null): AvailabilityWin
   };
 }
 
+function getLocalDayAndMinutes(date: Date, timeZone = "Asia/Manila") {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      weekday: "short",
+      hour: "numeric",
+      minute: "numeric",
+      hour12: false,
+    }).formatToParts(date);
+
+    let dayStr = "";
+    let hour = 0;
+    let minute = 0;
+
+    for (const p of parts) {
+      if (p.type === "weekday") dayStr = p.value.toLowerCase();
+      else if (p.type === "hour") hour = Number(p.value);
+      else if (p.type === "minute") minute = Number(p.value);
+    }
+
+    const dayIndex = DAY_INDEX[dayStr] ?? date.getDay();
+    return {
+      day: dayIndex,
+      minutes: hour * 60 + minute,
+    };
+  } catch {
+    return {
+      day: date.getDay(),
+      minutes: date.getHours() * 60 + date.getMinutes(),
+    };
+  }
+}
+
+export function isValidTimeZone(value?: string | null) {
+  if (!value) return false;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function getDoctorTimeZone(doctor: ScheduleDoctor) {
+  return isValidTimeZone(doctor.timeZone) ? doctor.timeZone! : DEFAULT_DOCTOR_TIME_ZONE;
+}
+export const DEFAULT_AVAILABILITY_STRING = "Mon - Fri, 09:00 AM - 05:00 PM";
+
+export const DEFAULT_AVAILABILITY_WINDOW: AvailabilityWindow = {
+  days: [1, 2, 3, 4, 5], // Monday - Friday
+  startMinutes: 9 * 60,   // 9:00 AM
+  endMinutes: 17 * 60,   // 5:00 PM
+};
+
+export function getEffectiveAvailabilityWindow(availability?: string | null): AvailabilityWindow {
+  return parseAvailability(availability) ?? DEFAULT_AVAILABILITY_WINDOW;
+}
+
 export function isWithinDoctorAvailability(
   scheduledAt: Date,
   durationMinutes: number,
   doctor: ScheduleDoctor
 ) {
-  const window = parseAvailability(doctor.availability);
+  const window = getEffectiveAvailabilityWindow(doctor.availability);
+  const { day, minutes: startMinutes } = getLocalDayAndMinutes(scheduledAt, getDoctorTimeZone(doctor));
 
-  if (!window) {
-    return true;
+  if (window.startMinutes < window.endMinutes) {
+    return window.days.includes(day) && startMinutes >= window.startMinutes && startMinutes + durationMinutes <= window.endMinutes;
   }
 
-  const startMinutes = scheduledAt.getHours() * 60 + scheduledAt.getMinutes();
-  const endMinutes = startMinutes + durationMinutes;
+  // Overnight hours (for example, 9 PM-1 AM) belong to the date they start.
+  if (window.days.includes(day) && startMinutes >= window.startMinutes) {
+    return durationMinutes <= (24 * 60 - startMinutes) + window.endMinutes;
+  }
 
-  return (
-    window.days.includes(scheduledAt.getDay()) &&
-    startMinutes >= window.startMinutes &&
-    endMinutes <= window.endMinutes
-  );
+  const previousDay = (day + 6) % 7;
+  return window.days.includes(previousDay) && startMinutes < window.endMinutes && startMinutes + durationMinutes <= window.endMinutes;
 }
-
 export function getScheduleConflict(
   appointments: ScheduleAppointment[],
   scheduledAt: Date,
@@ -148,7 +207,9 @@ export function getFullyBookedMessage() {
 }
 
 export function getOutsideAvailabilityMessage(availability?: string | null) {
-  return `This consultation time is outside the doctor's available schedule${availability ? ` (${availability})` : ""}. Please choose another available time slot.`;
+  const display = availability && availability.toLowerCase() !== "available" ? availability : DEFAULT_AVAILABILITY_STRING;
+  return `This consultation time is outside the doctor's available schedule (${display}). Please choose another available time slot.`;
 }
 
 export { DEFAULT_DURATION_MINUTES };
+

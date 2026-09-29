@@ -34,9 +34,10 @@ export default async function DoctorDashboardPage({
   const initialModule = getInitialModule(params?.module);
 
   // Serialize models correctly for client component boundary
+  const doctorBookings = ((doctor as any)?.bookings ?? []) as DoctorAppointment[];
   const serializedDoctor = {
     ...doctor,
-    bookings: doctor.bookings
+    bookings: doctorBookings
       .filter((booking: DoctorAppointment) => booking.patient !== null && booking.patient !== undefined)
       .map((booking: DoctorAppointment) => ({
         ...booking,
@@ -92,5 +93,5 @@ export default async function DoctorDashboardPage({
       yearsExp: candidate.yearsExp,
     }));
 
-  return <DoctorDashboardClient doctor={serializedDoctor} doctors={doctors} initialModule={initialModule} />;
+  return <DoctorDashboardClient doctor={serializedDoctor as any} doctors={doctors} initialModule={initialModule} />;
 }
