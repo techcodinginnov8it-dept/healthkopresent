@@ -726,6 +726,10 @@ export function AppointmentCalendar({
   useEffect(() => {
     setIsHydrated(true);
   }, []);
+
+  // Appointment placement uses local date parts. Keep the SSR and first client
+  // render identical, then calculate the browser-local calendar after mount.
+  const renderedAppointments = isHydrated ? appointments : [];
   const days = getCalendarDays(viewMode, resolvedAnchorDate);
   const availabilityWindow = getEffectiveAvailabilityWindow(availability);
 
@@ -828,7 +832,7 @@ export function AppointmentCalendar({
       </div>
       <div className="space-y-3 md:hidden">
         {days.map((day) => {
-          const dayAppointments = appointments.filter((appointment) => sameDay(appointment.scheduledAt, day));
+          const dayAppointments = renderedAppointments.filter((appointment) => sameDay(appointment.scheduledAt, day));
           const dayAvailable = availabilityWindow.days.includes(day.getDay());
 
           return (
@@ -869,7 +873,7 @@ export function AppointmentCalendar({
           }`}>
             <div className="grid min-w-[920px] grid-cols-7 gap-px">
               {days.map((day) => {
-                const dayAppointments = appointments.filter((appointment) => sameDay(appointment.scheduledAt, day));
+                const dayAppointments = renderedAppointments.filter((appointment) => sameDay(appointment.scheduledAt, day));
                 const dayAvailable = availabilityWindow.days.includes(day.getDay());
                 const dayOverflow = dayAppointments.length > 3;
                 const visibleDayAppts = dayAppointments.slice(0, 3);
@@ -894,7 +898,7 @@ export function AppointmentCalendar({
                       }
 
                       const appointmentId = event.dataTransfer.getData("text/plain");
-                      const appointment = appointments.find((item) => item.id === appointmentId);
+                      const appointment = renderedAppointments.find((item) => item.id === appointmentId);
                       if (appointment) {
                         onReschedule(appointmentId, moveAppointmentToDay(appointment.scheduledAt, day));
                       }
@@ -991,7 +995,7 @@ export function AppointmentCalendar({
                     </div>
                     {days.map((day) => {
                       const slot = setTime(day, hour);
-                      const slotAppointments = appointments.filter((appointment) => sameSlot(appointment.scheduledAt, slot));
+                      const slotAppointments = renderedAppointments.filter((appointment) => sameSlot(appointment.scheduledAt, slot));
                       const slotMinutes = hour * 60;
                       const slotAvailable = (
                         availabilityWindow.days.includes(slot.getDay()) &&
@@ -1143,7 +1147,7 @@ export function AppointmentCalendar({
           </div>
         )}
       </div>
-      {!stage && appointments.length ? (
+      {!stage && renderedAppointments.length ? (
         <div className="mt-4 grid gap-2 md:grid-cols-2">
           {appointments.slice(0, 4).map((appointment) => (
             <p key={appointment.id} className={dark ? "text-xs font-semibold text-slate-400" : "text-xs font-semibold text-slate-500"}>
